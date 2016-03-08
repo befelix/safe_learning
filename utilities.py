@@ -129,7 +129,7 @@ def compute_v_dot(dV, mean, var=None, beta=2.):
         return np.sum(dV * mean, axis=1)
     else:
         return (np.sum(dV * mean, axis=1) +
-                beta * np.sqrt(np.sum(dV**2 * var, axis=1)) )
+                beta * np.sqrt(np.sum(dV**2 * var, axis=1)))
     
     
 def get_safe_set(V_dot, threshold, S0=None):
@@ -141,14 +141,14 @@ def get_safe_set(V_dot, threshold, S0=None):
     V_dot: np.array
         V_dot at all grid points
     threshold: float
-        The safety threshold, in the paper threshold = tau * L
+        The safety threshold, in the paper threshold = -L * tau
     S0: np.array
         The deterministic safe set
     """    
     if S0 is None:
-        return V_dot < -threshold
+        return V_dot < threshold
     else:
-        return np.logical_or(S0, V_dot < -threshold)
+        return np.logical_or(S0, V_dot < threshold)
         
         
 def find_max_levelset(S, V, accuracy, interval=None):
@@ -251,7 +251,7 @@ def quadratic_lyapunov_function(x, P):
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,
-                       interpolation='linear'):
+                       interpolation='linear', mean_function=None):
     """
     Sample a function from a gp with corresponding kernel within its bounds.
 
@@ -270,6 +270,8 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
     interpolation: string
         If 'linear' interpolate linearly between samples, if 'kernel' use the
         corresponding mean RKHS-function of the GP.
+    mean_function: callable
+        Mean of the sample function
 
     Returns
     -------
@@ -300,6 +302,8 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
             x = np.atleast_2d(x)
             y = sp.interpolate.griddata(inputs, output, x, method='linear')
             y = np.atleast_2d(y)
+            if mean_function is not None:
+                y += mean_function(x)
             if noise:
                 y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
             return y
@@ -321,6 +325,9 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
             """
             x = np.atleast_2d(x)
             y = kernel.K(x, inputs).dot(alpha)
+            y = y[:, None]
+            if mean_function is not None:
+                y += mean_function(x)
             if noise:
                 y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
             return y
