@@ -7,9 +7,9 @@ import scipy as sp
 
 
 __all__ = ['combinations', 'linearly_spaced_combinations',
-           'line_search_bisection', 'compute_v_dot', 'get_safe_set',
-           'find_max_levelset', 'lqr', 'quadratic_lyapunov_function',
-           'sample_gp_function']
+           'line_search_bisection', 'compute_v_dot_distribution',
+           'compute_v_dot_upper_bound', 'get_safe_set', 'find_max_levelset',
+           'lqr', 'quadratic_lyapunov_function', 'sample_gp_function']
 
 
 def combinations(arrays):
@@ -101,9 +101,9 @@ def line_search_bisection(f, bound, accuracy):
     return bound
     
     
-def compute_v_dot(dV, mean, var=None, beta=2.):
+def compute_v_dot_distribution(dV, mean, variance):
     """
-    Compute the safe set
+    Compute the distribution over V_dot, given the gp dynamics model.
     
     Parameters
     ----------
@@ -111,25 +111,49 @@ def compute_v_dot(dV, mean, var=None, beta=2.):
         The derivatives of the Lyapunov function at grid points
     mean: np.array
         gp mean of the dynamics (including prior dynamics as mean)
-    var: np.array
+    variance: np.array
         gp var of the dynamics
-    beta: float
-        The confidence interval for the GP-prediction
         
     Returns
     -------
-    V_dot - np.array
-        The beta-upper confidence bound on V_dot 
+    mean - np.array
+        The mean of V_dot at each grid point
+    var - np.array
+        The variance of V_dot at each grid point
     """    
     # V_dot_mean = dV * mu
     # V_dot_var = sum_i(|dV_i| * var_i)
     # Should be dV.T var dV if we considered correlation
     # by considering correlations (predicting the sum term directly).
-    if var is None:
-        return np.sum(dV * mean, axis=1)
-    else:
-        return (np.sum(dV * mean, axis=1) +
-                beta * np.sqrt(np.sum(dV**2 * var, axis=1)))
+    return np.sum(dV * mean, axis=1), np.sum(dV**2 * variance, axis=1)
+
+
+def compute_v_dot_upper_bound(dV, mean, variance, beta=2.):
+    """
+    Compute the safe set
+
+    Parameters
+    ----------
+    dV: np.array
+        The derivatives of the Lyapunov function at grid points
+    mean: np.array
+        gp mean of the dynamics (including prior dynamics as mean)
+    variance: np.array
+        gp var of the dynamics
+    beta: float
+        The confidence interval for the GP-prediction
+
+    Returns
+    -------
+    V_dot - np.array
+        The beta-upper confidence bound on V_dot
+    """
+    # V_dot_mean = dV * mu
+    # V_dot_var = sum_i(|dV_i| * var_i)
+    # Should be dV.T var dV if we considered correlation
+    # by considering correlations (predicting the sum term directly).
+    mean, variance = compute_v_dot_distribution(dV, mean, variance)
+    return mean + beta * np.sqrt(variance)
     
     
 def get_safe_set(V_dot, threshold, S0=None):
