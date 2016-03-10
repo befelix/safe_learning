@@ -86,10 +86,13 @@ def line_search_bisection(f, bound, accuracy):
     # Break if lower bound does not fulfill constraint
     if not f(bound[0]):
         return None
-    
+
+    # Break if bound was too small
     if f(bound[1]):
-        return bound[1]
-    
+        bound[0] = bound[1]
+        return bound
+
+    # Improve bound until accuracy is achieved
     while bound[1] - bound[0] > accuracy:
         mean = (bound[0] + bound[1]) / 2
         
@@ -271,6 +274,7 @@ def quadratic_lyapunov_function(x, P):
     dV - np.array
         2d array with dV(x)/dx on each row
     """
+    x = np.asarray(x)
     return np.sum(x.dot(P) * x, axis=1), 2 * x.dot(P)
 
 
