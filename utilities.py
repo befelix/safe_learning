@@ -9,7 +9,8 @@ import scipy as sp
 __all__ = ['combinations', 'linearly_spaced_combinations',
            'line_search_bisection', 'compute_v_dot_distribution',
            'compute_v_dot_upper_bound', 'get_safe_set', 'find_max_levelset',
-           'lqr', 'quadratic_lyapunov_function', 'sample_gp_function']
+           'lqr', 'quadratic_lyapunov_function', 'sample_gp_function',
+           'ellipse_bounds_2d']
 
 
 def combinations(arrays):
@@ -131,7 +132,7 @@ def compute_v_dot_distribution(dV, mean, variance):
     return np.sum(dV * mean, axis=1), np.sum(dV**2 * variance, axis=1)
 
 
-def compute_v_dot_upper_bound(dV, mean, variance, beta=2.):
+def compute_v_dot_upper_bound(dV, mean, variance=None, beta=2.):
     """
     Compute the safe set
 
@@ -140,9 +141,9 @@ def compute_v_dot_upper_bound(dV, mean, variance, beta=2.):
     dV: np.array
         The derivatives of the Lyapunov function at grid points
     mean: np.array
-        gp mean of the dynamics (including prior dynamics as mean)
+        mean of the dynamics (including prior dynamics as mean)
     variance: np.array
-        gp var of the dynamics
+        variance of the dynamics
     beta: float
         The confidence interval for the GP-prediction
 
@@ -151,6 +152,8 @@ def compute_v_dot_upper_bound(dV, mean, variance, beta=2.):
     V_dot - np.array
         The beta-upper confidence bound on V_dot
     """
+    if variance is None:
+        variance = np.zeros_like(mean)
     # V_dot_mean = dV * mu
     # V_dot_var = sum_i(|dV_i| * var_i)
     # Should be dV.T var dV if we considered correlation
@@ -360,3 +363,41 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
                 y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
             return y
         return evaluate_gp_function_kernel
+
+
+def ellipse_bounds_2d(x0, P, level):
+    """Compute the bounds of a 2D ellipse.
+
+    The levelset of the ellipsoid is given by
+    level = x' P x. Given the coordinates of the first
+    dimension, this function computes the corresponding
+    lower and upper values of the second dimension and
+    removes any values of x0 that are outside of the ellipse.
+
+    Parameters
+    ----------
+    x0: np.array
+        The values of the first dimension
+    P: np.array
+        The matrix of the ellipsoid
+    level: float
+        The value of the levelset
+    """
+    #
+    def p_to_abc():
+        a = P[1, 1]
+        b = 2 * P[0,1] * x0
+        c = x0**2 * P[0, 0] - level
+        desc = b**2 - 4 * a * c
+        return a, b, c, desc
+
+    desc = p_to_abc()[3]
+
+    # Remove unecessary dimensions
+    x0 = x0[desc.squeeze() >= 0]
+
+    a, b, c, desc = p_to_abc()
+    x1 = -b + np.hstack(((-b - np.sqrt(desc)),
+                         (-b + np.sqrt(desc))))
+    x1 /= 2 * a
+    return x0, x1
