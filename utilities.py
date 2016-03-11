@@ -10,7 +10,7 @@ __all__ = ['combinations', 'linearly_spaced_combinations',
            'line_search_bisection', 'compute_v_dot_distribution',
            'compute_v_dot_upper_bound', 'get_safe_set', 'find_max_levelset',
            'lqr', 'quadratic_lyapunov_function', 'sample_gp_function',
-           'ellipse_bounds_2d']
+           'ellipse_bounds']
 
 
 def combinations(arrays):
@@ -365,7 +365,7 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
         return evaluate_gp_function_kernel
 
 
-def ellipse_bounds_2d(x0, P, level):
+def ellipse_bounds(P, level, n=100):
     """Compute the bounds of a 2D ellipse.
 
     The levelset of the ellipsoid is given by
@@ -376,28 +376,39 @@ def ellipse_bounds_2d(x0, P, level):
 
     Parameters
     ----------
-    x0: np.array
-        The values of the first dimension
     P: np.array
         The matrix of the ellipsoid
     level: float
         The value of the levelset
+    n: int
+        Number of data points
+
+    Returns
+    -------
+    x - np.array
+        1D array of x positions of the ellipse
+    yu - np.array
+        The upper bound of the ellipse
+    yl - np.array
+        The lower bound of the ellipse
+
+    Notes
+    -----
+    This can be used as
+    ```plt.fill_between(*ellipse_bounds(P, level))```
     """
-    #
-    def p_to_abc():
-        a = P[1, 1]
-        b = 2 * P[0,1] * x0
-        c = x0**2 * P[0, 0] - level
-        desc = b**2 - 4 * a * c
-        return a, b, c, desc
+    # Round up to multiple of 2
+    n += n % 2
 
-    desc = p_to_abc()[3]
+    # Principal axes of ellipsoid
+    eigval, eigvec = np.linalg.eig(P)
+    eigvec *= np.sqrt(level / eigval)
 
-    # Remove unecessary dimensions
-    x0 = x0[desc.squeeze() >= 0]
+    # set zero angle at maximum x
+    angle = np.linspace(0, 2 * np.pi, n)[:, None]
+    angle += np.arctan(eigvec[0, 1] / eigvec[0, 0])
 
-    a, b, c, desc = p_to_abc()
-    x1 = -b + np.hstack(((-b - np.sqrt(desc)),
-                         (-b + np.sqrt(desc))))
-    x1 /= 2 * a
-    return x0, x1
+    # Compute positions
+    pos = np.cos(angle) * eigvec[:, 0] + np.sin(angle) * eigvec[:, 1]
+    n /= 2
+    return pos[:n, 0], pos[:n, 1], pos[n:, 1][::-1]
