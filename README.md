@@ -1,6 +1,6 @@
 # Safe learning of regions of attraction (ROA)
 
-This code accompanies the paper:
+This code accompanies the paper: <br>
 "F. Berkenkamp, R. Moriconi, A. P. Schoellig, A. Krause, "Safe Learning of Regions of Attraction in Uncertain, Nonlinear Systems with Gaussian Processes", arXiv, <a href=http://arxiv.org/abs/1603.04915>arXiv:1603.04915 [cs.SY]</a>.
 
 Next to the source code, the results are documented in the following HTML jupyter notebooks:
