@@ -14,6 +14,8 @@ from collections import Sequence
 
 import numpy as np
 import scipy as sp
+import scipy.linalg
+import scipy.interpolate
 
 
 __all__ = ['combinations', 'linearly_spaced_combinations',
