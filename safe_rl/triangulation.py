@@ -46,7 +46,7 @@ class Triangulation(spatial.Delaunay):
         Parameters
         ----------
         points: 2d array
-            Each row represents one points
+            Each row represents one point
 
         Returns
         -------
@@ -78,5 +78,47 @@ class Triangulation(spatial.Delaunay):
             I[index] = i
             J[index] = simplex
 
+        return sparse.coo_matrix((X, (I, J)),
+                                 shape=(len(points), self.npoints)).tocsr()
+
+    def gradient_at(self, points):
+        """
+        Compute the gradients at the respective points
+
+        Parameters
+        ----------
+        points: 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        B: scipy.sparse
+            A sparse matrix so that gradient(points) = B * V(vertices)
+        """
+        raise NotImplementedError('Work in progress')
+        simplex_ids = self.find_simplex(points)
+
+        num_constraints = len(points) * 3
+        X = np.empty(3 * num_constraints, dtype=np.float)
+        I = np.empty(3 * num_constraints, dtype=np.int32)
+        J = np.empty(3 * num_constraints, dtype=np.int32)
+
+        for i, simplex_id in enumerate(simplex_ids):
+            # TODO: Add check for when point it is outside the triangulization
+
+            # Ids for the corner points
+            simplex = self.simplices[simplex_id]
+            # Id of the origin points
+            origin = self.points[simplex[0]]
+
+            # pre-multiply tmp with the distance
+            tmp = self.parameters[simplex_id].reshape(self.ndim, self.ndim)
+
+            index = slice(3 * i, 3 * (i + 1))
+            X[index] = [1 - np.sum(tmp), tmp[0], tmp[1]]
+            I[index] = i
+            J[index] = simplex
+
+        # TODO: How do we handle that we get multiple derivatives here? 
         return sparse.coo_matrix((X, (I, J)),
                                  shape=(len(points), self.npoints)).tocsr()
