@@ -22,6 +22,19 @@ class Triangulation(spatial.Delaunay):
 
     def __init__(self, points):
         super(Triangulation, self).__init__(points)
+        self.parameters = None
+        self._update_equations()
+
+    def _update_equations(self):
+        """Compute the simplex equations for a given triangulation"""
+        # TODO: It's enough to do this for one hypercube, rest are repetitions
+        self.parameters = np.empty((self.nsimplex, self.ndim ** 2),
+                                   dtype=np.float)
+
+        for i, simplex in enumerate(self.simplices):
+            simplex_points = self.points[simplex]
+            self.parameters[i, :] = np.linalg.inv(simplex_points[1:] -
+                                                  simplex_points[:1]).ravel()
 
     def function_values_at(self, points):
         """
@@ -41,19 +54,24 @@ class Triangulation(spatial.Delaunay):
             A sparse matrix so that V(points) = B * V(vertices)
         """
         simplex_ids = self.find_simplex(points)
-        simplices = self.simplices[simplex_ids]
 
         num_constraints = len(points) * 3
         X = np.empty(num_constraints, dtype=np.float)
         I = np.empty(num_constraints, dtype=np.int32)
         J = np.empty(num_constraints, dtype=np.int32)
 
-        for i, (point, simplex) in enumerate(zip(points, simplices)):
-            simplex_points = points[simplex]
-            # TODO: Add check for when it is outside the triangulization
+        for i, (point, simplex_id) in enumerate(zip(points, simplex_ids)):
+            # TODO: Add check for when point it is outside the triangulization
 
-            tmp = np.linalg.solve((simplex_points[1:] - simplex_points[:1]).T,
-                                  point - simplex_points[0])
+            # Ids for the corner points
+            simplex = self.simplices[simplex_id]
+            # Id of the origin points
+            origin = self.points[simplex[0]]
+
+            # pre-multiply tmp with the distance
+            tmp = self.parameters[simplex_id]
+            tmp = tmp.reshape(self.ndim, self.ndim).T.dot(
+                point - origin)
 
             index = slice(3 * i, 3 * (i + 1))
             X[index] = [1 - np.sum(tmp), tmp[0], tmp[1]]
