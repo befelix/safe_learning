@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from .triangulization import *
+from .triangulation import *
 
 # Import test after __all__ (no documentation)
 from numpy.testing import Tester

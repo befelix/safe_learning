@@ -3,7 +3,7 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import *
 import numpy as np
 
-from .triangulization import Triangulation
+from .triangulation import Triangulation
 
 
 class TriangulationTest(TestCase):
