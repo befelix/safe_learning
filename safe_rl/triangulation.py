@@ -79,6 +79,10 @@ class Delaunay(object):
         simplices: np.array (int)
             The indeces of the simplices
         """
+        # TODO: Figure out a good workflow here. Is it really the best idea
+        # to compute indeces for the simpleces or should we go straight to
+        # physical parameters/indices? If so, we need a consistent
+        # conversion scheme from simplex indices to the indeces on the corners.
         new_points = points - self.offset
 
         # Get coordinates within unit cube
