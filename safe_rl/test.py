@@ -36,6 +36,22 @@ class DelaunayTest(TestCase):
 
         assert_allclose(result, true_result)
 
+    def test_index_state_conversion(self):
+        limits = [[-1.1, 1.5], [2.2, 2.4]]
+        num_points = [7, 8]
+        delaunay = Delaunay(limits, num_points)
+
+        # Forward and backwards convert all indeces
+        indeces = np.arange(np.prod(num_points))
+        states = delaunay.index_to_state(indeces)
+        indeces2 = delaunay.state_to_index(states)
+        assert_equal(indeces, indeces2)
+
+        # test 1D input
+        delaunay.state_to_index([0, 2.3])
+        delaunay.index_to_state(1)
+
+
 
 class TriangulationTest(TestCase):
     """Test the Triangulization method"""

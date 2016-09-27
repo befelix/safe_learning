@@ -34,6 +34,39 @@ class Delaunay(object):
         self.strides = (np.concatenate(([1], self.num_points[:-1])) *
                         self.triangulation.nsimplex)
 
+    def index_to_state(self, indices):
+        """Convert indices to physical states.
+
+        Parameters
+        ----------
+        indices: ndarray
+            The indeces of points on the discretization.
+
+        Returns
+        -------
+        states: ndarray
+            The states with physical units that correspond to the indices.
+        """
+        ijk_index = np.vstack(np.unravel_index(indices, self.num_points + 1)).T
+        return (ijk_index * self.maxes) + self.offset
+
+    def state_to_index(self, states):
+        """Convert physical states to indices
+
+        Parameters
+        ----------
+        states: ndarray
+            Physical states on the discretization.
+
+        Returns
+        -------
+        indices: ndarray
+            The indeces that correspond to the physical states.
+        """
+        ijk_index = np.rint((states - self.offset) / self.maxes).astype(np.int)
+        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
+                                    self.num_points + 1)
+
     def find_simplex(self, points):
         """Find the simpleces corresponding to points
 
