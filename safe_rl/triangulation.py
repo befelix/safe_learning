@@ -3,9 +3,58 @@ from __future__ import absolute_import, print_function, division
 
 import numpy as np
 from scipy import spatial, sparse
+from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Triangulation']
+__all__ = ['Triangulation', 'Delaunay']
+
+
+class Delaunay(object):
+    """More efficient Delaunay for regular grids.
+
+    Parameters
+    ----------
+    limits: 2d arraylike
+        Contains the limits
+    """
+    def __init__(self, limits, num_points):
+        super(Delaunay, self).__init__()
+        self.limits = np.asarray(limits)
+        self.num_points = np.asarray(num_points, dtype=np.int)
+        self.offset = self.limits[:, 0]
+        self.maxes = (self.offset + self.limits[:, 1]) / self.num_points
+
+        self.hyperrectangle_corners = cartesian(np.diag(self.maxes))
+        self.triangulation = spatial.Delaunay(self.hyperrectangle_corners)
+
+        self.nrectangles = np.prod(num_points)
+        self.ndim = self.triangulation.ndim
+        self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+
+    def find_simplex(self, points):
+        """Find the simpleces corresponding to points
+
+        Parameters
+        ----------
+        points: 2darray
+
+        Returns
+        -------
+        simplices: np.array (int)
+            The indeces of the simplices
+        """
+        # Get coordinates within unit cube
+        unit_coordinates = (points + self.offset) % self.maxes
+
+        # Find simplex ids on unit-cube
+        simplex_ids = self.triangulation.find_simplex(unit_coordinates)
+
+        # Convert to simplex ids on the big domain
+        rect_ids = np.sum(np.floor_divide(points, self.maxes).astype(np.int) *
+                          self.num_points, axis=1)
+        simplex_ids += rect_ids
+
+        return simplex_ids
 
 
 class Triangulation(spatial.Delaunay):
