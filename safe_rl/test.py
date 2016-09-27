@@ -4,12 +4,41 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import Triangulation
+from .triangulation import Triangulation, Delaunay
+
+
+class DelaunayTest(TestCase):
+    """Test the generalized Delaunay triangulation"""
+
+    def test_find_simplex(self):
+        limits = [[-1, 1], [-1, 2]]
+        num_points = [2, 6]
+        delaunay = Delaunay(limits, num_points)
+
+        assert_equal(delaunay.nrectangles, 2 * 6)
+        assert_equal(delaunay.ndim, 2)
+        assert_equal(delaunay.nsimplex, 2 * 2 * 6)
+        assert_equal(delaunay.offset, np.array([-1, -1]))
+        assert_equal(delaunay.maxes, np.array([2, 3]) / np.array(num_points))
+
+        lower = delaunay.triangulation.find_simplex(np.array([0, 0])).squeeze()
+        upper = 1 - lower
+
+        test_points = np.array([[-1, -1],
+                                [-0.1, -0.55],
+                                [0.1, -1],
+                                [-0.1, -0.1]])
+
+        true_result = np.array([lower, upper, 2 + lower, 4 + upper])
+
+
+        result = delaunay.find_simplex(test_points)
+
+        assert_allclose(result, true_result)
 
 
 class TriangulationTest(TestCase):
     """Test the Triangulization method"""
-
 
     def test_values(self):
         points = np.array([[0, 0],

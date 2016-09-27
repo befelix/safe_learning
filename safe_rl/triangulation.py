@@ -22,14 +22,17 @@ class Delaunay(object):
         self.limits = np.asarray(limits)
         self.num_points = np.asarray(num_points, dtype=np.int)
         self.offset = self.limits[:, 0]
-        self.maxes = (self.offset + self.limits[:, 1]) / self.num_points
+        self.maxes = (self.limits[:, 1] - self.offset) / self.num_points
 
         self.hyperrectangle_corners = cartesian(np.diag(self.maxes))
         self.triangulation = spatial.Delaunay(self.hyperrectangle_corners)
 
-        self.nrectangles = np.prod(num_points)
+        self.nrectangles = np.prod(self.num_points)
         self.ndim = self.triangulation.ndim
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+
+        self.strides = (np.concatenate(([1], self.num_points[:-1])) *
+                        self.triangulation.nsimplex)
 
     def find_simplex(self, points):
         """Find the simpleces corresponding to points
@@ -43,15 +46,20 @@ class Delaunay(object):
         simplices: np.array (int)
             The indeces of the simplices
         """
+        new_points = points - self.offset
+
         # Get coordinates within unit cube
-        unit_coordinates = (points + self.offset) % self.maxes
+        unit_coordinates = new_points % self.maxes
 
         # Find simplex ids on unit-cube
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
 
         # Convert to simplex ids on the big domain
-        rect_ids = np.sum(np.floor_divide(points, self.maxes).astype(np.int) *
-                          self.num_points, axis=1)
+        rect_ids = np.sum(
+            np.floor_divide(new_points, self.maxes).astype(np.int) *
+            self.strides,
+            axis=1)
+
         simplex_ids += rect_ids
 
         return simplex_ids
