@@ -27,12 +27,11 @@ class Delaunay(object):
 
         hyperrectangle_corners = cartesian(np.diag(self.maxes))
         self.triangulation = spatial.Delaunay(hyperrectangle_corners)
-        self.unit_simplices = self._triangulation_simplex_indices()
 
         self.nrectangles = np.prod(self.num_points)
         self.ndim = self.triangulation.ndim
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
-
+        self.unit_simplices = self._triangulation_simplex_indices()
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
@@ -182,9 +181,12 @@ class Delaunay(object):
         simplices: ndarray
             Each row consists of the indices of the simplex corners.
         """
+        if np.any(indices > self.nsimplex):
+            raise ValueError('Maximum simplex number exceeded')
+
         # Get the indices inside the unit rectangle
         unit_indices = np.remainder(indices, self.triangulation.nsimplex)
-        simplices = self.unit_simplices[unit_indices]
+        simplices = self.unit_simplices[unit_indices].copy()
 
         # Shift indices to corresponding rectangle
         rectangles = np.floor_divide(indices, self.triangulation.nsimplex)
