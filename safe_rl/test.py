@@ -42,7 +42,7 @@ class DelaunayTest(TestCase):
         delaunay = Delaunay(limits, num_points)
 
         # Forward and backwards convert all indeces
-        indeces = np.arange(delaunay.max_index)
+        indeces = np.arange(delaunay.max_index + 1)
         states = delaunay.index_to_state(indeces)
         indeces2 = delaunay.state_to_index(states)
         assert_equal(indeces, indeces2)
