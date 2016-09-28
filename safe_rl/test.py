@@ -80,28 +80,34 @@ class DelaunayTest(TestCase):
 class TriangulationTest(TestCase):
     """Test the Triangulization method"""
 
-    @unittest.skip("test_values is work in progress")
+    # @unittest.skip("test_values is work in progress")
     def test_values(self):
-        points = np.array([[0, 0],
-                           [1, 0],
-                           [0, 1]])
+        eps = 1e-10
 
-        tri = Triangulation(points)
+        tri = Triangulation([[0, 1], [0, 1]], [1, 1])
 
-        test_points = np.vstack((points, np.array([[0.5, 0.5],
-                                                   [0, 0.5],
-                                                   [0.5, 0]])))
+        test_points = np.array([[0, 0],
+                                [1 - eps, 0],
+                                [0, 1 - eps],
+                                [0.5 - eps, 0.5 - eps],
+                                [0, 0.5],
+                                [0.5, 0]])
+        nodes = tri.delaunay.state_to_index(np.array([[0, 0],
+                                                      [1, 0],
+                                                      [0, 1]]))
 
         H = tri.function_values_at(test_points).todense()
 
-        true_H = np.array([[1, 0, 0],
-                           [0, 1, 0],
-                           [0, 0, 1],
-                           [0, 0.5, 0.5],
-                           [0.5, 0, 0.5],
-                           [0.5, 0.5, 0]])
+        true_H = np.zeros((len(test_points), tri.delaunay.nindex),
+                          dtype=np.float)
+        true_H[0, nodes[0]] = 1
+        true_H[1, nodes[1]] = 1
+        true_H[2, nodes[2]] = 1
+        true_H[3, nodes[[1, 2]]] = 0.5
+        true_H[4, nodes[[0, 2]]] = 0.5
+        true_H[5, nodes[[0, 1]]] = 0.5
 
-        assert_allclose(H, true_H)
+        assert_allclose(H, true_H, atol=1e-7)
 
 
 if __name__ == '__main__':

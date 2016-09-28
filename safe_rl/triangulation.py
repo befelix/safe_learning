@@ -156,8 +156,10 @@ class Delaunay(object):
         """
         states = np.atleast_2d(states)
         eps = np.finfo(states.dtype).eps
+
         ijk_index = np.floor_divide(states - self.offset + 2 * eps,
                                     self.unit_maxes).astype(np.int)
+        # print(ijk_index)
         return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
                                     self.num_points)
 
@@ -219,7 +221,7 @@ class Delaunay(object):
         rectangles = self.state_to_rectangle(points)
         simplex_ids += rectangles * self.triangulation.nsimplex
 
-        return simplex_ids.squeeze()
+        return simplex_ids
 
     def simplices(self, indices):
         """Return the simplices corresponding to the simplex index.
@@ -263,7 +265,7 @@ class Triangulation(object):
 
     def __init__(self, limits, num_points):
         super(Triangulation, self).__init__()
-        self.triangulation = Delaunay(limits, num_points)
+        self.delaunay = Delaunay(limits, num_points)
 
     def function_values_at(self, points):
         """
@@ -282,7 +284,7 @@ class Triangulation(object):
         B: scipy.sparse
             A sparse matrix so that V(points) = B * V(vertices)
         """
-        simplex_ids = self.find_simplex(points)
+        simplex_ids = self.delaunay.find_simplex(points)
 
         num_constraints = len(points) * 3
         X = np.empty(num_constraints, dtype=np.float)
@@ -293,14 +295,15 @@ class Triangulation(object):
             # TODO: Add check for when point it is outside the triangulization
 
             # Ids for the corner points
-            simplex = self.simplices[simplex_id]
+            simplex = self.delaunay.simplices(simplex_id)
             # Id of the origin points
-            origin = self.points[simplex[0]]
+            origin = self.delaunay.index_to_state(simplex[0])[0]
 
             # pre-multiply tmp with the distance
-            tmp = self.parameters[simplex_id]
-            tmp = tmp.reshape(self.ndim, self.ndim).T.dot(
-                point - origin)
+            tmp = self.delaunay.hyperplanes[simplex_id %
+                                            self.delaunay.triangulation.nsimplex]
+            ndim = self.delaunay.ndim
+            tmp = tmp.reshape(ndim, ndim).T.dot(point - origin)
 
             index = slice(3 * i, 3 * (i + 1))
             X[index] = [1 - np.sum(tmp), tmp[0], tmp[1]]
@@ -308,7 +311,8 @@ class Triangulation(object):
             J[index] = simplex
 
         return sparse.coo_matrix((X, (I, J)),
-                                 shape=(len(points), self.npoints)).tocsr()
+                                 shape=(len(points),
+                                        self.delaunay.nindex)).tocsr()
 
     def gradient_at(self, points):
         """
@@ -325,7 +329,7 @@ class Triangulation(object):
             A sparse matrix so that gradient(points) = B * V(vertices)
         """
         raise NotImplementedError('Work in progress')
-        simplex_ids = self.find_simplex(points)
+        simplex_ids = self.delaunay.find_simplex(points)
 
         num_constraints = len(points) * 3
         X = np.empty(3 * num_constraints, dtype=np.float)
@@ -336,7 +340,7 @@ class Triangulation(object):
             # TODO: Add check for when point it is outside the triangulization
 
             # Ids for the corner points
-            simplex = self.simplices[simplex_id]
+            simplex = self.simplices(simplex_id)
             # Id of the origin points
             origin = self.points[simplex[0]]
 
