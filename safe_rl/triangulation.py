@@ -27,11 +27,11 @@ class Delaunay(object):
 
         hyperrectangle_corners = cartesian(np.diag(self.maxes))
         self.triangulation = spatial.Delaunay(hyperrectangle_corners)
+        self.unit_simplices = self._triangulation_simplex_indices()
 
         self.nrectangles = np.prod(self.num_points)
         self.ndim = self.triangulation.ndim
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
-        self.unit_simplices = self._triangulation_simplex_indices()
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
