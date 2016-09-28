@@ -33,11 +33,16 @@ class DelaunayTest(TestCase):
         test_points += np.array(limits)[:, 0]
 
         true_result = np.array([lower, upper, 6 * 2 + lower, 11 * 2 + upper])
-
-
         result = delaunay.find_simplex(test_points)
 
         assert_allclose(result, true_result)
+
+        simplices = delaunay.simplices(result)
+        true_simplices = np.array([[0, 1, 7],
+                                   [1, 7, 8],
+                                   [7, 8, 14],
+                                   [13, 19, 20]])
+        assert_equal(np.sort(simplices, axis=1), true_simplices)
 
     def test_index_state_conversion(self):
         limits = [[-1.1, 1.5], [2.2, 2.4]]

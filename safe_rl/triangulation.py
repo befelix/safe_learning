@@ -190,6 +190,9 @@ class Delaunay(object):
         rectangles = np.floor_divide(indices, self.triangulation.nsimplex)
         corner_index = self.rectangle_corner_index(rectangles)
 
+        if simplices.ndim > 1:
+            corner_index = corner_index[:, None]
+
         simplices += corner_index
         return simplices
 
