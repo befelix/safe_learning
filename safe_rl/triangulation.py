@@ -6,7 +6,31 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Triangulation', 'Delaunay']
+__all__ = ['Triangulation', 'Delaunay', 'ScipyDelaunay']
+
+
+class ScipyDelaunay(spatial.Delaunay):
+    """
+    A dummy triangulation on a regular grid, very inefficient.
+
+    Warning: The internal indexing is different from the one used in our
+    implementation!
+
+    Parameters
+    ----------
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    num_points: 1d array-like
+        The number of points with which to grid each dimension.
+    """
+    def __init__(self, limits, num_points):
+        self.limits = limits
+        self.numpoints = num_points
+        params = [np.linspace(limit[0], limit[1], n + 1) for limit, n in
+                 zip(limits, num_points)]
+        output = np.meshgrid(*params)
+        points = np.array([par.ravel() for par in output]).T
+        super(ScipyDelaunay, self).__init__(points)
 
 
 class Delaunay(object):
