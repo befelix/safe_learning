@@ -286,7 +286,11 @@ class Triangulation(object):
         """
         simplex_ids = self.delaunay.find_simplex(points)
 
-        num_constraints = len(points) * 3
+        ndim = self.delaunay.ndim
+        nsimp = ndim + 1
+        nindex = self.delaunay.nindex
+        num_constraints = len(points) * nsimp
+
         X = np.empty(num_constraints, dtype=np.float)
         I = np.empty(num_constraints, dtype=np.int32)
         J = np.empty(num_constraints, dtype=np.int32)
@@ -299,20 +303,21 @@ class Triangulation(object):
             # Id of the origin points
             origin = self.delaunay.index_to_state(simplex[0])[0]
 
-            # pre-multiply tmp with the distance
             tmp = self.delaunay.hyperplanes[simplex_id %
                                             self.delaunay.triangulation.nsimplex]
-            ndim = self.delaunay.ndim
+            # pre-multiply tmp with the distance
             tmp = tmp.reshape(ndim, ndim).T.dot(point - origin)
 
-            index = slice(3 * i, 3 * (i + 1))
-            X[index] = [1 - np.sum(tmp), tmp[0], tmp[1]]
+            # Indeces for the three constraints
+            index = slice(nsimp * i, nsimp * (i + 1))
+
+            # Assign the weights: The weights have to sum up to one.
+            X[index] = [1 - np.sum(tmp)] + tmp.tolist()
             I[index] = i
             J[index] = simplex
 
         return sparse.coo_matrix((X, (I, J)),
-                                 shape=(len(points),
-                                        self.delaunay.nindex)).tocsr()
+                                 shape=(len(points), nindex)).tocsr()
 
     def gradient_at(self, points):
         """
