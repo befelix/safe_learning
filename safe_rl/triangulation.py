@@ -6,7 +6,7 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Triangulation', 'Delaunay', 'ScipyDelaunay']
+__all__ = ['Triangulation', 'Delaunay']
 
 
 class ScipyDelaunay(spatial.Delaunay):
@@ -27,7 +27,7 @@ class ScipyDelaunay(spatial.Delaunay):
         self.limits = limits
         self.numpoints = num_points
         params = [np.linspace(limit[0], limit[1], n + 1) for limit, n in
-                 zip(limits, num_points)]
+                  zip(limits, num_points)]
         output = np.meshgrid(*params)
         points = np.array([par.ravel() for par in output]).T
         super(ScipyDelaunay, self).__init__(points)
