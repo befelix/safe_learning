@@ -123,25 +123,13 @@ class Delaunay(object):
         """
         points = np.atleast_2d(points)
 
-        # TODO: Figure out a good workflow here. Is it really the best idea
-        # to compute indeces for the simpleces or should we go straight to
-        # physical parameters/indices? If so, we need a consistent
-        # conversion scheme from simplex indices to the indeces on the corners.
-        new_points = points - self.offset
-
-        # Get coordinates within unit cube
-        unit_coordinates = new_points % self.maxes
-
-        # Find simplex ids on unit-cube
+        # Convert to basic hyperrectangle coordinates and find simplex
+        unit_coordinates = (points - self.offset) % self.maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
 
-        # Convert to simplex ids on the big domain
-        rect_ids = np.sum(
-            np.floor_divide(new_points, self.maxes).astype(np.int) *
-            self.strides,
-            axis=1)
-
-        simplex_ids += rect_ids
+        # Adjust for the hyperrectangle index
+        rectangles = self.state_to_rectangle(points)
+        simplex_ids += rectangles * self.triangulation.nsimplex
 
         return simplex_ids
 

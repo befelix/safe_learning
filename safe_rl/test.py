@@ -20,16 +20,19 @@ class DelaunayTest(TestCase):
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
         assert_equal(delaunay.offset, np.array([-1, -1]))
         assert_equal(delaunay.maxes, np.array([2, 3]) / np.array(num_points))
+        assert_equal(delaunay.nrectangles, 2 * 6)
 
         lower = delaunay.triangulation.find_simplex(np.array([0, 0])).squeeze()
         upper = 1 - lower
 
-        test_points = np.array([[-1, -1],
-                                [-0.1, -0.55],
-                                [0.1, -1],
-                                [-0.1, -0.1]])
+        test_points = np.array([[0, 0],
+                                [0.9, 0.45],
+                                [1.1, 0],
+                                [1.9, 2.9]])
 
-        true_result = np.array([lower, upper, 2 + lower, 4 + upper])
+        test_points += np.array(limits)[:, 0]
+
+        true_result = np.array([lower, upper, 6 * 2 + lower, 11 * 2 + upper])
 
 
         result = delaunay.find_simplex(test_points)
