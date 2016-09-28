@@ -23,7 +23,7 @@ class Delaunay(object):
         self.num_points = np.asarray(num_points, dtype=np.int)
         self.offset = self.limits[:, 0]
         self.maxes = (self.limits[:, 1] - self.offset) / self.num_points
-        self.max_index = np.prod(self.num_points + 1) - 1
+        self.nindex = np.prod(self.num_points + 1)
 
         hyperrectangle_corners = cartesian(np.diag(self.maxes))
         self.triangulation = spatial.Delaunay(hyperrectangle_corners)
