@@ -51,6 +51,11 @@ class DelaunayTest(TestCase):
         delaunay.state_to_index([0, 2.3])
         delaunay.index_to_state(1)
 
+        # Test rectangles
+        rectangles = np.arange(delaunay.nrectangles)
+        states = delaunay.rectangle_to_state(rectangles)
+        rectangles2 = delaunay.state_to_rectangle(states)
+        assert_equal(rectangles, rectangles2)
 
 
 class TriangulationTest(TestCase):

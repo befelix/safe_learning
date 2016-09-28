@@ -40,7 +40,7 @@ class Delaunay(object):
 
         Parameters
         ----------
-        indices: ndarray
+        indices: ndarray (int)
             The indeces of points on the discretization.
 
         Returns
@@ -48,6 +48,7 @@ class Delaunay(object):
         states: ndarray
             The states with physical units that correspond to the indices.
         """
+        indices = np.atleast_1d(indices)
         ijk_index = np.vstack(np.unravel_index(indices, self.num_points + 1)).T
         return (ijk_index * self.maxes) + self.offset
 
@@ -61,12 +62,52 @@ class Delaunay(object):
 
         Returns
         -------
-        indices: ndarray
+        indices: ndarray (int)
             The indeces that correspond to the physical states.
         """
+        states = np.atleast_2d(states)
         ijk_index = np.rint((states - self.offset) / self.maxes).astype(np.int)
         return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
                                     self.num_points + 1)
+
+    def state_to_rectangle(self, states):
+        """Convert physical states to its closest rectangle index.
+
+        Parameters
+        ----------
+        states: ndarray
+            Physical states on the discretization.
+
+        Returns
+        -------
+        rectangles: ndarray (int)
+            The indeces that correspond to rectangles of the physical states.
+        """
+        states = np.atleast_2d(states)
+        eps = np.finfo(states.dtype).eps
+        ijk_index = np.floor_divide(states - self.offset + 2 * eps,
+                                    self.maxes).astype(np.int)
+        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
+                                    self.num_points)
+
+    def rectangle_to_state(self, rectangles):
+        """
+        Convert rectangle indeces to the states of the bottem-left corners.
+
+        Parameters
+        ----------
+        rectangles: ndarray (int)
+            The indeces of the rectangles
+
+        Returns
+        -------
+        states: ndarray
+            The states that correspond to the bottom-left corners of the
+            corresponding rectangles.
+        """
+        rectangles = np.atleast_1d(rectangles)
+        ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
+        return (ijk_index * self.maxes) + self.offset
 
     def find_simplex(self, points):
         """Find the simpleces corresponding to points
@@ -80,6 +121,8 @@ class Delaunay(object):
         simplices: np.array (int)
             The indeces of the simplices
         """
+        points = np.atleast_2d(points)
+
         # TODO: Figure out a good workflow here. Is it really the best idea
         # to compute indeces for the simpleces or should we go straight to
         # physical parameters/indices? If so, we need a consistent
