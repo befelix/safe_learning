@@ -25,15 +25,33 @@ class Delaunay(object):
         self.maxes = (self.limits[:, 1] - self.offset) / self.num_points
         self.max_index = np.prod(self.num_points + 1) - 1
 
-        self.hyperrectangle_corners = cartesian(np.diag(self.maxes))
-        self.triangulation = spatial.Delaunay(self.hyperrectangle_corners)
+        hyperrectangle_corners = cartesian(np.diag(self.maxes))
+        self.triangulation = spatial.Delaunay(hyperrectangle_corners)
+        self.unit_simplices = self._triangulation_simplex_indices()
 
         self.nrectangles = np.prod(self.num_points)
         self.ndim = self.triangulation.ndim
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
 
-        self.strides = (np.concatenate(([1], self.num_points[:-1])) *
-                        self.triangulation.nsimplex)
+    def _triangulation_simplex_indices(self):
+        """Return the simplex indices in our coordinates.
+
+        Returns
+        -------
+        simplices: ndarray (int)
+            The simplices array in our extended coordinate system.
+        """
+        simplices = self.triangulation.simplices
+        new_simplices = np.empty_like(simplices)
+
+        # Convert the points to out indeces
+        index_mapping = self.state_to_index(self.triangulation.points +
+                                            self.offset)
+
+        # Replace each index with out new_index in index_mapping
+        for i, new_index in enumerate(index_mapping):
+            new_simplices[simplices == i] = new_index
+        return new_simplices
 
     def index_to_state(self, indices):
         """Convert indices to physical states.
@@ -109,6 +127,23 @@ class Delaunay(object):
         ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
         return (ijk_index * self.maxes) + self.offset
 
+    def rectangle_corner_index(self, rectangles):
+        """Return the index of the bottom-left corner of the rectangle.
+
+        Parameters
+        ----------
+        rectangles: ndarray
+            The indices of the rectangles.
+
+        Returns
+        -------
+        corners: ndarray (int)
+            The indeces of the bottom-left corners of the rectangles.
+        """
+        ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
+        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
+                                    self.num_points + 1)
+
     def find_simplex(self, points):
         """Find the simpleces corresponding to points
 
@@ -132,6 +167,27 @@ class Delaunay(object):
         simplex_ids += rectangles * self.triangulation.nsimplex
 
         return simplex_ids
+
+    def simplices(self, indeces):
+        """Return the simplices corresponding to the simplex index.
+
+        Parameters
+        ----------
+        indices: ndarray
+            The indeces of the simpleces
+
+        Returns
+        -------
+        simplices: ndarray
+            Each row consists of the indeces of the simplex corners.
+        """
+        raise NotImplementedError('wip')
+        unit_indeces = np.remainder(indeces, self.triangulation.nsimplex)
+        unit_simplices = self.unit_simplices[unit_indeces]
+
+        bottom_left_index = self.rectangle_to_state()
+
+        # unit_simplices +=
 
 
 class Triangulation(spatial.Delaunay):

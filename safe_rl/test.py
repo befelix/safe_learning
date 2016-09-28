@@ -60,6 +60,12 @@ class DelaunayTest(TestCase):
         rectangles2 = delaunay.state_to_rectangle(states)
         assert_equal(rectangles, rectangles2)
 
+        # Test rectangle corners
+        corners = delaunay.rectangle_corner_index(rectangles)
+        corner_states = delaunay.rectangle_to_state(rectangles)
+        corners2 = delaunay.state_to_index(corner_states)
+        assert_equal(corners, corners2)
+
 
 class TriangulationTest(TestCase):
     """Test the Triangulization method"""
