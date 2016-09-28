@@ -80,6 +80,7 @@ class DelaunayTest(TestCase):
 class TriangulationTest(TestCase):
     """Test the Triangulization method"""
 
+    @unittest.skip("test_values is work in progress")
     def test_values(self):
         points = np.array([[0, 0],
                            [1, 0],

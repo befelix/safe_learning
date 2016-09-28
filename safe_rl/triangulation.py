@@ -71,6 +71,10 @@ class Delaunay(object):
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
         self.nindex = np.prod(self.num_points + 1)
 
+        # Parameters for the hyperplanes of the triangulation
+        self.hyperplanes = None
+        self._update_hyperplanes()
+
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
 
@@ -90,6 +94,17 @@ class Delaunay(object):
         for i, new_index in enumerate(index_mapping):
             new_simplices[simplices == i] = new_index
         return new_simplices
+
+    def _update_hyperplanes(self):
+        """Compute the simplex hyperplane parameters on the triangulation."""
+        self.hyperplanes = np.empty((self.triangulation.nsimplex,
+                                     self.ndim ** 2),
+                                    dtype=np.float)
+
+        for i, simplex in enumerate(self.unit_simplices):
+            simplex_points = self.index_to_state(simplex)
+            self.hyperplanes[i, :] = np.linalg.inv(simplex_points[1:] -
+                                                   simplex_points[:1]).ravel()
 
     def index_to_state(self, indices):
         """Convert indices to physical states.
@@ -234,7 +249,7 @@ class Delaunay(object):
         return simplices
 
 
-class Triangulation(spatial.Delaunay):
+class Triangulation(object):
     """
     Generalization of Delaunay triangulization with additional properties.
 
@@ -246,21 +261,9 @@ class Triangulation(spatial.Delaunay):
     see scipy.spatial.Delaunay
     """
 
-    def __init__(self, points):
-        super(Triangulation, self).__init__(points)
-        self.parameters = None
-        self._update_equations()
-
-    def _update_equations(self):
-        """Compute the simplex equations for a given triangulation"""
-        # TODO: It's enough to do this for one hypercube, rest are repetitions
-        self.parameters = np.empty((self.nsimplex, self.ndim ** 2),
-                                   dtype=np.float)
-
-        for i, simplex in enumerate(self.simplices):
-            simplex_points = self.points[simplex]
-            self.parameters[i, :] = np.linalg.inv(simplex_points[1:] -
-                                                  simplex_points[:1]).ravel()
+    def __init__(self, limits, num_points):
+        super(Triangulation, self).__init__()
+        self.triangulation = Delaunay(limits, num_points)
 
     def function_values_at(self, points):
         """
