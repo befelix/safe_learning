@@ -11,17 +11,20 @@ class DelaunayTest(TestCase):
     """Test the generalized Delaunay triangulation"""
 
     def test_find_simplex(self):
+        """ Test the implices on the grid."""
         limits = [[-1, 1], [-1, 2]]
         num_points = [2, 6]
         delaunay = Delaunay(limits, num_points)
 
+        # Test the basic properties
         assert_equal(delaunay.nrectangles, 2 * 6)
         assert_equal(delaunay.ndim, 2)
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
         assert_equal(delaunay.offset, np.array([-1, -1]))
-        assert_equal(delaunay.maxes, np.array([2, 3]) / np.array(num_points))
+        assert_equal(delaunay.unit_maxes, np.array([2, 3]) / np.array(num_points))
         assert_equal(delaunay.nrectangles, 2 * 6)
 
+        # test the simplex indices
         lower = delaunay.triangulation.find_simplex(np.array([0, 0])).squeeze()
         upper = 1 - lower
 
@@ -37,6 +40,7 @@ class DelaunayTest(TestCase):
 
         assert_allclose(result, true_result)
 
+        # Test the ability to find simplices
         simplices = delaunay.simplices(result)
         true_simplices = np.array([[0, 1, 7],
                                    [1, 7, 8],
@@ -45,6 +49,7 @@ class DelaunayTest(TestCase):
         assert_equal(np.sort(simplices, axis=1), true_simplices)
 
     def test_index_state_conversion(self):
+        """Test all index conversions"""
         limits = [[-1.1, 1.5], [2.2, 2.4]]
         num_points = [7, 8]
         delaunay = Delaunay(limits, num_points)

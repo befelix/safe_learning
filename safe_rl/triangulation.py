@@ -10,28 +10,42 @@ __all__ = ['Triangulation', 'Delaunay']
 
 
 class Delaunay(object):
-    """More efficient Delaunay for regular grids.
+    """
+    Efficient Delaunay triangulation on regular grids.
+
+    This class is a wrapper around scipy.spatial.Delaunay for regular grids. It
+    splits the space into regular hyperrectangles and then computes a Delaunay
+    triangulation for only one of them. This single triangulation is then
+    generalized to other hyperrectangles, without ever maintaining the full
+    triangulation for all individual hyperrectangles.
 
     Parameters
     ----------
-    limits: 2d arraylike
-        Contains the limits
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    num_points: 1d array-like
+        The number of points with which to grid each dimension.
     """
     def __init__(self, limits, num_points):
         super(Delaunay, self).__init__()
+
         self.limits = np.asarray(limits)
         self.num_points = np.asarray(num_points, dtype=np.int)
-        self.offset = self.limits[:, 0]
-        self.maxes = (self.limits[:, 1] - self.offset) / self.num_points
-        self.nindex = np.prod(self.num_points + 1)
 
-        hyperrectangle_corners = cartesian(np.diag(self.maxes))
+        # Compute offset and unit hyperrectangle
+        self.offset = self.limits[:, 0]
+        self.unit_maxes = (self.limits[:, 1] - self.offset) / self.num_points
+
+        # Get triangulation
+        hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
         self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
+        # Some statistics about the triangulation
         self.nrectangles = np.prod(self.num_points)
         self.ndim = self.triangulation.ndim
         self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+        self.nindex = np.prod(self.num_points + 1)
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
@@ -68,7 +82,7 @@ class Delaunay(object):
         """
         indices = np.atleast_1d(indices)
         ijk_index = np.vstack(np.unravel_index(indices, self.num_points + 1)).T
-        return (ijk_index * self.maxes) + self.offset
+        return (ijk_index * self.unit_maxes) + self.offset
 
     def state_to_index(self, states):
         """Convert physical states to indices
@@ -84,9 +98,9 @@ class Delaunay(object):
             The indices that correspond to the physical states.
         """
         states = np.atleast_2d(states)
-        ijk_index = np.rint((states - self.offset) / self.maxes).astype(np.int)
-        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
-                                    self.num_points + 1)
+        states = (states - self.offset) / self.unit_maxes
+        ijk_index = np.rint(states).astype(np.int)
+        return np.ravel_multi_index(ijk_index.T, self.num_points + 1)
 
     def state_to_rectangle(self, states):
         """Convert physical states to its closest rectangle index.
@@ -104,7 +118,7 @@ class Delaunay(object):
         states = np.atleast_2d(states)
         eps = np.finfo(states.dtype).eps
         ijk_index = np.floor_divide(states - self.offset + 2 * eps,
-                                    self.maxes).astype(np.int)
+                                    self.unit_maxes).astype(np.int)
         return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
                                     self.num_points)
 
@@ -125,7 +139,7 @@ class Delaunay(object):
         """
         rectangles = np.atleast_1d(rectangles)
         ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
-        return (ijk_index * self.maxes) + self.offset
+        return (ijk_index * self.unit_maxes) + self.offset
 
     def rectangle_corner_index(self, rectangles):
         """Return the index of the bottom-left corner of the rectangle.
@@ -159,7 +173,7 @@ class Delaunay(object):
         points = np.atleast_2d(points)
 
         # Convert to basic hyperrectangle coordinates and find simplex
-        unit_coordinates = (points - self.offset) % self.maxes
+        unit_coordinates = (points - self.offset) % self.unit_maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
 
         # Adjust for the hyperrectangle index
@@ -181,9 +195,6 @@ class Delaunay(object):
         simplices: ndarray
             Each row consists of the indices of the simplex corners.
         """
-        if np.any(indices > self.nsimplex):
-            raise ValueError('Maximum simplex number exceeded')
-
         # Get the indices inside the unit rectangle
         unit_indices = np.remainder(indices, self.triangulation.nsimplex)
         simplices = self.unit_simplices[unit_indices].copy()
