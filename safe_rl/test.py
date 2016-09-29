@@ -77,6 +77,7 @@ class DelaunayTest(TestCase):
         assert_equal(corners, corners2)
 
     def test_values(self):
+        """Test the function_value_at function."""
         eps = 1e-10
 
         delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
@@ -88,8 +89,8 @@ class DelaunayTest(TestCase):
                                 [0, 0.5],
                                 [0.5, 0]])
         nodes = delaunay.state_to_index(np.array([[0, 0],
-                                                      [1, 0],
-                                                      [0, 1]]))
+                                                  [1, 0],
+                                                  [0, 1]]))
 
         H = delaunay.function_values_at(test_points).toarray()
 
@@ -111,11 +112,9 @@ class DelaunayTest(TestCase):
         assert_allclose(v1, v2)
 
     def test_gradient(self):
+        """Test the gradient_at function."""
 
-        limits = [[0, 1], [0, 1]]
         delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
-
-        values = np.random.rand(delaunay.nindex)
 
         points = np.array([[0, 0],
                            [1, 0],
