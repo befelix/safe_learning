@@ -6,7 +6,7 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Triangulation', 'Delaunay']
+__all__ = ['Delaunay']
 
 
 class ScipyDelaunay(spatial.Delaunay):
@@ -295,7 +295,7 @@ class Delaunay(object):
 
         # Return function values if desired
         if vertex_values is not None:
-            return np.sum(weights * vertex_values[simplices], axis=1)
+            return np.einsum('ij,ij->i', weights, vertex_values[simplices])
 
         # Construct sparse matrix for optimization
 
@@ -307,24 +307,7 @@ class Delaunay(object):
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-
-class Triangulation(object):
-    """
-    Generalization of Delaunay triangulization with additional properties.
-
-    A normal Delaunay triangulation, but provides additional methods to obtain
-    the hyperplanes and gradients.
-
-    Parameters
-    ----------
-    see scipy.spatial.Delaunay
-    """
-
-    def __init__(self, limits, num_points):
-        super(Triangulation, self).__init__()
-        self.delaunay = Delaunay(limits, num_points)
-
-    def gradient_at(self, points):
+    def gradient_at(self, simplex_ids, vertex_values=None):
         """
         Compute the gradients at the respective points
 
@@ -338,30 +321,27 @@ class Triangulation(object):
         B: scipy.sparse
             A sparse matrix so that gradient(points) = B * V(vertices)
         """
-        raise NotImplementedError('Work in progress')
-        simplex_ids = self.delaunay.find_simplex(points)
+        simplex_ids = np.asarray(simplex_ids, dtype=np.int)
+        simplices = self.simplices(simplex_ids)
 
-        num_constraints = len(points) * 3
-        X = np.empty(3 * num_constraints, dtype=np.float)
-        I = np.empty(3 * num_constraints, dtype=np.int32)
-        J = np.empty(3 * num_constraints, dtype=np.int32)
+        # Get hyperplane equations
+        simplex_ids %= self.triangulation.nsimplex
+        hyperplanes = self.hyperplanes[simplex_ids]
 
-        for i, simplex_id in enumerate(simplex_ids):
-            # TODO: Add check for when point it is outside the triangulization
+        # Some numbers for convenience
+        nsimp = self.ndim + 1
+        npoints = len(simplex_ids)
 
-            # Ids for the corner points
-            simplex = self.simplices(simplex_id)
-            # Id of the origin points
-            origin = self.points[simplex[0]]
+        # weights
+        weights = np.empty((npoints, self.ndim, nsimp), dtype=np.float)
 
-            # pre-multiply tmp with the distance
-            tmp = self.parameters[simplex_id].reshape(self.ndim, self.ndim)
+        # The weights have to add up to one
+        # weights = np.empty((npoints, nsimp), dtype=np.float)
+        weights[:, :, 0] = -np.sum(hyperplanes, axis=2)
+        weights[:, :, 1:] = hyperplanes
 
-            index = slice(3 * i, 3 * (i + 1))
-            X[index] = [1 - np.sum(tmp), tmp[0], tmp[1]]
-            I[index] = i
-            J[index] = simplex
-
-        # TODO: How do we handle that we get multiple derivatives here? 
-        return sparse.coo_matrix((X, (I, J)),
-                                 shape=(len(points), self.npoints)).tocsr()
+        # Return function values if desired
+        if vertex_values is not None:
+            return np.einsum('ijk,ik->ij', weights, vertex_values[simplices])
+        else:
+            return NotImplementedError('wip')

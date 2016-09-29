@@ -110,12 +110,36 @@ class DelaunayTest(TestCase):
         v2 = delaunay.function_values_at(test_points, vertex_values=values)
         assert_allclose(v1, v2)
 
+    def test_gradient(self):
 
+        limits = [[0, 1], [0, 1]]
+        delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
 
-class TriangulationTest(TestCase):
-    """Test the Triangulization method"""
+        values = np.random.rand(delaunay.nindex)
 
-    # @unittest.skip("test_values is work in progress")
+        points = np.array([[0, 0],
+                           [1, 0],
+                           [0, 1],
+                           [1, 1]], dtype=np.int)
+        nodes = delaunay.state_to_index(points)
+
+        # Simplex with node values:
+        # 3 - 1
+        # | \ |
+        # 1 - 2
+        # --> x
+
+        values = np.zeros(delaunay.nindex)
+        values[nodes] = [1, 2, 3, 1]
+
+        simplices = delaunay.find_simplex(np.array([[0.01, 0.01],
+                                                    [0.99, 0.99]]))
+
+        grad = delaunay.gradient_at([0, 1], vertex_values=values)
+
+        true_grad = np.array([[1, 2], [-2, -1]])
+        assert_allclose(grad[simplices], true_grad)
+
 
 if __name__ == '__main__':
     unittest.main()
