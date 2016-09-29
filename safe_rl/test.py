@@ -112,7 +112,7 @@ class TriangulationTest(TestCase):
         # Test value property
         values = np.random.rand(tri.delaunay.nindex)
         v1 = H.dot(values)
-        v2 = tri.function_values_at(test_points, values=values)
+        v2 = tri.function_values_at(test_points, vertex_values=values)
         assert_allclose(v1, v2)
 
 

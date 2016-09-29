@@ -267,7 +267,7 @@ class Triangulation(object):
         super(Triangulation, self).__init__()
         self.delaunay = Delaunay(limits, num_points)
 
-    def function_values_at(self, points, values=None):
+    def function_values_at(self, points, vertex_values=None):
         """
         Obtain function values at points from triangulation.
 
@@ -294,8 +294,10 @@ class Triangulation(object):
         simplex_ids %= self.delaunay.triangulation.nsimplex
         hyperplanes = self.delaunay.hyperplanes[simplex_ids]
 
+        # Pre-multiply each hyperplane by (point - origin)
         hyp_weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
 
+        # Some numbers for convenience
         nsimp = self.delaunay.ndim + 1
         nindex = self.delaunay.nindex
         npoints = len(points)
@@ -305,8 +307,11 @@ class Triangulation(object):
         weights[:, 0] = 1 - np.sum(hyp_weights, axis=1)
         weights[:, 1:] = hyp_weights
 
-        if values is not None:
-            return np.sum(weights * values[simplices], axis=1)
+        # Return function values if desired
+        if vertex_values is not None:
+            return np.sum(weights * vertex_values[simplices], axis=1)
+
+        # Construct sparse matrix for optimization
 
         # Indices of constraints (nsimp points per simplex, so we have nsimp
         #  values in each row; one for each simplex)
