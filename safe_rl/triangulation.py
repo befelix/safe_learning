@@ -250,23 +250,6 @@ class Delaunay(object):
         simplices += corner_index
         return simplices
 
-
-class Triangulation(object):
-    """
-    Generalization of Delaunay triangulization with additional properties.
-
-    A normal Delaunay triangulation, but provides additional methods to obtain
-    the hyperplanes and gradients.
-
-    Parameters
-    ----------
-    see scipy.spatial.Delaunay
-    """
-
-    def __init__(self, limits, num_points):
-        super(Triangulation, self).__init__()
-        self.delaunay = Delaunay(limits, num_points)
-
     def function_values_at(self, points, vertex_values=None):
         """
         Obtain function values at points from triangulation.
@@ -290,20 +273,19 @@ class Triangulation(object):
             Either a vector of function values or a sparse matrix so that
             V(points) = B.dot(V(vertices))
         """
-        simplex_ids = self.delaunay.find_simplex(points)
-        simplices = self.delaunay.simplices(simplex_ids)
-        origins = self.delaunay.index_to_state(simplices[:, 0])
+        simplex_ids = self.find_simplex(points)
+        simplices = self.simplices(simplex_ids)
+        origins = self.index_to_state(simplices[:, 0])
 
         # Get hyperplane equations
-        simplex_ids %= self.delaunay.triangulation.nsimplex
-        hyperplanes = self.delaunay.hyperplanes[simplex_ids]
+        simplex_ids %= self.triangulation.nsimplex
+        hyperplanes = self.hyperplanes[simplex_ids]
 
         # Pre-multiply each hyperplane by (point - origin)
         hyp_weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
 
         # Some numbers for convenience
-        nsimp = self.delaunay.ndim + 1
-        nindex = self.delaunay.nindex
+        nsimp = self.ndim + 1
         npoints = len(points)
 
         # The weights have to add up to one
@@ -323,7 +305,24 @@ class Triangulation(object):
         cols = simplices.ravel()
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
-                                 shape=(npoints, nindex))
+                                 shape=(npoints, self.nindex))
+
+
+class Triangulation(object):
+    """
+    Generalization of Delaunay triangulization with additional properties.
+
+    A normal Delaunay triangulation, but provides additional methods to obtain
+    the hyperplanes and gradients.
+
+    Parameters
+    ----------
+    see scipy.spatial.Delaunay
+    """
+
+    def __init__(self, limits, num_points):
+        super(Triangulation, self).__init__()
+        self.delaunay = Delaunay(limits, num_points)
 
     def gradient_at(self, points):
         """

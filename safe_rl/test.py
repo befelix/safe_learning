@@ -4,7 +4,7 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import Triangulation, Delaunay
+from .triangulation import Delaunay
 
 
 class DelaunayTest(TestCase):
@@ -76,15 +76,10 @@ class DelaunayTest(TestCase):
         corners2 = delaunay.state_to_index(corner_states)
         assert_equal(corners, corners2)
 
-
-class TriangulationTest(TestCase):
-    """Test the Triangulization method"""
-
-    # @unittest.skip("test_values is work in progress")
     def test_values(self):
         eps = 1e-10
 
-        tri = Triangulation([[0, 1], [0, 1]], [1, 1])
+        delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
 
         test_points = np.array([[0, 0],
                                 [1 - eps, 0],
@@ -92,13 +87,13 @@ class TriangulationTest(TestCase):
                                 [0.5 - eps, 0.5 - eps],
                                 [0, 0.5],
                                 [0.5, 0]])
-        nodes = tri.delaunay.state_to_index(np.array([[0, 0],
+        nodes = delaunay.state_to_index(np.array([[0, 0],
                                                       [1, 0],
                                                       [0, 1]]))
 
-        H = tri.function_values_at(test_points).toarray()
+        H = delaunay.function_values_at(test_points).toarray()
 
-        true_H = np.zeros((len(test_points), tri.delaunay.nindex),
+        true_H = np.zeros((len(test_points), delaunay.nindex),
                           dtype=np.float)
         true_H[0, nodes[0]] = 1
         true_H[1, nodes[1]] = 1
@@ -110,11 +105,17 @@ class TriangulationTest(TestCase):
         assert_allclose(H, true_H, atol=1e-7)
 
         # Test value property
-        values = np.random.rand(tri.delaunay.nindex)
+        values = np.random.rand(delaunay.nindex)
         v1 = H.dot(values)
-        v2 = tri.function_values_at(test_points, vertex_values=values)
+        v2 = delaunay.function_values_at(test_points, vertex_values=values)
         assert_allclose(v1, v2)
 
+
+
+class TriangulationTest(TestCase):
+    """Test the Triangulization method"""
+
+    # @unittest.skip("test_values is work in progress")
 
 if __name__ == '__main__':
     unittest.main()
