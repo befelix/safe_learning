@@ -267,7 +267,7 @@ class Triangulation(object):
         super(Triangulation, self).__init__()
         self.delaunay = Delaunay(limits, num_points)
 
-    def function_values_at(self, points):
+    def function_values_at(self, points, values=None):
         """
         Obtain function values at points from triangulation.
 
@@ -278,6 +278,8 @@ class Triangulation(object):
         ----------
         points: 2d array
             Each row represents one point
+        values: 1d array, optional
+            The values for all the corners of the simplex
 
         Returns
         -------
@@ -292,23 +294,26 @@ class Triangulation(object):
         simplex_ids %= self.delaunay.triangulation.nsimplex
         hyperplanes = self.delaunay.hyperplanes[simplex_ids]
 
-        weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
+        hyp_weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
 
         nsimp = self.delaunay.ndim + 1
         nindex = self.delaunay.nindex
         npoints = len(points)
+
+        # The weights have to add up to one
+        weights = np.empty((npoints, nsimp), dtype=np.float)
+        weights[:, 0] = 1 - np.sum(hyp_weights, axis=1)
+        weights[:, 1:] = hyp_weights
+
+        if values is not None:
+            return np.sum(weights * values[simplices], axis=1)
 
         # Indices of constraints (nsimp points per simplex, so we have nsimp
         #  values in each row; one for each simplex)
         rows = np.repeat(np.arange(len(points)), nsimp)
         cols = simplices.ravel()
 
-        # The weights have to add up to one
-        values = np.empty((npoints, nsimp), dtype=np.float)
-        values[:, 0] = 1 - np.sum(weights, axis=1)
-        values[:, 1:] = weights
-
-        return sparse.coo_matrix((values.ravel(), (rows, cols)),
+        return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, nindex))
 
     def gradient_at(self, points):

@@ -96,7 +96,7 @@ class TriangulationTest(TestCase):
                                                       [1, 0],
                                                       [0, 1]]))
 
-        H = tri.function_values_at(test_points).todense()
+        H = tri.function_values_at(test_points).toarray()
 
         true_H = np.zeros((len(test_points), tri.delaunay.nindex),
                           dtype=np.float)
@@ -108,6 +108,12 @@ class TriangulationTest(TestCase):
         true_H[5, nodes[[0, 1]]] = 0.5
 
         assert_allclose(H, true_H, atol=1e-7)
+
+        # Test value property
+        values = np.random.rand(tri.delaunay.nindex)
+        v1 = H.dot(values)
+        v2 = tri.function_values_at(test_points, values=values)
+        assert_allclose(v1, v2)
 
 
 if __name__ == '__main__':
