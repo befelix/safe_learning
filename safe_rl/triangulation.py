@@ -309,17 +309,29 @@ class Delaunay(object):
 
     def gradient_at(self, simplex_ids, vertex_values=None):
         """
-        Compute the gradients at the respective points
+        Return the gradients at the respective points.
+
+        If the values on the vertices are provided, the function returns the
+        gradients at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector of all the function values on the vertices,
+        returns the gradients. Note that after the product you have to call
+        ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
+        gradient matrix.
 
         Parameters
         ----------
-        points: 2d array
-            Each row represents one point
+        simplex_ids: 1d array
+            Each value represents the id of a simplex
+        vertex_values: 1d array, optional
+            The values for all the corners of the simplex
 
         Returns
         -------
-        B: scipy.sparse
-            A sparse matrix so that gradient(points) = B * V(vertices)
+        gradients:
+            Either a vector of gradient values or a sparse matrix so that
+            grad(points) = B.dot(V(vertices)).reshape(ndim, -1) corresponds
+            to the true gradients
         """
         simplex_ids = np.asarray(simplex_ids, dtype=np.int)
         simplices = self.simplices(simplex_ids)
@@ -335,13 +347,19 @@ class Delaunay(object):
         # weights
         weights = np.empty((npoints, self.ndim, nsimp), dtype=np.float)
 
-        # The weights have to add up to one
-        # weights = np.empty((npoints, nsimp), dtype=np.float)
         weights[:, :, 0] = -np.sum(hyperplanes, axis=2)
         weights[:, :, 1:] = hyperplanes
 
         # Return function values if desired
         if vertex_values is not None:
             return np.einsum('ijk,ik->ij', weights, vertex_values[simplices])
-        else:
-            return NotImplementedError('wip')
+
+        # Construct sparse matrix for optimization
+
+        # Indices of constraints (ndim gradients for each point, which each
+        # depend on the nsimp vertices of the simplex.
+        rows = np.repeat(np.arange(npoints * self.ndim), nsimp)
+        cols = np.tile(simplices, (1, self.ndim)).ravel()
+
+        return sparse.coo_matrix((weights.ravel(), (rows, cols)),
+                                 shape=(self.ndim * npoints, self.nindex))

@@ -135,10 +135,28 @@ class DelaunayTest(TestCase):
         simplices = delaunay.find_simplex(np.array([[0.01, 0.01],
                                                     [0.99, 0.99]]))
 
+        true_grad = np.array([[1, 2], [-2, -1]])[simplices]
+
+        # Construct true H (gradient as function of values)
+        true_H = np.zeros((2 * delaunay.ndim, delaunay.nindex))
+
+        # Indicators for lower and upper triangle
+        lower = simplices[0] * delaunay.ndim
+        upper = simplices[1] * delaunay.ndim
+
+        true_H[lower, nodes[[0, 1]]] = [-1, 1]
+        true_H[lower + 1, nodes[[0, 2]]] = [-1, 1]
+        true_H[upper, nodes[[2, 3]]] = [-1, 1]
+        true_H[upper + 1, nodes[[1, 3]]] = [-1, 1]
+
+        # Evaluate gradient with and without values
+        H = delaunay.gradient_at([0, 1]).toarray()
         grad = delaunay.gradient_at([0, 1], vertex_values=values)
 
-        true_grad = np.array([[1, 2], [-2, -1]])
-        assert_allclose(grad[simplices], true_grad)
+        # Compare
+        assert_allclose(grad, true_grad)
+        assert_allclose(H, true_H)
+        assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
 
 
 if __name__ == '__main__':
