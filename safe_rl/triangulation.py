@@ -281,43 +281,35 @@ class Triangulation(object):
 
         Returns
         -------
-        B: scipy.sparse
+        B: scipy.sparse.coo_matrix
             A sparse matrix so that V(points) = B * V(vertices)
         """
         simplex_ids = self.delaunay.find_simplex(points)
+        simplices = self.delaunay.simplices(simplex_ids)
+        origins = self.delaunay.index_to_state(simplices[:, 0])
 
-        ndim = self.delaunay.ndim
-        nsimp = ndim + 1
+        # Get hyperplane equations
+        simplex_ids %= self.delaunay.triangulation.nsimplex
+        hyperplanes = self.delaunay.hyperplanes[simplex_ids]
+
+        weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
+
+        nsimp = self.delaunay.ndim + 1
         nindex = self.delaunay.nindex
-        num_constraints = len(points) * nsimp
+        npoints = len(points)
 
-        X = np.empty(num_constraints, dtype=np.float)
-        I = np.empty(num_constraints, dtype=np.int32)
-        J = np.empty(num_constraints, dtype=np.int32)
+        # Indices of constraints (nsimp points per simplex, so we have nsimp
+        #  values in each row; one for each simplex)
+        rows = np.repeat(np.arange(len(points)), nsimp)
+        cols = simplices.ravel()
 
-        for i, (point, simplex_id) in enumerate(zip(points, simplex_ids)):
-            # TODO: Add check for when point it is outside the triangulization
+        # The weights have to add up to one
+        values = np.empty((npoints, nsimp), dtype=np.float)
+        values[:, 0] = 1 - np.sum(weights, axis=1)
+        values[:, 1:] = weights
 
-            # Ids for the corner points
-            simplex = self.delaunay.simplices(simplex_id)
-            # Id of the origin points
-            origin = self.delaunay.index_to_state(simplex[0])[0]
-
-            tmp = self.delaunay.hyperplanes[simplex_id %
-                                            self.delaunay.triangulation.nsimplex]
-            # pre-multiply tmp with the distance
-            tmp = tmp.T.dot(point - origin)
-
-            # Indeces for the three constraints
-            index = slice(nsimp * i, nsimp * (i + 1))
-
-            # Assign the weights: The weights have to sum up to one.
-            X[index] = [1 - np.sum(tmp)] + tmp.tolist()
-            I[index] = i
-            J[index] = simplex
-
-        return sparse.coo_matrix((X, (I, J)),
-                                 shape=(len(points), nindex)).tocsr()
+        return sparse.coo_matrix((values.ravel(), (rows, cols)),
+                                 shape=(npoints, nindex))
 
     def gradient_at(self, points):
         """
