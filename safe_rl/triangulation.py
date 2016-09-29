@@ -98,13 +98,13 @@ class Delaunay(object):
     def _update_hyperplanes(self):
         """Compute the simplex hyperplane parameters on the triangulation."""
         self.hyperplanes = np.empty((self.triangulation.nsimplex,
-                                     self.ndim ** 2),
+                                     self.ndim, self.ndim),
                                     dtype=np.float)
 
         for i, simplex in enumerate(self.unit_simplices):
             simplex_points = self.index_to_state(simplex)
-            self.hyperplanes[i, :] = np.linalg.inv(simplex_points[1:] -
-                                                   simplex_points[:1]).ravel()
+            self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
+                                                simplex_points[:1])
 
     def index_to_state(self, indices):
         """Convert indices to physical states.
@@ -306,7 +306,7 @@ class Triangulation(object):
             tmp = self.delaunay.hyperplanes[simplex_id %
                                             self.delaunay.triangulation.nsimplex]
             # pre-multiply tmp with the distance
-            tmp = tmp.reshape(ndim, ndim).T.dot(point - origin)
+            tmp = tmp.T.dot(point - origin)
 
             # Indeces for the three constraints
             index = slice(nsimp * i, nsimp * (i + 1))
