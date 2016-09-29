@@ -271,20 +271,24 @@ class Triangulation(object):
         """
         Obtain function values at points from triangulation.
 
-        Get a matrix that, when multiplied with the vector of function values
-        on the vertices of the simplex, returns the function values at points.
+        If the values on the vertices are provided, the function returns the
+        values at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector with all the function values on the vertices,
+        returns the function values at points.
 
         Parameters
         ----------
         points: 2d array
             Each row represents one point
-        values: 1d array, optional
+        vertex_values: 1d array, optional
             The values for all the corners of the simplex
 
         Returns
         -------
-        B: scipy.sparse.coo_matrix
-            A sparse matrix so that V(points) = B * V(vertices)
+        values:
+            Either a vector of function values or a sparse matrix so that
+            V(points) = B.dot(V(vertices))
         """
         simplex_ids = self.delaunay.find_simplex(points)
         simplices = self.delaunay.simplices(simplex_ids)
