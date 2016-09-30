@@ -59,6 +59,8 @@ class Delaunay(object):
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
         self.unit_maxes = (self.limits[:, 1] - self.offset) / self.num_points
+        self.offset_limits = np.hstack((np.zeros_like(self.limits[:, [0]]),
+                                        self.limits[:, [1]] - self.offset))
 
         # Get triangulation
         hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
@@ -155,11 +157,14 @@ class Delaunay(object):
             The indices that correspond to rectangles of the physical states.
         """
         states = np.atleast_2d(states)
+        # clip to domain (find closest rectangle)
         eps = np.finfo(states.dtype).eps
+        states = np.clip(states - self.offset,
+                         self.offset_limits[:, 0] + 2 * eps,
+                         self.offset_limits[:, 1] - 2 * eps)
 
-        ijk_index = np.floor_divide(states - self.offset + 2 * eps,
-                                    self.unit_maxes).astype(np.int)
-        # print(ijk_index)
+        ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
+
         return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
                                     self.num_points)
 
