@@ -48,6 +48,11 @@ class DelaunayTest(TestCase):
                                    [13, 19, 20]])
         assert_equal(np.sort(simplices, axis=1), true_simplices)
 
+        # Test point ouside domain (should map to bottom left and top right)
+        assert_equal(lower, delaunay.find_simplex(np.array([[-100., -100.]])))
+        assert_equal(delaunay.nsimplex - 1 - lower,
+                     delaunay.find_simplex(np.array([[100., 100.]])))
+
     def test_index_state_conversion(self):
         """Test all index conversions"""
         limits = [[-1.1, 1.5], [2.2, 2.4]]
@@ -72,6 +77,10 @@ class DelaunayTest(TestCase):
         assert_equal(rectangles, rectangles2)
 
         rectangle = delaunay.state_to_rectangle(100 * np.ones((1, 2)))
+        assert_equal(rectangle, delaunay.nrectangles - 1)
+
+        rectangle = delaunay.state_to_rectangle(-100 * np.ones((1, 2)))
+        assert_equal(rectangle, 0)
 
         # Test rectangle corners
         corners = delaunay.rectangle_corner_index(rectangles)
