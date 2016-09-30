@@ -71,6 +71,8 @@ class DelaunayTest(TestCase):
                                                   delaunay.unit_maxes / 2)
         assert_equal(rectangles, rectangles2)
 
+        rectangle = delaunay.state_to_rectangle(100 * np.ones((1, 2)))
+
         # Test rectangle corners
         corners = delaunay.rectangle_corner_index(rectangles)
         corner_states = delaunay.rectangle_to_state(rectangles)

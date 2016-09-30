@@ -53,14 +53,15 @@ class Delaunay(object):
     def __init__(self, limits, num_points):
         super(Delaunay, self).__init__()
 
-        self.limits = np.asarray(limits)
+        self.limits = np.asarray(limits, dtype=np.float)
         self.num_points = np.asarray(num_points, dtype=np.int)
 
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
         self.unit_maxes = (self.limits[:, 1] - self.offset) / self.num_points
-        self.offset_limits = np.hstack((np.zeros_like(self.limits[:, [0]]),
-                                        self.limits[:, [1]] - self.offset))
+        self.offset_limits = np.stack((np.zeros_like(self.limits[:, 0]),
+                                       self.limits[:, 1] - self.offset),
+                                      axis=1)
 
         # Get triangulation
         hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
@@ -156,16 +157,15 @@ class Delaunay(object):
         rectangles: ndarray (int)
             The indices that correspond to rectangles of the physical states.
         """
-        states = np.atleast_2d(states)
         # clip to domain (find closest rectangle)
         eps = np.finfo(states.dtype).eps
-        states = np.clip(states - self.offset,
+        states = np.atleast_2d(states)
+        states = np.clip(states - self.offset[None, :] + 2 * eps,
                          self.offset_limits[:, 0] + 2 * eps,
                          self.offset_limits[:, 1] - 2 * eps)
 
         ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
-
-        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
+        return np.ravel_multi_index(ijk_index.T,
                                     self.num_points)
 
     def rectangle_to_state(self, rectangles):
@@ -218,8 +218,13 @@ class Delaunay(object):
         """
         points = np.atleast_2d(points)
 
+        eps = np.finfo(points.dtype).eps
+        points2 = np.clip(points - self.offset[None, :],
+                          self.offset_limits[:, 0] + 2 * eps,
+                          self.offset_limits[:, 1] - 2 * eps)
+
         # Convert to basic hyperrectangle coordinates and find simplex
-        unit_coordinates = (points - self.offset) % self.unit_maxes
+        unit_coordinates = points2 % self.unit_maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
 
         # Adjust for the hyperrectangle index
