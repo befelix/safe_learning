@@ -295,17 +295,16 @@ class Delaunay(object):
         simplex_ids %= self.triangulation.nsimplex
         hyperplanes = self.hyperplanes[simplex_ids]
 
-        # Pre-multiply each hyperplane by (point - origin)
-        hyp_weights = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
-
         # Some numbers for convenience
         nsimp = self.ndim + 1
         npoints = len(points)
 
-        # The weights have to add up to one
         weights = np.empty((npoints, nsimp), dtype=np.float)
-        weights[:, 0] = 1 - np.sum(hyp_weights, axis=1)
-        weights[:, 1:] = hyp_weights
+
+        # Pre-multiply each hyperplane by (point - origin)
+        weights[:, 1:] = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
+        # The weights have to add up to one
+        weights[:, 0] = 1 - np.sum(weights[:, 1:], axis=1)
 
         # Return function values if desired
         if vertex_values is not None:
@@ -352,7 +351,6 @@ class Delaunay(object):
 
         # Get hyperplane equations
         simplex_ids %= self.triangulation.nsimplex
-        hyperplanes = self.hyperplanes[simplex_ids]
 
         # Some numbers for convenience
         nsimp = self.ndim + 1
@@ -361,8 +359,8 @@ class Delaunay(object):
         # weights
         weights = np.empty((npoints, self.ndim, nsimp), dtype=np.float)
 
-        weights[:, :, 0] = -np.sum(hyperplanes, axis=2)
-        weights[:, :, 1:] = hyperplanes
+        weights[:, :, 1:] = self.hyperplanes[simplex_ids]
+        weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
 
         # Return function values if desired
         if vertex_values is not None:
