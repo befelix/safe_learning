@@ -108,12 +108,14 @@ class Delaunay(object):
                                      self.ndim, self.ndim),
                                     dtype=np.float)
 
+        # Use that the bottom-left rectangle has the index zero, so that the
+        # index numbers of scipy correspond to ours.
         for i, simplex in enumerate(self.unit_simplices):
             simplex_points = self.index_to_state(simplex)
             self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
                                                 simplex_points[:1])
 
-    def center_states(self, states, clip=True):
+    def _center_states(self, states, clip=True):
         """Center the states to the interval [0, x].
 
         Parameters
@@ -187,7 +189,7 @@ class Delaunay(object):
         """
         # clip to domain (find closest rectangle)
         if offset:
-            states = self.center_states(states, clip=True)
+            states = self._center_states(states, clip=True)
 
         ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
         return np.ravel_multi_index(ijk_index.T,
@@ -241,7 +243,7 @@ class Delaunay(object):
         simplices: np.array (int)
             The indices of the simplices
         """
-        points = self.center_states(points, clip=True)
+        points = self._center_states(points, clip=True)
 
         # Convert to basic hyperrectangle coordinates and find simplex
         unit_coordinates = points % self.unit_maxes
