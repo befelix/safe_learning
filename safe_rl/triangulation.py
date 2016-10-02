@@ -113,6 +113,28 @@ class Delaunay(object):
             self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
                                                 simplex_points[:1])
 
+    def center_states(self, states, clip=True):
+        """Center the states to the interval [0, x].
+
+        Parameters
+        ----------
+        states: np.array
+        clip: bool, optinal
+            If False the data is not clipped to lie within the limits.
+
+        Returns
+        -------
+        offset_states: ndarray
+        """
+        states = np.atleast_2d(states) - self.offset[None, :]
+        eps = np.finfo(states.dtype).eps
+        if clip:
+            np.clip(states,
+                    self.offset_limits[:, 0] + 2 * eps,
+                    self.offset_limits[:, 1] - 2 * eps,
+                    out=states)
+        return states
+
     def index_to_state(self, indices):
         """Convert indices to physical states.
 
@@ -148,13 +170,15 @@ class Delaunay(object):
         ijk_index = np.rint(states).astype(np.int)
         return np.ravel_multi_index(ijk_index.T, self.num_points + 1)
 
-    def state_to_rectangle(self, states):
+    def state_to_rectangle(self, states, offset=True):
         """Convert physical states to its closest rectangle index.
 
         Parameters
         ----------
         states: ndarray
             Physical states on the discretization.
+        offset: bool, optional
+            If False the data is assumed to be already centered and clipped.
 
         Returns
         -------
@@ -162,11 +186,8 @@ class Delaunay(object):
             The indices that correspond to rectangles of the physical states.
         """
         # clip to domain (find closest rectangle)
-        eps = np.finfo(states.dtype).eps
-        states = np.atleast_2d(states)
-        states = np.clip(states - self.offset[None, :] + 2 * eps,
-                         self.offset_limits[:, 0] + 2 * eps,
-                         self.offset_limits[:, 1] - 2 * eps)
+        if offset:
+            states = self.center_states(states, clip=True)
 
         ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
         return np.ravel_multi_index(ijk_index.T,
@@ -220,19 +241,14 @@ class Delaunay(object):
         simplices: np.array (int)
             The indices of the simplices
         """
-        points = np.atleast_2d(points)
-
-        eps = np.finfo(points.dtype).eps
-        points2 = np.clip(points - self.offset[None, :],
-                          self.offset_limits[:, 0] + 2 * eps,
-                          self.offset_limits[:, 1] - 2 * eps)
+        points = self.center_states(points, clip=True)
 
         # Convert to basic hyperrectangle coordinates and find simplex
-        unit_coordinates = points2 % self.unit_maxes
+        unit_coordinates = points % self.unit_maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
 
         # Adjust for the hyperrectangle index
-        rectangles = self.state_to_rectangle(points)
+        rectangles = self.state_to_rectangle(points, offset=False)
         simplex_ids += rectangles * self.triangulation.nsimplex
 
         return simplex_ids
