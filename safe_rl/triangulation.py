@@ -85,6 +85,10 @@ class Delaunay(object):
         -------
         simplices: ndarray (int)
             The simplices array in our extended coordinate system.
+
+        Notes
+        -----
+        This is only used once in the initialization.
         """
         simplices = self.triangulation.simplices
         new_simplices = np.empty_like(simplices)
