@@ -152,7 +152,7 @@ class Delaunay(object):
         """
         indices = np.atleast_1d(indices)
         ijk_index = np.vstack(np.unravel_index(indices, self.num_points + 1)).T
-        return (ijk_index * self.unit_maxes) + self.offset
+        return ijk_index * self.unit_maxes + self.offset
 
     def state_to_index(self, states):
         """Convert physical states to indices
