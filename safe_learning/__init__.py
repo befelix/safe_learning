@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from .triangulation import *
 from .lyapunov import *
+from .reinforcement_learning import  *
 from . import utilities
 
 # Import test after __all__ (no documentation)
