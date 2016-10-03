@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from .utilities import *
 from .safe_learning import *
 from .triangulation import *
+from .lyapunov import *
 
 # Import test after __all__ (no documentation)
 from numpy.testing import Tester
