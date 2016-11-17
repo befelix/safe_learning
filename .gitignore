@@ -1,4 +1,6 @@
 *.pyc
 .idea
 .ipynb_checkpoints
+htmlcov
+.coverage
 

@@ -19,13 +19,17 @@ get_script_dir () {
 cd $(get_script_dir)
 
 # Run style tests
-echo "Running style tests"
+echo "Running style tests..."
 flake8 $module --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
 
 # Ignore import errors for __init__ and tests
 flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
 
 # Run unit tests
-echo "Running unit tests"
+echo "Running unit tests..."
 nosetests --with-doctest $module
 
+# Running coverage
+echo "Running coverage..."
+coverage run -m $module.test
+coverage report -m
