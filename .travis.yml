@@ -1,0 +1,29 @@
+language: python
+python:
+  - 2.7
+notifications:
+  email: false
+
+# Setup anaconda
+before_install:
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b -p ~/miniconda
+  - export PATH=~/miniconda/bin:$PATH
+  - conda update --yes conda
+  # The next couple lines fix a crash with multiprocessing on Travis and are not specific to using Miniconda
+  - sudo rm -rf /dev/shm
+  - sudo ln -s /run/shm /dev/shm
+# Install packages
+install:
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION pep8 numpy scipy matplotlib nose
+  - pip install GPy
+  # Coverage packages are on my binstar channel
+  # - conda install --yes -c dan_blanchard python-coveralls nose-cov
+  # - python setup.py install
+
+# Run tests
+script:
+  - find safe_learning -name \*.py -exec pep8 --ignore=E402 {} +
+  - nosetests --with-doctest safe_learning
+
