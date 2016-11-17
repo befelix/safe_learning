@@ -16,7 +16,7 @@ before_install:
   - sudo ln -s /run/shm /dev/shm
 # Install packages
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION pep8 numpy scipy matplotlib nose
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION pep8 numpy scipy scikit-learn matplotlib nose
   - pip install GPy
   # Coverage packages are on my binstar channel
   # - conda install --yes -c dan_blanchard python-coveralls nose-cov
