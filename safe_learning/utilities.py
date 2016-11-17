@@ -69,18 +69,18 @@ def linearly_spaced_combinations(bounds, num_samples):
     # Convert to 2-D array
     return combinations(inputs)
 
-                                 
+
 def lqr(A, B, Q, R):
     """
-    Compute the continuous time LQR-controller. 
-    
+    Compute the continuous time LQR-controller.
+
     Parameters
     ----------
     A - np.array
     B - np.array
     Q - np.array
     R - np.array
-     
+
     Returns
     -------
     K - np.array
@@ -89,23 +89,23 @@ def lqr(A, B, Q, R):
         Cost to go matrix
     """
     P = sp.linalg.solve_continuous_are(A, B, Q, R)
-     
+
     # LQR gain
     K = np.linalg.solve(R, B.T.dot(P))
 
     return K, P
-    
-    
+
+
 def quadratic_lyapunov_function(x, P):
     """
     Compute V(x) and dV(x)/dx for a quadratic Lyapunov function
-    
+
     V(x) = x.T P x
     dV(x)/dx = 2 x.T P
-    
+
     Equivalent, but slower implementation:
     np.array([ xi.dot(p.dot(xi.T)) for xi in x])
-    
+
     Parameters
     ----------
     x - np.array
@@ -256,4 +256,4 @@ def ellipse_bounds(P, level, n=100):
     n /= 2
 
     # Return x-position (symmetric) and upper/lower bounds
-    return pos[:n, 0], pos[:n, 1], pos[:n-1:-1, 1]
+    return pos[:n, 0], pos[:n, 1], pos[:n - 1:-1, 1]

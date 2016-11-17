@@ -192,4 +192,3 @@ class LyapunovFunction(object):
 
         self.cmax = self.max_safe_levelset(accuracy, interval)
         self.safe_set[:] = self.V <= self.cmax
-

@@ -21,7 +21,8 @@ class DelaunayTest(TestCase):
         assert_equal(delaunay.ndim, 2)
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
         assert_equal(delaunay.offset, np.array([-1, -1]))
-        assert_equal(delaunay.unit_maxes, np.array([2, 3]) / np.array(num_points))
+        assert_equal(delaunay.unit_maxes,
+                     np.array([2, 3]) / np.array(num_points))
         assert_equal(delaunay.nrectangles, 2 * 6)
 
         # test the simplex indices
