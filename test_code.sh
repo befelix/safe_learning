@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+module="safe_learning"
+
 get_script_dir () {
      SOURCE="${BASH_SOURCE[0]}"
      # While $SOURCE is a symlink, resolve it
@@ -16,11 +18,14 @@ get_script_dir () {
 # Change to script root
 cd $(get_script_dir)
 
-# Run PEP8
+# Run style tests
 echo "Running style tests"
-find safe_learning -name \*.py -exec pep8 --ignore=E402 {} +
+flake8 $module --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
+
+# Ignore import errors for __init__ and tests
+flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
 
 # Run unit tests
 echo "Running unit tests"
-nosetests --with-doctest safe_learning
+nosetests --with-doctest $module
 

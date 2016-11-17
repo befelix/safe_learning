@@ -16,7 +16,7 @@ before_install:
   - sudo ln -s /run/shm /dev/shm
 # Install packages
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION pep8 numpy scipy scikit-learn matplotlib nose
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION flake8 numpy scipy scikit-learn matplotlib nose
   - pip install GPy
   # Coverage packages are on my binstar channel
   # - conda install --yes -c dan_blanchard python-coveralls nose-cov
@@ -24,6 +24,7 @@ install:
 
 # Run tests
 script:
-  - find safe_learning -name \*.py -exec pep8 --ignore=E402 {} +
+  - flake8 safe_learning --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
+  - flake8 safe_learning --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
   - nosetests --with-doctest safe_learning
 

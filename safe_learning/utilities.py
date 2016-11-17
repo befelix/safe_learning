@@ -13,7 +13,6 @@ from __future__ import division, print_function
 from collections import Sequence
 
 import numpy as np
-import scipy as sp
 import scipy.linalg
 import scipy.interpolate
 
@@ -88,7 +87,7 @@ def lqr(A, B, Q, R):
     P - np.array
         Cost to go matrix
     """
-    P = sp.linalg.solve_continuous_are(A, B, Q, R)
+    P = scipy.linalg.solve_continuous_are(A, B, Q, R)
 
     # LQR gain
     K = np.linalg.solve(R, B.T.dot(P))
@@ -174,7 +173,7 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
                 Whether to include prediction noise
             """
             x = np.atleast_2d(x)
-            y = sp.interpolate.griddata(inputs, output, x, method='linear')
+            y = scipy.interpolate.griddata(inputs, output, x, method='linear')
             y = np.atleast_2d(y)
             if mean_function is not None:
                 y += mean_function(x)
@@ -183,8 +182,8 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
             return y
         return evaluate_gp_function_linear
     elif interpolation == 'kernel':
-        cho_factor = sp.linalg.cho_factor(cov)
-        alpha = sp.linalg.cho_solve(cho_factor, output)
+        cho_factor = scipy.linalg.cho_factor(cov)
+        alpha = scipy.linalg.cho_solve(cho_factor, output)
 
         def evaluate_gp_function_kernel(x, noise=True):
             """
