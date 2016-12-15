@@ -17,19 +17,24 @@ get_script_dir () {
 
 # Change to script root
 cd $(get_script_dir)
+GREEN='\033[0;32m'
+NC='\033[0m'
 
 # Run style tests
-echo "Running style tests..."
+echo -e "${GREEN}Running style tests.${NC}"
 flake8 $module --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
 
 # Ignore import errors for __init__ and tests
 flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
 
-# Run unit tests
-echo "Running unit tests..."
-nosetests --with-doctest $module
+echo -e "${GREEN}Testing docstring conventions.${NC}"
+# Test docstring conventions
+pydocstyle $module --match='(?!__init__).*\.py' 2>&1 | grep -v "WARNING: __all__"
 
-# Running coverage
-echo "Running coverage..."
-coverage run -m $module.test
-coverage report -m
+# Run unit tests
+echo -e "${GREEN}Running unit tests.${NC}"
+nosetests --with-doctest --with-coverage --cover-min-percentage=55 --cover-erase --cover-package=$module $module
+
+# Export html
+coverage html
+

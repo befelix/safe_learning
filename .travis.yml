@@ -17,6 +17,7 @@ before_install:
 # Install packages
 install:
   - conda install --yes python=$TRAVIS_PYTHON_VERSION flake8 numpy scipy scikit-learn matplotlib nose
+  - pip install pydocstyle
   - pip install GPy
   # Coverage packages are on my binstar channel
   # - conda install --yes -c dan_blanchard python-coveralls nose-cov
@@ -26,5 +27,6 @@ install:
 script:
   - flake8 safe_learning --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
   - flake8 safe_learning --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
-  - nosetests --with-doctest safe_learning
+  - nosetests --with-doctest --with-coverage --cover-min-percentage=55 --cover-erase --cover-package=safe_learning safe_learning
+  - pydocstyle safe_learning --match='(?!__init__).*\.py'
 
