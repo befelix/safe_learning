@@ -1,3 +1,5 @@
+"""Unit tests for the safe_learning module."""
+
 from __future__ import division, print_function, absolute_import
 
 from numpy.testing import *
@@ -8,10 +10,10 @@ from .triangulation import Delaunay
 
 
 class DelaunayTest(TestCase):
-    """Test the generalized Delaunay triangulation"""
+    """Test the generalized Delaunay triangulation."""
 
     def test_find_simplex(self):
-        """ Test the implices on the grid."""
+        """Test the implices on the grid."""
         limits = [[-1, 1], [-1, 2]]
         num_points = [2, 6]
         delaunay = Delaunay(limits, num_points)
@@ -55,7 +57,7 @@ class DelaunayTest(TestCase):
                      delaunay.find_simplex(np.array([[100., 100.]])))
 
     def test_index_state_conversion(self):
-        """Test all index conversions"""
+        """Test all index conversions."""
         limits = [[-1.1, 1.5], [2.2, 2.4]]
         num_points = [7, 8]
         delaunay = Delaunay(limits, num_points)
@@ -126,7 +128,6 @@ class DelaunayTest(TestCase):
 
     def test_gradient(self):
         """Test the gradient_at function."""
-
         delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
 
         points = np.array([[0, 0],

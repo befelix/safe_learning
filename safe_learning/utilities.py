@@ -1,4 +1,6 @@
 """
+Utilities for plotting, function definitions, and GPs.
+
 This file defines utilities needed for the experiments, such as creating
 parameter grids, computing LQR controllers, Lyapunov functions, sample
 functions of Gaussian processes, and plotting ellipses.
@@ -27,11 +29,11 @@ def combinations(arrays):
 
     Parameters
     ----------
-    arrays: list of np.array
+    arrays : list of np.array
 
     Returns
     -------
-    array - np.array
+    array : np.array
         An array that contains all combinations of the input arrays
     """
     return np.array(np.meshgrid(*arrays)).T.reshape(-1, len(arrays))
@@ -43,16 +45,16 @@ def linearly_spaced_combinations(bounds, num_samples):
 
     Parameters
     ----------
-    bounds: sequence of tuples
+    bounds : sequence of tuples
         The bounds for the variables, [(x1_min, x1_max), (x2_min, x2_max), ...]
-    num_samples: integer or array_likem
+    num_samples : integer or array_likem
         Number of samples to use for every dimension. Can be a constant if
         the same number should be used for all, or an array to fine-tune
         precision. Total number of data points is num_samples ** len(bounds).
 
     Returns
     -------
-    combinations: 2-d array
+    combinations : 2-d array
         A 2-d arrray. If d = len(bounds) and l = prod(num_samples) then it
         is of size l x d, that is, every row contains one combination of
         inputs.
@@ -75,16 +77,16 @@ def lqr(A, B, Q, R):
 
     Parameters
     ----------
-    A - np.array
-    B - np.array
-    Q - np.array
-    R - np.array
+    A : np.array
+    B : np.array
+    Q : np.array
+    R : np.array
 
     Returns
     -------
-    K - np.array
+    K : np.array
         Controller matrix
-    P - np.array
+    P : np.array
         Cost to go matrix
     """
     P = scipy.linalg.solve_continuous_are(A, B, Q, R)
@@ -97,7 +99,7 @@ def lqr(A, B, Q, R):
 
 def quadratic_lyapunov_function(x, P):
     """
-    Compute V(x) and dV(x)/dx for a quadratic Lyapunov function
+    Compute V(x) and dV(x)/dx for a quadratic Lyapunov function.
 
     V(x) = x.T P x
     dV(x)/dx = 2 x.T P
@@ -107,16 +109,16 @@ def quadratic_lyapunov_function(x, P):
 
     Parameters
     ----------
-    x - np.array
+    x : np.array
         2d array that has a state vector xi on each row
-    P - np.array
+    P : np.array
         2d cost matrix for lyapunov function
 
     Returns
     -------
-    V - np.array
+    V : np.array
         1d array with V(x)
-    dV - np.array
+    dV : np.array
         2d array with dV(x)/dx on each row
     """
     x = np.asarray(x)
@@ -130,25 +132,25 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
 
     Parameters
     ----------
-    kernel: instance of GPy.kern.*
-    bounds: list of tuples
+    kernel : instance of GPy.kern.*
+    bounds : list of tuples
         [(x1_min, x1_max), (x2_min, x2_max), ...]
-    num_samples: int or list
+    num_samples : int or list
         If integer draws the corresponding number of samples in all
         dimensions and test all possible input combinations. If a list then
         the list entries correspond to the number of linearly spaced samples of
         the corresponding input
-    noise_var: float
+    noise_var : float
         Variance of the observation noise of the GP function
-    interpolation: string
+    interpolation : string
         If 'linear' interpolate linearly between samples, if 'kernel' use the
         corresponding mean RKHS-function of the GP.
-    mean_function: callable
+    mean_function : callable
         Mean of the sample function
 
     Returns
     -------
-    function: object
+    function : object
         function(x, noise=True)
         A function that takes as inputs new locations x to be evaluated and
         returns the corresponding noisy function values. If noise=False is
@@ -167,9 +169,9 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
 
             Parameters
             ----------
-            x: np.array
+            x : np.array
                 2D array with inputs
-            noise: bool
+            noise : bool
                 Whether to include prediction noise
             """
             x = np.atleast_2d(x)
@@ -191,10 +193,10 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
 
             Parameters
             ----------
-            x: np.array
+            x : np.array
                 2D array with inputs
-            noise: bool
-                Whether to include prediction noise
+            noise : bool
+                Whether to include prediction noise.
             """
             x = np.atleast_2d(x)
             y = kernel.K(x, inputs).dot(alpha)
@@ -218,20 +220,20 @@ def ellipse_bounds(P, level, n=100):
 
     Parameters
     ----------
-    P: np.array
+    P : np.array
         The matrix of the ellipsoid
-    level: float
+    level : float
         The value of the levelset
-    n: int
+    n : int
         Number of data points
 
     Returns
     -------
-    x - np.array
+    x : np.array
         1D array of x positions of the ellipse
-    yu - np.array
+    yu : np.array
         The upper bound of the ellipse
-    yl - np.array
+    yl : np.array
         The lower bound of the ellipse
 
     Notes

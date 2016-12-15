@@ -1,3 +1,4 @@
+"""Implements the Lyapunov functions and learning."""
 
 from __future__ import absolute_import, division, print_function
 
@@ -54,20 +55,61 @@ def line_search_bisection(f, bound, accuracy):
 
 
 class FakeGP(object):
-    """Fake GP for deterministic functions"""
+    """Fake GP for deterministic functions.
+
+    Parameters
+    ----------
+    function : callable
+        The function that is used as a fake GP model.
+    """
+
     def __init__(self, function):
+        """Initialization, see `FakeGP`."""
         self.function = function
 
     def predict_noiseless(self, X):
+        """Predict the deterministic function values with zero variance.
+
+        Parameters
+        ----------
+        X : ndarray
+            2D array with the test inputs.
+
+        Returns
+        -------
+        mean: ndarray
+            The mean (determinstic function values).
+        var : ndarray
+            The variance (always zero).
+        """
         mean = self.function(X)
         var = np.zeros_like(mean)
         return mean, var
 
 
 class LyapunovFunction(object):
+    """A class for general Lyapunov functions.
+
+    Parameters
+    ----------
+    discretization : ndarray
+        A discrete grid on which to evaluate the Lyapunov function.
+    lyapunov_function : callable
+        The lyapunov function. Can be called with states and returns the
+        corresponding values of the Lyapunov function.
+    dynamics_model : callable
+        The dynamics model. Can be either a GP or a deterministic function
+        (callable).
+    initial_set : ndarray, optional
+        An array of states that are known to be safe a priori.
+    beta : float, optional
+        The scaling factor used for the GP confidence intervals. Only used if
+        the dynamics are modeled with a GP.
+    """
 
     def __init__(self, discretization, lyapunov_function,
                  dynamics_model, initial_set=None, beta=2):
+        """Initialization, see `LyapunovFunction`."""
         super(LyapunovFunction, self).__init__()
 
         self.discretization = discretization
@@ -95,18 +137,18 @@ class LyapunovFunction(object):
 
         Parameters
         ----------
-        dV: np.array
+        dV : np.array
             The derivatives of the Lyapunov function at grid points
-        mean: np.array
+        mean : np.array
             gp mean of the dynamics (including prior dynamics as mean)
-        variance: np.array
+        variance : np.array
             gp var of the dynamics
 
         Returns
         -------
-        mean - np.array
+        mean : np.array
             The mean of V_dot at each grid point
-        var - np.array
+        var : np.array
             The variance of V_dot at each grid point
         """
         # V_dot_mean = dV * mu
@@ -117,40 +159,37 @@ class LyapunovFunction(object):
                 np.sum(self.dV ** 2 * variance, axis=1))
 
     def max_safe_levelset(self, accuracy, interval=None):
-        """
-        Find maximum level set of V in S.
-
+        """Find maximum level set of V in S.
 
         Parameters
         ----------
-        S: boolean array
+        S : boolean array
             Elements are True if V_dot <= L tau
-        V: np.array
+        V : np.array
             1d array with values of Lyapunov function.
-        accuracy :float
+        accuracy : float
             The accuracy up to which the level set is computed
-        interval: list
+        interval : list
             Interval within which the level set is search. Defaults
             to [0, max(V) + accuracy]
 
         Returns
         -------
-        c - float
+        c : float
             The value of the maximum level set
         """
-
         def levelset_is_safe(c):
             """
-            Return true if V(c) is subset of S
+            Return true if V(c) is subset of S.
 
             Parameters
             ----------
-            c: float
+            c : float
                 The level set value
 
             Returns
             -------
-            safe: boolean
+            safe : boolean
             """
             # All points that have V<=c should be safe (have S=True)
             return np.all(self.v_dot_negative[self.V <= c])
@@ -163,17 +202,16 @@ class LyapunovFunction(object):
                                      accuracy)[0]
 
     def update_safe_set(self, threshold, accuracy, interval=None):
-        """
-        Compute the safe set
+        """Compute the safe set.
 
         Parameters
         ----------
-        threshold: float
+        threshold : float
             The safety threshold, in the paper threshold = -L * tau
 
         Returns
         -------
-        safe_set: ndarray
+        safe_set : ndarray
             The safe set.
         """
         # Get the distribution over the dynamics and V_dot

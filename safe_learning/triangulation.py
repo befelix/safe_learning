@@ -1,3 +1,5 @@
+"""An efficient implementation of Delaunay triangulation on regular grids."""
+
 from __future__ import absolute_import, print_function, division
 
 
@@ -23,6 +25,7 @@ class ScipyDelaunay(spatial.Delaunay):
     num_points: 1d array-like
         The number of points with which to grid each dimension.
     """
+
     def __init__(self, limits, num_points):
         self.limits = limits
         self.numpoints = num_points
@@ -50,7 +53,9 @@ class Delaunay(object):
     num_points: 1d array-like
         The number of points with which to grid each dimension.
     """
+
     def __init__(self, limits, num_points):
+        """Initialization."""
         super(Delaunay, self).__init__()
 
         self.limits = np.asarray(limits, dtype=np.float)
@@ -120,13 +125,13 @@ class Delaunay(object):
 
         Parameters
         ----------
-        states: np.array
-        clip: bool, optinal
+        states : np.array
+        clip : bool, optinal
             If False the data is not clipped to lie within the limits.
 
         Returns
         -------
-        offset_states: ndarray
+        offset_states : ndarray
         """
         states = np.atleast_2d(states) - self.offset[None, :]
         eps = np.finfo(states.dtype).eps
@@ -142,12 +147,12 @@ class Delaunay(object):
 
         Parameters
         ----------
-        indices: ndarray (int)
+        indices : ndarray (int)
             The indices of points on the discretization.
 
         Returns
         -------
-        states: ndarray
+        states : ndarray
             The states with physical units that correspond to the indices.
         """
         indices = np.atleast_1d(indices)
@@ -155,7 +160,7 @@ class Delaunay(object):
         return ijk_index * self.unit_maxes + self.offset
 
     def state_to_index(self, states):
-        """Convert physical states to indices
+        """Convert physical states to indices.
 
         Parameters
         ----------
@@ -177,14 +182,14 @@ class Delaunay(object):
 
         Parameters
         ----------
-        states: ndarray
+        states : ndarray
             Physical states on the discretization.
-        offset: bool, optional
+        offset : bool, optional
             If False the data is assumed to be already centered and clipped.
 
         Returns
         -------
-        rectangles: ndarray (int)
+        rectangles : ndarray (int)
             The indices that correspond to rectangles of the physical states.
         """
         # clip to domain (find closest rectangle)
@@ -201,12 +206,12 @@ class Delaunay(object):
 
         Parameters
         ----------
-        rectangles: ndarray (int)
+        rectangles : ndarray (int)
             The indices of the rectangles
 
         Returns
         -------
-        states: ndarray
+        states : ndarray
             The states that correspond to the bottom-left corners of the
             corresponding rectangles.
         """
@@ -224,7 +229,7 @@ class Delaunay(object):
 
         Returns
         -------
-        corners: ndarray (int)
+        corners : ndarray (int)
             The indices of the bottom-left corners of the rectangles.
         """
         ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
@@ -232,15 +237,15 @@ class Delaunay(object):
                                     self.num_points + 1)
 
     def find_simplex(self, points):
-        """Find the simplices corresponding to points
+        """Find the simplices corresponding to points.
 
         Parameters
         ----------
-        points: 2darray
+        points : 2darray
 
         Returns
         -------
-        simplices: np.array (int)
+        simplices : np.array (int)
             The indices of the simplices
         """
         points = self._center_states(points, clip=True)
@@ -260,12 +265,12 @@ class Delaunay(object):
 
         Parameters
         ----------
-        indices: ndarray
+        indices : ndarray
             The indices of the simpleces
 
         Returns
         -------
-        simplices: ndarray
+        simplices : ndarray
             Each row consists of the indices of the simplex corners.
         """
         # Get the indices inside the unit rectangle
@@ -294,14 +299,14 @@ class Delaunay(object):
 
         Parameters
         ----------
-        points: 2d array
+        points : 2d array
             Each row represents one point
-        vertex_values: 1d array, optional
+        vertex_values : 1d array, optional
             The values for all the corners of the simplex
 
         Returns
         -------
-        values:
+        values
             Either a vector of function values or a sparse matrix so that
             V(points) = B.dot(V(vertices))
         """
@@ -352,14 +357,14 @@ class Delaunay(object):
 
         Parameters
         ----------
-        simplex_ids: 1d array
+        simplex_ids : 1d array
             Each value represents the id of a simplex
-        vertex_values: 1d array, optional
+        vertex_values : 1d array, optional
             The values for all the corners of the simplex
 
         Returns
         -------
-        gradients:
+        gradients
             Either a vector of gradient values or a sparse matrix so that
             grad(points) = B.dot(V(vertices)).reshape(ndim, -1) corresponds
             to the true gradients
