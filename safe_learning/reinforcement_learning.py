@@ -105,12 +105,13 @@ class PolicyIteration(object):
         # Initialize
         values = np.empty((len(self.state_space), len(self.action_space)),
                           dtype=np.float)
-        actions = np.empty((len(self.state_space), 1), dtype=np.float)
+        action_size = (len(self.state_space), 1)
 
         # Compute values for each action
         for i, action in enumerate(self.action_space):
-            actions[:] = action
-            self.get_future_values(self.state_space, actions, out=values[:, i])
+            self.get_future_values(self.state_space,
+                                   np.broadcast_to(action, action_size),
+                                   out=values[:, i])
 
         # Select best action for policy
         self.policy[:] = self.action_space[np.argmax(values, axis=1)]
