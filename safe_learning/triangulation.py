@@ -50,6 +50,14 @@ class FunctionApproximator(object):
         self.limits = np.asarray(limits, dtype=np.float)
         self.ndim = None
 
+    def function_values_at(self):
+        """Return the function values."""
+        raise NotImplementedError()
+
+    def gradient_at(self):
+        """Return the gradient."""
+        raise NotImplementedError()
+
 
 class Delaunay(FunctionApproximator):
     """
