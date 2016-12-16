@@ -6,7 +6,22 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import Delaunay
+from .triangulation import Delaunay, ScipyDelaunay
+
+
+class ScipyDelaunayTest(TestCase):
+    """Test the fake replacement for Scipy."""
+
+    def test_init(self):
+        """Test the initialization."""
+        limits = [[-1, 1], [-1, 2]]
+        num_points = [2, 6]
+        sp_delaunay = ScipyDelaunay(limits, num_points)
+        delaunay = Delaunay(limits, num_points)
+
+        assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
+        assert_equal(delaunay.ndim, sp_delaunay.ndim)
+        sp_delaunay.find_simplex(np.array([[0, 0]]))
 
 
 class DelaunayTest(TestCase):
