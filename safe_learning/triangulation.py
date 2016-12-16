@@ -11,6 +11,29 @@ from sklearn.utils.extmath import cartesian
 __all__ = ['Delaunay']
 
 
+class FunctionApproximator(object):
+    """Base class for function approximators.
+
+    Parameters
+    ----------
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    """
+
+    def __init__(self, limits):
+        super(FunctionApproximator, self).__init__()
+        self.limits = np.asarray(limits, dtype=np.float)
+        self.ndim = None
+
+    def function_values_at(self, points, vertex_values=None, project=False):
+        """Return the function values."""
+        raise NotImplementedError()
+
+    def gradient_at(self, simplex_ids, vertex_values=None):
+        """Return the gradient."""
+        raise NotImplementedError()
+
+
 class ScipyDelaunay(spatial.Delaunay):
     """
     A dummy triangulation on a regular grid, very inefficient.
@@ -27,7 +50,6 @@ class ScipyDelaunay(spatial.Delaunay):
     """
 
     def __init__(self, limits, num_points):
-        self.limits = limits
         self.numpoints = num_points
         params = [np.linspace(limit[0], limit[1], n + 1) for limit, n in
                   zip(limits, num_points)]
@@ -36,38 +58,8 @@ class ScipyDelaunay(spatial.Delaunay):
         super(ScipyDelaunay, self).__init__(points)
 
 
-class FunctionApproximator(object):
-    """Base class for function approximators.
-
-    Parameters
-    ----------
-    limits: 2d array-like
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
-    """
-
-    def __init__(self, limits):
-        super(FunctionApproximator, self).__init__()
-        self.limits = np.asarray(limits, dtype=np.float)
-        self.ndim = None
-
-    def function_values_at(self):
-        """Return the function values."""
-        raise NotImplementedError()
-
-    def gradient_at(self):
-        """Return the gradient."""
-        raise NotImplementedError()
-
-
-class Delaunay(FunctionApproximator):
-    """
-    Efficient Delaunay triangulation on regular grids.
-
-    This class is a wrapper around scipy.spatial.Delaunay for regular grids. It
-    splits the space into regular hyperrectangles and then computes a Delaunay
-    triangulation for only one of them. This single triangulation is then
-    generalized to other hyperrectangles, without ever maintaining the full
-    triangulation for all individual hyperrectangles.
+class GridWorld(FunctionApproximator):
+    """Base class for function approximators on a regular grid.
 
     Parameters
     ----------
@@ -78,8 +70,8 @@ class Delaunay(FunctionApproximator):
     """
 
     def __init__(self, limits, num_points):
-        """Initialization."""
-        super(Delaunay, self).__init__(limits)
+        """Initialization, see `GridWorld`."""
+        super(GridWorld, self).__init__(limits)
 
         self.num_points = np.asarray(num_points, dtype=np.int)
 
@@ -90,57 +82,10 @@ class Delaunay(FunctionApproximator):
                                        self.limits[:, 1] - self.offset),
                                       axis=1)
 
-        # Get triangulation
-        hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
-        self.triangulation = spatial.Delaunay(hyperrectangle_corners)
-        self.unit_simplices = self._triangulation_simplex_indices()
-
-        # Some statistics about the triangulation
+        # Statistics about the grid
         self.nrectangles = np.prod(self.num_points)
-        self.ndim = self.triangulation.ndim
-        self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+        self.ndim = len(limits)
         self.nindex = np.prod(self.num_points + 1)
-
-        # Parameters for the hyperplanes of the triangulation
-        self.hyperplanes = None
-        self._update_hyperplanes()
-
-    def _triangulation_simplex_indices(self):
-        """Return the simplex indices in our coordinates.
-
-        Returns
-        -------
-        simplices: ndarray (int)
-            The simplices array in our extended coordinate system.
-
-        Notes
-        -----
-        This is only used once in the initialization.
-        """
-        simplices = self.triangulation.simplices
-        new_simplices = np.empty_like(simplices)
-
-        # Convert the points to out indices
-        index_mapping = self.state_to_index(self.triangulation.points +
-                                            self.offset)
-
-        # Replace each index with out new_index in index_mapping
-        for i, new_index in enumerate(index_mapping):
-            new_simplices[simplices == i] = new_index
-        return new_simplices
-
-    def _update_hyperplanes(self):
-        """Compute the simplex hyperplane parameters on the triangulation."""
-        self.hyperplanes = np.empty((self.triangulation.nsimplex,
-                                     self.ndim, self.ndim),
-                                    dtype=np.float)
-
-        # Use that the bottom-left rectangle has the index zero, so that the
-        # index numbers of scipy correspond to ours.
-        for i, simplex in enumerate(self.unit_simplices):
-            simplex_points = self.index_to_state(simplex)
-            self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
-                                                simplex_points[:1])
 
     def _center_states(self, states, clip=True):
         """Center the states to the interval [0, x].
@@ -257,6 +202,94 @@ class Delaunay(FunctionApproximator):
         ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
         return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
                                     self.num_points + 1)
+
+
+class PiecewiseConstant(GridWorld):
+    """A piecewise constant function approximator.
+
+    Parameters
+    ----------
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    num_points: 1d array-like
+        The number of points with which to grid each dimension.
+    """
+
+    def __init__(self, limits, num_points):
+        """Initialization, see `PiecewiseConstant`."""
+        super(PiecewiseConstant, self).__init__(limits, num_points)
+
+
+class Delaunay(GridWorld):
+    """
+    Efficient Delaunay triangulation on regular grids.
+
+    This class is a wrapper around scipy.spatial.Delaunay for regular grids. It
+    splits the space into regular hyperrectangles and then computes a Delaunay
+    triangulation for only one of them. This single triangulation is then
+    generalized to other hyperrectangles, without ever maintaining the full
+    triangulation for all individual hyperrectangles.
+
+    Parameters
+    ----------
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    num_points: 1d array-like
+        The number of points with which to grid each dimension.
+    """
+
+    def __init__(self, limits, num_points):
+        """Initialization."""
+        super(Delaunay, self).__init__(limits, num_points)
+
+        # Get triangulation
+        hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
+        self.triangulation = spatial.Delaunay(hyperrectangle_corners)
+        self.unit_simplices = self._triangulation_simplex_indices()
+
+        # Some statistics about the triangulation
+        self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+
+        # Parameters for the hyperplanes of the triangulation
+        self.hyperplanes = None
+        self._update_hyperplanes()
+
+    def _triangulation_simplex_indices(self):
+        """Return the simplex indices in our coordinates.
+
+        Returns
+        -------
+        simplices: ndarray (int)
+            The simplices array in our extended coordinate system.
+
+        Notes
+        -----
+        This is only used once in the initialization.
+        """
+        simplices = self.triangulation.simplices
+        new_simplices = np.empty_like(simplices)
+
+        # Convert the points to out indices
+        index_mapping = self.state_to_index(self.triangulation.points +
+                                            self.offset)
+
+        # Replace each index with out new_index in index_mapping
+        for i, new_index in enumerate(index_mapping):
+            new_simplices[simplices == i] = new_index
+        return new_simplices
+
+    def _update_hyperplanes(self):
+        """Compute the simplex hyperplane parameters on the triangulation."""
+        self.hyperplanes = np.empty((self.triangulation.nsimplex,
+                                     self.ndim, self.ndim),
+                                    dtype=np.float)
+
+        # Use that the bottom-left rectangle has the index zero, so that the
+        # index numbers of scipy correspond to ours.
+        for i, simplex in enumerate(self.unit_simplices):
+            simplex_points = self.index_to_state(simplex)
+            self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
+                                                simplex_points[:1])
 
     def find_simplex(self, points):
         """Find the simplices corresponding to points.
