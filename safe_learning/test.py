@@ -141,6 +141,49 @@ class DelaunayTest(TestCase):
         v2 = delaunay.function_values_at(test_points, vertex_values=values)
         assert_allclose(v1, v2)
 
+        # Test the projections
+        test_point = np.array([-0.5, -0.5])
+        values = np.array([0, 1, 1])
+        unprojected = delaunay.function_values_at(test_point, values)
+        projected = delaunay.function_values_at(test_point,
+                                                values,
+                                                project=True)
+
+        assert_allclose(projected, np.array([0, 0]))
+        assert_allclose(unprojected, np.array([-1, -1]))
+
+    def test_multiple_dimensions(self):
+        """Test delaunay in three dimensions."""
+        limits = [[0, 1]] * 3
+        delaunay = Delaunay(limits, [1] * 3)
+        assert_equal(delaunay.ndim, 3)
+        assert_equal(delaunay.nrectangles, 1)
+        assert_equal(delaunay.nsimplex, np.math.factorial(3))
+
+        corner_points = np.array([[0, 0, 0],
+                                  [1, 0, 0],
+                                  [0, 1, 0],
+                                  [0, 0, 1],
+                                  [0, 1, 1],
+                                  [1, 1, 0],
+                                  [1, 0, 1],
+                                  [1, 1, 1]], dtype=np.float)
+
+        values = np.sum(delaunay.index_to_state(np.arange(8)), axis=1) / 3
+
+        test_points = np.vstack((corner_points,
+                                 np.array([[0, 0, 0.5],
+                                           [0.5, 0, 0],
+                                           [0, 0.5, 0],
+                                           [0.5, 0.5, 0.5]])))
+        corner_values = np.sum(corner_points, axis=1) / 3
+        true_values = np.hstack((corner_values,
+                                 np.array([1 / 6, 1 / 6, 1 / 6, 1 / 2])))
+
+        result = delaunay.function_values_at(test_points,
+                                             values)
+        assert_allclose(result, true_values, atol=1e-5)
+
     def test_gradient(self):
         """Test the gradient_at function."""
         delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])

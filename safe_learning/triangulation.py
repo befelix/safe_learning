@@ -36,7 +36,22 @@ class ScipyDelaunay(spatial.Delaunay):
         super(ScipyDelaunay, self).__init__(points)
 
 
-class Delaunay(object):
+class FunctionApproximator(object):
+    """Base class for function approximators.
+
+    Parameters
+    ----------
+    limits: 2d array-like
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
+    """
+
+    def __init__(self, limits):
+        super(FunctionApproximator, self).__init__()
+        self.limits = np.asarray(limits, dtype=np.float)
+        self.ndim = None
+
+
+class Delaunay(FunctionApproximator):
     """
     Efficient Delaunay triangulation on regular grids.
 
@@ -56,9 +71,8 @@ class Delaunay(object):
 
     def __init__(self, limits, num_points):
         """Initialization."""
-        super(Delaunay, self).__init__()
+        super(Delaunay, self).__init__(limits)
 
-        self.limits = np.asarray(limits, dtype=np.float)
         self.num_points = np.asarray(num_points, dtype=np.int)
 
         # Compute offset and unit hyperrectangle
@@ -287,7 +301,7 @@ class Delaunay(object):
         simplices += corner_index
         return simplices
 
-    def function_values_at(self, points, vertex_values=None):
+    def function_values_at(self, points, vertex_values=None, project=False):
         """
         Obtain function values at points from triangulation.
 
@@ -303,6 +317,10 @@ class Delaunay(object):
             Each row represents one point
         vertex_values : 1d array, optional
             The values for all the corners of the simplex
+        project : bool, optional
+            Wether to project data points back onto the triangulation if they
+            are defined outside the limits. This can increase robustness for
+            iterative algorithms.
 
         Returns
         -------
@@ -311,6 +329,12 @@ class Delaunay(object):
             V(points) = B.dot(V(vertices))
         """
         simplex_ids = self.find_simplex(points)
+
+        if project:
+            points = np.clip(points,
+                             self.offset_limits[:, 0] + self.offset,
+                             self.offset_limits[:, 1] + self.offset)
+
         simplices = self.simplices(simplex_ids)
         origins = self.index_to_state(simplices[:, 0])
 

@@ -82,7 +82,8 @@ class PolicyIteration(object):
 
         expected_values = self.function_approximator.function_values_at(
             next_states,
-            vertex_values=self.values)
+            vertex_values=self.values,
+            project=True)
 
         if out is None:
             out = np.empty(len(states), dtype=np.float)
