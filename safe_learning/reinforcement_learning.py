@@ -3,6 +3,11 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+try:
+    import cvxpy
+    _CVXPY_AVAILABLE = True
+except ImportError:
+    _CVXPY_AVAILABLE = False
 
 
 __all__ = ['PolicyIteration']
@@ -100,6 +105,40 @@ class PolicyIteration(object):
     def update_value_function(self):
         """Perform one round of value updates."""
         self.get_future_values(self.state_space, self.policy, out=self.values)
+
+    def optimize_value_function(self):
+        """Solve a linear program to optimize the value function."""
+        if not _CVXPY_AVAILABLE:
+            raise ImportError('This function requires the cvxpy module.')
+
+        next_states = self.dynamics(self.state_space, self.policy)
+        rewards = self.reward_function(self.state_space,
+                                       self.policy,
+                                       next_states)
+        rewards[self.terminal_states] = self.terminal_reward
+
+        # Define random variables
+        values = cvxpy.Variable(self.function_approximator.nindex)
+        objective = cvxpy.Maximize(cvxpy.sum_entries(values))
+
+        value_matrix = self.function_approximator.function_values_at(
+            next_states,
+            project=True)
+        # Make cvxpy work with sparse matrices
+        value_matrix = cvxpy.Constant(value_matrix)
+
+        future_values = rewards + self.gamma * value_matrix * values
+
+        constraints = [values <= future_values,
+                       values[self.terminal_states] == self.terminal_reward]
+
+        prob = cvxpy.Problem(objective, constraints)
+        prob.solve()
+
+        if not prob.status == cvxpy.OPTIMAL:
+            raise ValueError('Optimization problem is {}'.format(prob.status))
+
+        self.values[:] = values.value.squeeze()
 
     def update_policy(self):
         """Optimize the policy for a given value function."""
