@@ -25,7 +25,7 @@ class FunctionApproximator(object):
         self.limits = np.asarray(limits, dtype=np.float)
         self.ndim = None
 
-    def function_values_at(self, points, vertex_values=None, project=False):
+    def values_at(self, points, vertex_values=None, project=False):
         """Return the function values."""
         raise NotImplementedError()
 
@@ -342,7 +342,7 @@ class Delaunay(GridWorld):
         simplices += corner_index
         return simplices
 
-    def function_values_at(self, points, vertex_values=None, project=False):
+    def values_at(self, points, vertex_values=None, project=False):
         """
         Obtain function values at points from triangulation.
 

@@ -122,7 +122,7 @@ class DelaunayTest(TestCase):
                                                   [1, 0],
                                                   [0, 1]]))
 
-        H = delaunay.function_values_at(test_points).toarray()
+        H = delaunay.values_at(test_points).toarray()
 
         true_H = np.zeros((len(test_points), delaunay.nindex),
                           dtype=np.float)
@@ -138,16 +138,16 @@ class DelaunayTest(TestCase):
         # Test value property
         values = np.random.rand(delaunay.nindex)
         v1 = H.dot(values)
-        v2 = delaunay.function_values_at(test_points, vertex_values=values)
+        v2 = delaunay.values_at(test_points, vertex_values=values)
         assert_allclose(v1, v2)
 
         # Test the projections
         test_point = np.array([-0.5, -0.5])
         values = np.array([0, 1, 1])
-        unprojected = delaunay.function_values_at(test_point, values)
-        projected = delaunay.function_values_at(test_point,
-                                                values,
-                                                project=True)
+        unprojected = delaunay.values_at(test_point, values)
+        projected = delaunay.values_at(test_point,
+                                       values,
+                                       project=True)
 
         assert_allclose(projected, np.array([0, 0]))
         assert_allclose(unprojected, np.array([-1, -1]))
@@ -180,8 +180,8 @@ class DelaunayTest(TestCase):
         true_values = np.hstack((corner_values,
                                  np.array([1 / 6, 1 / 6, 1 / 6, 1 / 2])))
 
-        result = delaunay.function_values_at(test_points,
-                                             values)
+        result = delaunay.values_at(test_points,
+                                    values)
         assert_allclose(result, true_values, atol=1e-5)
 
     def test_gradient(self):

@@ -85,7 +85,7 @@ class PolicyIteration(object):
         next_states = self.dynamics(states, actions)
         rewards = self.reward_function(states, actions, next_states)
 
-        expected_values = self.function_approximator.function_values_at(
+        expected_values = self.function_approximator.values_at(
             next_states,
             vertex_values=self.values,
             project=True)
@@ -121,9 +121,8 @@ class PolicyIteration(object):
         values = cvxpy.Variable(self.function_approximator.nindex)
         objective = cvxpy.Maximize(cvxpy.sum_entries(values))
 
-        value_matrix = self.function_approximator.function_values_at(
-            next_states,
-            project=True)
+        value_matrix = self.function_approximator.values_at(next_states,
+                                                            project=True)
         # Make cvxpy work with sparse matrices
         value_matrix = cvxpy.Constant(value_matrix)
 
