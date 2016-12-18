@@ -372,9 +372,7 @@ class Delaunay(GridWorld):
         simplex_ids = self.find_simplex(points)
 
         if project:
-            points = np.clip(points,
-                             self.offset_limits[:, 0] + self.offset,
-                             self.offset_limits[:, 1] + self.offset)
+            points = np.clip(points, self.limits[:, 0], self.limits[:, 1])
 
         simplices = self.simplices(simplex_ids)
         origins = self.index_to_state(simplices[:, 0])
@@ -390,7 +388,8 @@ class Delaunay(GridWorld):
         weights = np.empty((npoints, nsimp), dtype=np.float)
 
         # Pre-multiply each hyperplane by (point - origin)
-        weights[:, 1:] = np.einsum('ij,ijk->ik', points - origins, hyperplanes)
+        np.einsum('ij,ijk->ik', points - origins, hyperplanes,
+                  out=weights[:, 1:])
         # The weights have to add up to one
         weights[:, 0] = 1 - np.sum(weights[:, 1:], axis=1)
 
