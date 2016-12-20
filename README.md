@@ -1,5 +1,7 @@
 # Safe learning of regions of attraction (ROA)
 
+[![Build Status](https://travis-ci.com/befelix/lyapunov-learning-private.svg?token=jhZwW5XAmNDthi4dmvkf&branch=master)](https://travis-ci.com/befelix/lyapunov-learning-private)
+
 This code accompanies the paper: <br>
 "F. Berkenkamp, R. Moriconi, A. P. Schoellig, A. Krause, "Safe Learning of Regions of Attraction in Uncertain, Nonlinear Systems with Gaussian Processes", arXiv, <a href="http://arxiv.org/abs/1603.04915" target="_blank">arXiv:1603.04915</a> [cs.SY].
 
