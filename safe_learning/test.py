@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 from .triangulation import (Delaunay, ScipyDelaunay, GridWorld,
-                            PiecewiseConstant, FunctionApproximator)
+                            PiecewiseConstant, Function)
 
 
 class FunctionAproxTest(TestCase):
@@ -15,7 +15,7 @@ class FunctionAproxTest(TestCase):
 
     def test_errors(self):
         """Check notImplemented error."""
-        f = FunctionApproximator([[0, 1], [0, 1]])
+        f = Function()
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 

@@ -12,18 +12,11 @@ from sklearn.utils.extmath import cartesian
 __all__ = ['Delaunay', 'PiecewiseConstant', 'GridWorld', 'PiecewiseConstant']
 
 
-class FunctionApproximator(object):
-    """Base class for function approximators.
+class Function(object):
+    """Base class for function approximators."""
 
-    Parameters
-    ----------
-    limits: 2d array-like
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
-    """
-
-    def __init__(self, limits):
-        super(FunctionApproximator, self).__init__()
-        self.limits = np.asarray(limits, dtype=np.float)
+    def __init__(self):
+        super(Function, self).__init__()
         self.ndim = None
 
     def evaluate(self, points, vertex_values=None, project=False):
@@ -60,7 +53,7 @@ class ScipyDelaunay(spatial.Delaunay):
         super(ScipyDelaunay, self).__init__(points)
 
 
-class GridWorld(FunctionApproximator):
+class GridWorld(Function):
     """Base class for function approximators on a regular grid.
 
     Parameters
@@ -73,7 +66,9 @@ class GridWorld(FunctionApproximator):
 
     def __init__(self, limits, num_points):
         """Initialization, see `GridWorld`."""
-        super(GridWorld, self).__init__(limits)
+        super(GridWorld, self).__init__()
+
+        self.limits = np.asarray(limits, dtype=np.float)
 
         if not isinstance(num_points, Sequence):
             num_points = [num_points] * len(limits)
