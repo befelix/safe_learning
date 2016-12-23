@@ -53,18 +53,24 @@ class PolicyIteration(object):
         self.action_space = action_space
         self.dynamics = dynamics
         self.reward_function = reward_function
-        self.function_approximator = function_approximator
+        self.value_function = function_approximator
         self.gamma = gamma
 
         # Random initial policy
         self.policy = np.random.choice(action_space, size=len(state_space))
-        self.values = np.zeros(len(state_space), dtype=np.float)
+        values = np.zeros(len(state_space), dtype=np.float)
 
         self.terminal_reward = terminal_reward
         self.terminal_states = None
         if terminal_states is not None:
             self.terminal_states = terminal_states
-            self.values[self.terminal_states] = self.terminal_reward
+            values[self.terminal_states] = self.terminal_reward
+
+        self.value_function.vertex_values = values
+
+    @property
+    def values(self):
+        return self.value_function.vertex_values
 
     def get_future_values(self, states, actions, out=None):
         """Return the value at the current states.
@@ -85,10 +91,7 @@ class PolicyIteration(object):
         next_states = self.dynamics(states, actions)
         rewards = self.reward_function(states, actions, next_states)
 
-        expected_values = self.function_approximator.evaluate(
-            next_states,
-            vertex_values=self.values,
-            project=True)
+        expected_values = self.value_function.evaluate(next_states)
 
         if out is None:
             out = np.empty(len(states), dtype=np.float)
@@ -104,7 +107,8 @@ class PolicyIteration(object):
 
     def update_value_function(self):
         """Perform one round of value updates."""
-        self.get_future_values(self.state_space, self.policy, out=self.values)
+        self.get_future_values(self.state_space, self.policy,
+                               out=self.value_function.vertex_values)
 
     def optimize_value_function(self):
         """Solve a linear program to optimize the value function."""
@@ -118,11 +122,10 @@ class PolicyIteration(object):
         rewards[self.terminal_states] = self.terminal_reward
 
         # Define random variables
-        values = cvxpy.Variable(self.function_approximator.nindex)
+        values = cvxpy.Variable(self.value_function.nindex)
         objective = cvxpy.Maximize(cvxpy.sum_entries(values))
 
-        value_matrix = self.function_approximator.evaluate(next_states,
-                                                           project=True)
+        value_matrix = self.value_function.evaluate_constraint(next_states)
         # Make cvxpy work with sparse matrices
         value_matrix = cvxpy.Constant(value_matrix)
 
@@ -137,7 +140,7 @@ class PolicyIteration(object):
         if not prob.status == cvxpy.OPTIMAL:
             raise ValueError('Optimization problem is {}'.format(prob.status))
 
-        self.values[:] = values.value.squeeze()
+        self.value_function.vertex_values[:] = values.value.squeeze()
 
     def update_policy(self):
         """Optimize the policy for a given value function."""
