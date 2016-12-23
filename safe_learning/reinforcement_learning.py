@@ -70,6 +70,7 @@ class PolicyIteration(object):
 
     @property
     def values(self):
+        """Return the vertex values."""
         return self.value_function.vertex_values
 
     def get_future_values(self, states, actions, out=None):
