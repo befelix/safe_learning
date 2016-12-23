@@ -7,15 +7,25 @@ import unittest
 import numpy as np
 
 from .triangulation import (Delaunay, ScipyDelaunay, GridWorld,
-                            PiecewiseConstant, Function)
+                            PiecewiseConstant, Function, UncertainFunction)
 
 
-class FunctionAproxTest(TestCase):
+class FunctionTest(TestCase):
     """Test the base class."""
 
     def test_errors(self):
         """Check notImplemented error."""
         f = Function()
+        assert_raises(NotImplementedError, f.evaluate, None)
+        assert_raises(NotImplementedError, f.gradient, None)
+
+
+class UncertainFunctionTest(TestCase):
+    """Test the base class."""
+
+    def test_errors(self):
+        """Check notImplemented error."""
+        f = UncertainFunction()
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 
@@ -86,6 +96,13 @@ class GridworldTest(TestCase):
 class PiecewiseConstantTest(TestCase):
     """Test a piecewise constant function."""
 
+    def test_init(self):
+        """Test initialisation."""
+        limits = [[-1, 1], [-1, 1]]
+        npoints = 3
+        pwc = PiecewiseConstant(limits, npoints, [1, 2, 3])
+        assert_allclose(pwc.vertex_values, np.array([1, 2, 3]))
+
     def test_evaluation(self):
         """Simple tests."""
         limits = [[-1, 1], [-1, 1]]
@@ -94,17 +111,19 @@ class PiecewiseConstantTest(TestCase):
 
         vertex_points = pwc.index_to_state(np.arange(pwc.nindex))
         vertex_values = np.sum(vertex_points, axis=1)
+        pwc.vertex_values = vertex_values
 
-        test = pwc.evaluate(vertex_points, vertex_values=vertex_values)
+        test = pwc.evaluate(vertex_points)
         assert_allclose(test, vertex_values)
 
-        test2 = pwc.evaluate(vertex_points)
+        outside_point = np.array([[-1.5, -1.5]])
+        test1 = pwc.evaluate(outside_point)
+        assert_allclose(test1, -2)
+
+        # Test constraint evaluation
+        test2 = pwc.evaluate_constraint(vertex_points)
         test2 = test2.toarray().dot(vertex_values)
         assert_allclose(test2, vertex_values)
-
-        outside_point = np.array([[-1.5, -1.5]])
-        test1 = pwc.evaluate(outside_point, vertex_values=vertex_values)
-        assert_allclose(test1, -2)
 
     def test_gradient(self):
         """Test the gradient."""
@@ -179,7 +198,7 @@ class DelaunayTest(TestCase):
                                                   [1, 0],
                                                   [0, 1]]))
 
-        H = delaunay.evaluate(test_points).toarray()
+        H = delaunay.evaluate_constraint(test_points).toarray()
 
         true_H = np.zeros((len(test_points), delaunay.nindex),
                           dtype=np.float)
@@ -194,17 +213,17 @@ class DelaunayTest(TestCase):
 
         # Test value property
         values = np.random.rand(delaunay.nindex)
+        delaunay.vertex_values = values
         v1 = H.dot(values)
-        v2 = delaunay.evaluate(test_points, vertex_values=values)
+        v2 = delaunay.evaluate(test_points)
         assert_allclose(v1, v2)
 
         # Test the projections
         test_point = np.array([-0.5, -0.5])
-        values = np.array([0, 1, 1])
-        unprojected = delaunay.evaluate(test_point, values)
-        projected = delaunay.evaluate(test_point,
-                                      values,
-                                      project=True)
+        delaunay.vertex_values = np.array([0, 1, 1])
+        unprojected = delaunay.evaluate(test_point)
+        delaunay.project = True
+        projected = delaunay.evaluate(test_point)
 
         assert_allclose(projected, np.array([0, 0]))
         assert_allclose(unprojected, np.array([-1, -1]))
@@ -237,8 +256,8 @@ class DelaunayTest(TestCase):
         true_values = np.hstack((corner_values,
                                  np.array([1 / 6, 1 / 6, 1 / 6, 1 / 2])))
 
-        result = delaunay.evaluate(test_points,
-                                   values)
+        delaunay.vertex_values = values
+        result = delaunay.evaluate(test_points)
         assert_allclose(result, true_values, atol=1e-5)
 
     def test_gradient(self):
@@ -260,31 +279,29 @@ class DelaunayTest(TestCase):
         values = np.zeros(delaunay.nindex)
         values[nodes] = [1, 2, 3, 1]
 
-        simplices = delaunay.find_simplex(np.array([[0.01, 0.01],
-                                                    [0.99, 0.99]]))
+        test_points = np.array([[0.01, 0.01],
+                                [0.99, 0.99]])
 
-        true_grad = np.array([[1, 2], [-2, -1]])[simplices]
+        true_grad = np.array([[1, 2], [-2, -1]])
 
         # Construct true H (gradient as function of values)
         true_H = np.zeros((2 * delaunay.ndim, delaunay.nindex))
 
-        # Indicators for lower and upper triangle
-        lower = simplices[0] * delaunay.ndim
-        upper = simplices[1] * delaunay.ndim
-
-        true_H[lower, nodes[[0, 1]]] = [-1, 1]
-        true_H[lower + 1, nodes[[0, 2]]] = [-1, 1]
-        true_H[upper, nodes[[2, 3]]] = [-1, 1]
-        true_H[upper + 1, nodes[[1, 3]]] = [-1, 1]
+        true_H[0, nodes[[0, 1]]] = [-1, 1]
+        true_H[1, nodes[[0, 2]]] = [-1, 1]
+        true_H[2, nodes[[2, 3]]] = [-1, 1]
+        true_H[3, nodes[[1, 3]]] = [-1, 1]
 
         # Evaluate gradient with and without values
-        H = delaunay.gradient([0, 1]).toarray()
-        grad = delaunay.gradient([0, 1], vertex_values=values)
+        H = delaunay.gradient_constraint(test_points).toarray()
+        delaunay.vertex_values = values
+        grad = delaunay.gradient(test_points)
 
         # Compare
+        # print(grad)
         assert_allclose(grad, true_grad)
         assert_allclose(H, true_H)
-        assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
+        # assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
 
 
 if __name__ == '__main__':

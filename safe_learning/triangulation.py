@@ -9,21 +9,39 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Delaunay', 'PiecewiseConstant', 'GridWorld', 'PiecewiseConstant']
+__all__ = ['Function', 'Delaunay', 'PiecewiseConstant', 'GridWorld',
+           'PiecewiseConstant']
+
+
+class UncertainFunction(object):
+    """Base class for function approximators."""
+
+    def __init__(self):
+        super(UncertainFunction, self).__init__()
+        self.ndim = None
+
+    def evaluate(self, points):
+        """Return the function values."""
+        raise NotImplementedError()
+
+    def gradient(self, points):
+        """Return the gradient."""
+        raise NotImplementedError()
 
 
 class Function(object):
     """Base class for function approximators."""
 
     def __init__(self):
+        """Initialization, see `Function` for details."""
         super(Function, self).__init__()
         self.ndim = None
 
-    def evaluate(self, points, vertex_values=None, project=False):
+    def evaluate(self, points):
         """Return the function values."""
         raise NotImplementedError()
 
-    def gradient(self, simplex_ids, vertex_values=None):
+    def gradient(self, points):
         """Return the gradient."""
         raise NotImplementedError()
 
@@ -64,7 +82,7 @@ class GridWorld(Function):
         The number of points with which to grid each dimension.
     """
 
-    def __init__(self, limits, num_points):
+    def __init__(self, limits, num_points, vertex_values=None):
         """Initialization, see `GridWorld`."""
         super(GridWorld, self).__init__()
 
@@ -85,6 +103,10 @@ class GridWorld(Function):
         self.nrectangles = np.prod(self.num_points)
         self.ndim = len(limits)
         self.nindex = np.prod(self.num_points + 1)
+
+        self.vertex_values = None
+        if vertex_values is not None:
+            self.vertex_values = np.asarray(vertex_values)
 
     def _center_states(self, states, clip=True):
         """Center the states to the interval [0, x].
@@ -213,13 +235,16 @@ class PiecewiseConstant(GridWorld):
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
     num_points: 1d array-like
         The number of points with which to grid each dimension.
+    vertex_values: 1d array_like, optional
+        The values at the vertices of the grid.
     """
 
-    def __init__(self, limits, num_points):
+    def __init__(self, limits, num_points, vertex_values=None):
         """Initialization, see `PiecewiseConstant`."""
-        super(PiecewiseConstant, self).__init__(limits, num_points)
+        super(PiecewiseConstant, self).__init__(limits, num_points,
+                                                vertex_values=vertex_values)
 
-    def evaluate(self, points, vertex_values=None, project=False):
+    def evaluate(self, points):
         """
         Obtain function values at points from triangulation.
 
@@ -233,32 +258,45 @@ class PiecewiseConstant(GridWorld):
         ----------
         points : 2d array
             Each row represents one point
-        vertex_values : 1d array, optional
-            The values for all the corners of the simplex
-        project : bool, optional
-            This parameter has no effect, since all inputs are projected.
 
         Returns
         -------
         values
-            Either a vector of function values or a sparse matrix so that
-            V(points) = B.dot(V(vertices))
+            A vector of function values.
         """
         nodes = self.state_to_index(points)
+        return self.vertex_values[nodes]
 
-        if vertex_values is not None:
-            return vertex_values[nodes]
+    def evaluate_constraint(self, points):
+        """
+        Obtain function values at points from triangulation.
 
+        If the values on the vertices are provided, the function returns the
+        values at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector with all the function values on the vertices,
+        returns the function values at points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        values
+            A sparse matrix B so that evaluate(points) = B.dot(vertex_values).
+        """
         npoints = len(points)
         weights = np.ones(npoints, dtype=np.int)
         rows = np.arange(npoints)
-        cols = nodes
+        cols = self.state_to_index(points)
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def gradient(self, simplex_ids, vertex_values=None):
+    def gradient(self, points, vertex_values=None):
         """Return derivative (always zero)."""
-        return np.zeros((len(simplex_ids), self.nindex))
+        return np.zeros((len(points), self.nindex))
 
 
 class Delaunay(GridWorld):
@@ -277,11 +315,16 @@ class Delaunay(GridWorld):
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
     num_points: 1d array-like
         The number of points with which to grid each dimension.
+    vertex_values: 1d array_like, optional
+        The values at the vertices of the grid.
+    project: bool, optional
+        Whether to project points onto the limits.
     """
 
-    def __init__(self, limits, num_points):
+    def __init__(self, limits, num_points, vertex_values=None, project=False):
         """Initialization."""
-        super(Delaunay, self).__init__(limits, num_points)
+        super(Delaunay, self).__init__(limits, num_points,
+                                       vertex_values=vertex_values)
 
         # Get triangulation
         hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
@@ -294,6 +337,8 @@ class Delaunay(GridWorld):
         # Parameters for the hyperplanes of the triangulation
         self.hyperplanes = None
         self._update_hyperplanes()
+
+        self.project = project
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
@@ -383,36 +428,24 @@ class Delaunay(GridWorld):
         simplices += corner_index
         return simplices
 
-    def evaluate(self, points, vertex_values=None, project=False):
-        """
-        Obtain function values at points from triangulation.
-
-        If the values on the vertices are provided, the function returns the
-        values at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
-        with the vector with all the function values on the vertices,
-        returns the function values at points.
+    def _get_weights(self, points):
+        """Return the linear weights asscoiated with points.
 
         Parameters
         ----------
         points : 2d array
             Each row represents one point
-        vertex_values : 1d array, optional
-            The values for all the corners of the simplex
-        project : bool, optional
-            Wether to project data points back onto the triangulation if they
-            are defined outside the limits. This can increase robustness for
-            iterative algorithms.
 
         Returns
         -------
-        values
-            Either a vector of function values or a sparse matrix so that
-            V(points) = B.dot(V(vertices))
+        weights : ndarray
+            An array that contains the linear weights for each point.
+        simplices : ndarray
+            The indeces of the simplices associated with each points
         """
         simplex_ids = self.find_simplex(points)
 
-        if project:
+        if self.project:
             points = np.clip(points, self.limits[:, 0], self.limits[:, 1])
 
         simplices = self.simplices(simplex_ids)
@@ -434,12 +467,58 @@ class Delaunay(GridWorld):
         # The weights have to add up to one
         weights[:, 0] = 1 - np.sum(weights[:, 1:], axis=1)
 
-        # Return function values if desired
-        if vertex_values is not None:
-            return np.einsum('ij,ij->i', weights, vertex_values[simplices])
+        return weights, simplices
 
+    def evaluate(self, points):
+        """
+        Obtain function values at points from triangulation.
+
+        If the values on the vertices are provided, the function returns the
+        values at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector with all the function values on the vertices,
+        returns the function values at points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        values
+            Either a vector of function values or a sparse matrix so that
+            V(points) = B.dot(V(vertices))
+        """
+        weights, simplices = self._get_weights(points)
+        # Return function values if desired
+        return np.einsum('ij,ij->i', weights, self.vertex_values[simplices])
+
+    def evaluate_constraint(self, points):
+        """
+        Obtain function values at points from triangulation.
+
+        If the values on the vertices are provided, the function returns the
+        values at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector with all the function values on the vertices,
+        returns the function values at points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        values
+            A sparse matrix B so that evaluate(points) = B.dot(vertex_values).
+        """
+        weights, simplices = self._get_weights(points)
         # Construct sparse matrix for optimization
 
+        nsimp = self.ndim + 1
+        npoints = len(simplices)
         # Indices of constraints (nsimp points per simplex, so we have nsimp
         #  values in each row; one for each simplex)
         rows = np.repeat(np.arange(len(points)), nsimp)
@@ -448,33 +527,8 @@ class Delaunay(GridWorld):
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def gradient(self, simplex_ids, vertex_values=None):
-        """
-        Return the gradients at the respective points.
-
-        If the values on the vertices are provided, the function returns the
-        gradients at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
-        with the vector of all the function values on the vertices,
-        returns the gradients. Note that after the product you have to call
-        ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
-        gradient matrix.
-
-        Parameters
-        ----------
-        simplex_ids : 1d array
-            Each value represents the id of a simplex
-        vertex_values : 1d array, optional
-            The values for all the corners of the simplex
-
-        Returns
-        -------
-        gradients
-            Either a vector of gradient values or a sparse matrix so that
-            grad(points) = B.dot(V(vertices)).reshape(ndim, -1) corresponds
-            to the true gradients
-        """
-        simplex_ids = np.asarray(simplex_ids, dtype=np.int)
+    def _get_weights_gradient(self, points):
+        simplex_ids = self.find_simplex(points)
         simplices = self.simplices(simplex_ids)
 
         # Get hyperplane equations
@@ -489,10 +543,63 @@ class Delaunay(GridWorld):
 
         weights[:, :, 1:] = self.hyperplanes[simplex_ids]
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
+        return weights, simplices
 
+    def gradient(self, points):
+        """
+        Return the gradients at the respective points.
+
+        If the values on the vertices are provided, the function returns the
+        gradients at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector of all the function values on the vertices,
+        returns the gradients. Note that after the product you have to call
+        ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
+        gradient matrix.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row contains one state at which to evaluate the gradient.
+
+        Returns
+        -------
+        gradients : ndarray
+            A vector of gradient values.
+        """
+        weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
-        if vertex_values is not None:
-            return np.einsum('ijk,ik->ij', weights, vertex_values[simplices])
+        return np.einsum('ijk,ik->ij', weights, self.vertex_values[simplices])
+
+    def gradient_constraint(self, points):
+        """
+        Return the gradients at the respective points.
+
+        If the values on the vertices are provided, the function returns the
+        gradients at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector of all the function values on the vertices,
+        returns the gradients. Note that after the product you have to call
+        ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
+        gradient matrix.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row contains one state at which to evaluate the gradient.
+
+        Returns
+        -------
+        gradients
+            A sparse matrix so that
+            `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
+            to the true gradients
+        """
+        weights, simplices = self._get_weights_gradient(points)
+
+        # Some numbers for convenience
+        nsimp = self.ndim + 1
+        npoints = len(simplices)
 
         # Construct sparse matrix for optimization
 
