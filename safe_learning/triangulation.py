@@ -26,11 +26,11 @@ class FunctionApproximator(object):
         self.limits = np.asarray(limits, dtype=np.float)
         self.ndim = None
 
-    def values_at(self, points, vertex_values=None, project=False):
+    def evaluate(self, points, vertex_values=None, project=False):
         """Return the function values."""
         raise NotImplementedError()
 
-    def gradient_at(self, simplex_ids, vertex_values=None):
+    def gradient(self, simplex_ids, vertex_values=None):
         """Return the gradient."""
         raise NotImplementedError()
 
@@ -223,7 +223,7 @@ class PiecewiseConstant(GridWorld):
         """Initialization, see `PiecewiseConstant`."""
         super(PiecewiseConstant, self).__init__(limits, num_points)
 
-    def values_at(self, points, vertex_values=None, project=False):
+    def evaluate(self, points, vertex_values=None, project=False):
         """
         Obtain function values at points from triangulation.
 
@@ -260,8 +260,8 @@ class PiecewiseConstant(GridWorld):
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def gradient_at(self, simplex_ids, vertex_values=None):
-        """Return gradient (always zero)."""
+    def gradient(self, simplex_ids, vertex_values=None):
+        """Return derivative (always zero)."""
         return np.zeros((len(simplex_ids), self.nindex))
 
 
@@ -387,7 +387,7 @@ class Delaunay(GridWorld):
         simplices += corner_index
         return simplices
 
-    def values_at(self, points, vertex_values=None, project=False):
+    def evaluate(self, points, vertex_values=None, project=False):
         """
         Obtain function values at points from triangulation.
 
@@ -452,7 +452,7 @@ class Delaunay(GridWorld):
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def gradient_at(self, simplex_ids, vertex_values=None):
+    def gradient(self, simplex_ids, vertex_values=None):
         """
         Return the gradients at the respective points.
 
