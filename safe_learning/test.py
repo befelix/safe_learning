@@ -6,7 +6,18 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import Delaunay, ScipyDelaunay, GridWorld
+from .triangulation import (Delaunay, ScipyDelaunay, GridWorld,
+                            PiecewiseConstant, FunctionApproximator)
+
+
+class FunctionAproxTest(TestCase):
+    """Test the base class."""
+
+    def test_errors(self):
+        """Check notImplemented error."""
+        f = FunctionApproximator([[0, 1], [0, 1]])
+        assert_raises(NotImplementedError, f.values_at, None)
+        assert_raises(NotImplementedError, f.gradient_at, None)
 
 
 class ScipyDelaunayTest(TestCase):
@@ -61,10 +72,48 @@ class GridworldTest(TestCase):
         corners2 = grid.state_to_index(corner_states)
         assert_equal(corners, corners2)
 
+        # Test point outside grid
+        test_point = np.array([[-1.2, 2.]])
+        index = grid.state_to_index(test_point)
+        assert_equal(index, 0)
+
     def test_1d_numpoints(self):
         """Check 1-dimensional numpoints argument."""
         grid = GridWorld([[1, 2], [3, 4]], 2)
         assert_equal(grid.num_points, np.array([2, 2]))
+
+
+class PiecewiseConstantTest(TestCase):
+    """Test a piecewise constant function."""
+
+    def test_evaluation(self):
+        """Simple tests."""
+        limits = [[-1, 1], [-1, 1]]
+        npoints = 3
+        pwc = PiecewiseConstant(limits, npoints)
+
+        vertex_points = pwc.index_to_state(np.arange(pwc.nindex))
+        vertex_values = np.sum(vertex_points, axis=1)
+
+        test = pwc.values_at(vertex_points, vertex_values=vertex_values)
+        assert_allclose(test, vertex_values)
+
+        test2 = pwc.values_at(vertex_points)
+        test2 = test2.toarray().dot(vertex_values)
+        assert_allclose(test2, vertex_values)
+
+        outside_point = np.array([[-1.5, -1.5]])
+        test1 = pwc.values_at(outside_point, vertex_values=vertex_values)
+        assert_allclose(test1, -2)
+
+    def test_gradient(self):
+        """Test the gradient."""
+        limits = [[-1, 1], [-1, 1]]
+        npoints = 3
+        pwc = PiecewiseConstant(limits, npoints)
+        test_points = pwc.index_to_state(np.arange(pwc.nindex))
+        gradient = pwc.gradient_at(test_points)
+        assert_allclose(gradient, 0)
 
 
 class DelaunayTest(TestCase):

@@ -9,7 +9,7 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Delaunay', 'PiecewiseConstant', 'GridWorld']
+__all__ = ['Delaunay', 'PiecewiseConstant', 'GridWorld', 'PiecewiseConstant']
 
 
 class FunctionApproximator(object):
@@ -143,6 +143,7 @@ class GridWorld(FunctionApproximator):
             The indices that correspond to the physical states.
         """
         states = np.atleast_2d(states)
+        states = np.clip(states, self.limits[:, 0], self.limits[:, 1])
         states = (states - self.offset) / self.unit_maxes
         ijk_index = np.rint(states).astype(np.int)
         return np.ravel_multi_index(ijk_index.T, self.num_points + 1)
@@ -221,6 +222,47 @@ class PiecewiseConstant(GridWorld):
     def __init__(self, limits, num_points):
         """Initialization, see `PiecewiseConstant`."""
         super(PiecewiseConstant, self).__init__(limits, num_points)
+
+    def values_at(self, points, vertex_values=None, project=False):
+        """
+        Obtain function values at points from triangulation.
+
+        If the values on the vertices are provided, the function returns the
+        values at the given points.
+        Otherwise, this function returns a sparse matrix that, when multiplied
+        with the vector with all the function values on the vertices,
+        returns the function values at points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+        vertex_values : 1d array, optional
+            The values for all the corners of the simplex
+        project : bool, optional
+            This parameter has no effect, since all inputs are projected.
+
+        Returns
+        -------
+        values
+            Either a vector of function values or a sparse matrix so that
+            V(points) = B.dot(V(vertices))
+        """
+        nodes = self.state_to_index(points)
+
+        if vertex_values is not None:
+            return vertex_values[nodes]
+
+        npoints = len(points)
+        weights = np.ones(npoints, dtype=np.int)
+        rows = np.arange(npoints)
+        cols = nodes
+        return sparse.coo_matrix((weights, (rows, cols)),
+                                 shape=(npoints, self.nindex))
+
+    def gradient_at(self, simplex_ids, vertex_values=None):
+        """Return gradient (always zero)."""
+        return np.zeros((len(simplex_ids), self.nindex))
 
 
 class Delaunay(GridWorld):
