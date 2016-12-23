@@ -52,6 +52,7 @@ class ScipyDelaunay(spatial.Delaunay):
 
     def __init__(self, limits, num_points):
         self.numpoints = num_points
+        self.limits = np.asarray(limits, dtype=np.float)
         params = [np.linspace(limit[0], limit[1], n + 1) for limit, n in
                   zip(limits, num_points)]
         output = np.meshgrid(*params)
