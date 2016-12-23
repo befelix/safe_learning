@@ -6,7 +6,7 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import Delaunay, ScipyDelaunay
+from .triangulation import Delaunay, ScipyDelaunay, GridWorld
 
 
 class ScipyDelaunayTest(TestCase):
@@ -22,6 +22,49 @@ class ScipyDelaunayTest(TestCase):
         assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
         assert_equal(delaunay.ndim, sp_delaunay.ndim)
         sp_delaunay.find_simplex(np.array([[0, 0]]))
+
+
+class GridworldTest(TestCase):
+    """Test the general GridWorld definitions."""
+
+    def test_index_state_conversion(self):
+        """Test all index conversions."""
+        limits = [[-1.1, 1.5], [2.2, 2.4]]
+        num_points = [7, 8]
+        grid = GridWorld(limits, num_points)
+
+        # Forward and backwards convert all indeces
+        indeces = np.arange(grid.nindex)
+        states = grid.index_to_state(indeces)
+        indeces2 = grid.state_to_index(states)
+        assert_equal(indeces, indeces2)
+
+        # test 1D input
+        grid.state_to_index([0, 2.3])
+        grid.index_to_state(1)
+
+        # Test rectangles
+        rectangles = np.arange(grid.nrectangles)
+        states = grid.rectangle_to_state(rectangles)
+        rectangles2 = grid.state_to_rectangle(states + grid.unit_maxes / 2)
+        assert_equal(rectangles, rectangles2)
+
+        rectangle = grid.state_to_rectangle(100 * np.ones((1, 2)))
+        assert_equal(rectangle, grid.nrectangles - 1)
+
+        rectangle = grid.state_to_rectangle(-100 * np.ones((1, 2)))
+        assert_equal(rectangle, 0)
+
+        # Test rectangle corners
+        corners = grid.rectangle_corner_index(rectangles)
+        corner_states = grid.rectangle_to_state(rectangles)
+        corners2 = grid.state_to_index(corner_states)
+        assert_equal(corners, corners2)
+
+    def test_1d_numpoints(self):
+        """Check 1-dimensional numpoints argument."""
+        grid = GridWorld([[1, 2], [3, 4]], 2)
+        assert_equal(grid.num_points, np.array([2, 2]))
 
 
 class DelaunayTest(TestCase):
@@ -70,41 +113,6 @@ class DelaunayTest(TestCase):
         assert_equal(lower, delaunay.find_simplex(np.array([[-100., -100.]])))
         assert_equal(delaunay.nsimplex - 1 - lower,
                      delaunay.find_simplex(np.array([[100., 100.]])))
-
-    def test_index_state_conversion(self):
-        """Test all index conversions."""
-        limits = [[-1.1, 1.5], [2.2, 2.4]]
-        num_points = [7, 8]
-        delaunay = Delaunay(limits, num_points)
-
-        # Forward and backwards convert all indeces
-        indeces = np.arange(delaunay.nindex)
-        states = delaunay.index_to_state(indeces)
-        indeces2 = delaunay.state_to_index(states)
-        assert_equal(indeces, indeces2)
-
-        # test 1D input
-        delaunay.state_to_index([0, 2.3])
-        delaunay.index_to_state(1)
-
-        # Test rectangles
-        rectangles = np.arange(delaunay.nrectangles)
-        states = delaunay.rectangle_to_state(rectangles)
-        rectangles2 = delaunay.state_to_rectangle(states +
-                                                  delaunay.unit_maxes / 2)
-        assert_equal(rectangles, rectangles2)
-
-        rectangle = delaunay.state_to_rectangle(100 * np.ones((1, 2)))
-        assert_equal(rectangle, delaunay.nrectangles - 1)
-
-        rectangle = delaunay.state_to_rectangle(-100 * np.ones((1, 2)))
-        assert_equal(rectangle, 0)
-
-        # Test rectangle corners
-        corners = delaunay.rectangle_corner_index(rectangles)
-        corner_states = delaunay.rectangle_to_state(rectangles)
-        corners2 = delaunay.state_to_index(corner_states)
-        assert_equal(corners, corners2)
 
     def test_values(self):
         """Test the function_value_at function."""

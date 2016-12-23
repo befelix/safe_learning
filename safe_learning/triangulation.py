@@ -2,13 +2,14 @@
 
 from __future__ import absolute_import, print_function, division
 
+from collections import Sequence
 
 import numpy as np
 from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Delaunay']
+__all__ = ['Delaunay', 'PiecewiseConstant', 'GridWorld']
 
 
 class FunctionApproximator(object):
@@ -73,7 +74,9 @@ class GridWorld(FunctionApproximator):
         """Initialization, see `GridWorld`."""
         super(GridWorld, self).__init__(limits)
 
-        self.num_points = np.asarray(num_points, dtype=np.int)
+        if not isinstance(num_points, Sequence):
+            num_points = [num_points] * len(limits)
+        self.num_points = np.atleast_1d(np.asarray(num_points, dtype=np.int))
 
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
