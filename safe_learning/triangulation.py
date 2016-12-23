@@ -88,7 +88,8 @@ class GridWorld(Function):
 
         self.limits = np.asarray(limits, dtype=np.float)
 
-        if not isinstance(num_points, Sequence):
+        if not (isinstance(num_points, Sequence) or
+                isinstance(num_points, np.ndarray)):
             num_points = [num_points] * len(limits)
         self.num_points = np.atleast_1d(np.asarray(num_points, dtype=np.int))
 
