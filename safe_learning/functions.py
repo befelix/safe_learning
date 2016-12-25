@@ -109,6 +109,78 @@ class DeterministicFunction(Function):
         raise NotImplementedError()
 
 
+class GPyGaussianProcess(UncertainFunction):
+    """An `UncertainFunction` for GPy Gaussian processes.
+
+    Parameters
+    ----------
+    gaussian_process : instance of GPy.core.GP
+        The Gaussian process model.
+    beta : float
+        The scaling factor for the standard deviation to create confidence
+        intervals.
+    """
+
+    def __init__(self, gaussian_process, beta=2.):
+        """Initialization, see `FakeGP`."""
+        super(GPyGaussianProcess, self).__init__()
+        self.ndim = gaussian_process.ndim
+        self.gaussian_process = gaussian_process
+
+        if callable(beta):
+            self.beta = beta
+        else:
+            self.beta = lambda t: beta
+
+    def evaluate(self, points, full_cov=True):
+        """Return the distribution over function values.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        full_cov : bool
+            Whether to return a full covariance matrix for each data point, or
+            only the diagonal part.
+
+        Returns
+        -------
+        mean : ndarray
+            The expected function values at the points.
+        error_bounds : ndarray
+            Error bounds for each dimension of the estimate.
+        """
+        mean, var = self.gaussian_process.predict_noiseless(points,
+                                                            full_cov=full_cov)
+        t = len(self.gaussian_process.X)
+        return mean, self.beta(t) * np.sqrt(var)
+
+    def gradient(self, points):
+        """Return the distribution over the gradient.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        full_cov : bool
+            Whether to return a full covariance tensor for each data point, or
+            only the diagonal part.
+
+        Returns
+        -------
+        mean : ndarray
+            The expected function gradient at the points.
+        var : ndarray
+            Error bounds for each dimension of the estimate.
+        """
+        mean, var = self.gaussian_process.predict_jacobian(points)
+
+        t = len(self.gaussian_process.X)
+        return mean, self.beta(t) * np.sqrt(var)
+
+
 class ScipyDelaunay(spatial.Delaunay):
     """
     A dummy triangulation on a regular grid, very inefficient.

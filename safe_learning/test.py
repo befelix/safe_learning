@@ -5,6 +5,11 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import *
 import unittest
 import numpy as np
+try:
+    import GPy
+    _GPY_AVAILABLE = True
+except ImportError:
+    _GPY_AVAILABLE = False
 
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
@@ -29,6 +34,23 @@ class UncertainFunctionTest(TestCase):
         f = UncertainFunction()
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
+
+
+@unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
+class GPyTest(TestCase):
+    """Test the GPY GP function class."""
+
+    def __init__(self):
+        """Create GP model."""
+        super(GPyTest, self).__init__()
+        x = np.array([[1, 0], [0, 1]])
+        y = np.array([[0], [1]])
+        kernel = GPy.kern.RBF(1)
+        lik = GPy.likelihoods.Gaussian(variance=0.1**2)
+        self.gp = GPy.core.GP(x, y, kernel, lik)
+        self.beta = 2.
+        self.ufun = UncertainFunction(self.gp, beta=self.beta)
+        self.test_points = np.array([[5, 2], [3., 2]])
 
 
 class ScipyDelaunayTest(TestCase):
