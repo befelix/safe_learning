@@ -9,40 +9,103 @@ from scipy import spatial, sparse
 from sklearn.utils.extmath import cartesian
 
 
-__all__ = ['Function', 'Delaunay', 'PiecewiseConstant', 'GridWorld',
-           'PiecewiseConstant']
+__all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
+           'GridWorld', 'PiecewiseConstant']
 
 
-class UncertainFunction(object):
+class Function(object):
+    """A generic function class."""
+
+    def __init__(self):
+        super(Function, self).__init__()
+        self.ndim = None
+
+
+class UncertainFunction(Function):
     """Base class for function approximators."""
 
     def __init__(self):
         super(UncertainFunction, self).__init__()
-        self.ndim = None
 
-    def evaluate(self, points):
-        """Return the function values."""
+    def evaluate(self, points, full_cov=True):
+        """Return the distribution over function values.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        full_cov : bool
+            Whether to return a full covariance matrix for each data point, or
+            only the diagonal part.
+
+        Returns
+        -------
+        mean : ndarray
+            The expected function values at the points.
+        var : ndarray
+            The variance of the estimate.
+        """
         raise NotImplementedError()
 
     def gradient(self, points):
-        """Return the gradient."""
+        """Return the distribution over the gradient.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        full_cov : bool
+            Whether to return a full covariance tensor for each data point, or
+            only the diagonal part.
+
+        Returns
+        -------
+        mean : ndarray
+            The expected function gradient at the points.
+        var : ndarray
+            The variance of the estimate.
+        """
         raise NotImplementedError()
 
 
-class Function(object):
+class DeterministicFunction(Function):
     """Base class for function approximators."""
 
     def __init__(self):
         """Initialization, see `Function` for details."""
-        super(Function, self).__init__()
-        self.ndim = None
+        super(DeterministicFunction, self).__init__()
 
     def evaluate(self, points):
-        """Return the function values."""
+        """Return the function values.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+
+        Returns
+        -------
+        values : ndarray
+            The function values at the points.
+        """
         raise NotImplementedError()
 
     def gradient(self, points):
-        """Return the gradient."""
+        """Return the gradient.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        Returns
+        -------
+        gradient : ndarray
+            The function gradient at the points.
+        """
         raise NotImplementedError()
 
 
@@ -71,7 +134,7 @@ class ScipyDelaunay(spatial.Delaunay):
         super(ScipyDelaunay, self).__init__(points)
 
 
-class GridWorld(Function):
+class GridWorld(object):
     """Base class for function approximators on a regular grid.
 
     Parameters
@@ -102,8 +165,8 @@ class GridWorld(Function):
 
         # Statistics about the grid
         self.nrectangles = np.prod(self.num_points)
-        self.ndim = len(limits)
         self.nindex = np.prod(self.num_points + 1)
+        self.ndim = len(limits)
 
         self.vertex_values = None
         if vertex_values is not None:
@@ -227,7 +290,7 @@ class GridWorld(Function):
                                     self.num_points + 1)
 
 
-class PiecewiseConstant(GridWorld):
+class PiecewiseConstant(GridWorld, DeterministicFunction):
     """A piecewise constant function approximator.
 
     Parameters
@@ -246,24 +309,18 @@ class PiecewiseConstant(GridWorld):
                                                 vertex_values=vertex_values)
 
     def evaluate(self, points):
-        """
-        Obtain function values at points from triangulation.
-
-        If the values on the vertices are provided, the function returns the
-        values at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
-        with the vector with all the function values on the vertices,
-        returns the function values at points.
+        """Return the function values.
 
         Parameters
         ----------
-        points : 2d array
-            Each row represents one point
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
 
         Returns
         -------
-        values
-            A vector of function values.
+        values : ndarray
+            The function values at the points.
         """
         nodes = self.state_to_index(points)
         return self.vertex_values[nodes]
@@ -272,9 +329,7 @@ class PiecewiseConstant(GridWorld):
         """
         Obtain function values at points from triangulation.
 
-        If the values on the vertices are provided, the function returns the
-        values at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
+        This function returns a sparse matrix that, when multiplied
         with the vector with all the function values on the vertices,
         returns the function values at points.
 
@@ -295,12 +350,25 @@ class PiecewiseConstant(GridWorld):
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def gradient(self, points, vertex_values=None):
-        """Return derivative (always zero)."""
+    def gradient(self, points):
+        """Return the gradient.
+
+        The gradient is always zero for piecewise constant functions!
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+        Returns
+        -------
+        gradient : ndarray
+            The function gradient at the points.
+        """
         return np.zeros((len(points), self.nindex))
 
 
-class Delaunay(GridWorld):
+class Triangulation(GridWorld, DeterministicFunction):
     """
     Efficient Delaunay triangulation on regular grids.
 
@@ -324,8 +392,8 @@ class Delaunay(GridWorld):
 
     def __init__(self, limits, num_points, vertex_values=None, project=False):
         """Initialization."""
-        super(Delaunay, self).__init__(limits, num_points,
-                                       vertex_values=vertex_values)
+        super(Triangulation, self).__init__(limits, num_points,
+                                            vertex_values=vertex_values)
 
         # Get triangulation
         hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
@@ -430,7 +498,7 @@ class Delaunay(GridWorld):
         return simplices
 
     def _get_weights(self, points):
-        """Return the linear weights asscoiated with points.
+        """Return the linear weights associated with points.
 
         Parameters
         ----------
@@ -471,25 +539,18 @@ class Delaunay(GridWorld):
         return weights, simplices
 
     def evaluate(self, points):
-        """
-        Obtain function values at points from triangulation.
-
-        If the values on the vertices are provided, the function returns the
-        values at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
-        with the vector with all the function values on the vertices,
-        returns the function values at points.
+        """Return the function values.
 
         Parameters
         ----------
-        points : 2d array
-            Each row represents one point
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
 
         Returns
         -------
-        values
-            Either a vector of function values or a sparse matrix so that
-            V(points) = B.dot(V(vertices))
+        values : ndarray
+            The function values at the points.
         """
         weights, simplices = self._get_weights(points)
         # Return function values if desired
@@ -499,16 +560,14 @@ class Delaunay(GridWorld):
         """
         Obtain function values at points from triangulation.
 
-        If the values on the vertices are provided, the function returns the
-        values at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
+        This function returns a sparse matrix that, when multiplied
         with the vector with all the function values on the vertices,
         returns the function values at points.
 
         Parameters
         ----------
         points : 2d array
-            Each row represents one point
+            Each row represents one point.
 
         Returns
         -------
@@ -529,6 +588,20 @@ class Delaunay(GridWorld):
                                  shape=(npoints, self.nindex))
 
     def _get_weights_gradient(self, points):
+        """Return the linear gradient weights asscoiated with points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        weights : ndarray
+            An array that contains the linear weights for each point.
+        simplices : ndarray
+            The indeces of the simplices associated with each points
+        """
         simplex_ids = self.find_simplex(points)
         simplices = self.simplices(simplex_ids)
 
@@ -547,26 +620,17 @@ class Delaunay(GridWorld):
         return weights, simplices
 
     def gradient(self, points):
-        """
-        Return the gradients at the respective points.
-
-        If the values on the vertices are provided, the function returns the
-        gradients at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
-        with the vector of all the function values on the vertices,
-        returns the gradients. Note that after the product you have to call
-        ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
-        gradient matrix.
+        """Return the gradient.
 
         Parameters
         ----------
-        points : 2d array
-            Each row contains one state at which to evaluate the gradient.
-
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
         Returns
         -------
-        gradients : ndarray
-            A vector of gradient values.
+        gradient : ndarray
+            The function gradient at the points.
         """
         weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
@@ -576,9 +640,7 @@ class Delaunay(GridWorld):
         """
         Return the gradients at the respective points.
 
-        If the values on the vertices are provided, the function returns the
-        gradients at the given points.
-        Otherwise, this function returns a sparse matrix that, when multiplied
+        This function returns a sparse matrix that, when multiplied
         with the vector of all the function values on the vertices,
         returns the gradients. Note that after the product you have to call
         ```np.reshape(grad, (ndim, -1))``` in order to obtain a proper
@@ -591,7 +653,7 @@ class Delaunay(GridWorld):
 
         Returns
         -------
-        gradients
+        gradient : scipy.sparse.coo_matrix
             A sparse matrix so that
             `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
             to the true gradients

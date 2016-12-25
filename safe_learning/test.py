@@ -6,8 +6,9 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import (Delaunay, ScipyDelaunay, GridWorld,
-                            PiecewiseConstant, Function, UncertainFunction)
+from .triangulation import (Triangulation, ScipyDelaunay, GridWorld,
+                            PiecewiseConstant, DeterministicFunction,
+                            UncertainFunction)
 
 
 class FunctionTest(TestCase):
@@ -15,7 +16,7 @@ class FunctionTest(TestCase):
 
     def test_errors(self):
         """Check notImplemented error."""
-        f = Function()
+        f = DeterministicFunction()
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 
@@ -38,7 +39,7 @@ class ScipyDelaunayTest(TestCase):
         limits = [[-1, 1], [-1, 2]]
         num_points = [2, 6]
         sp_delaunay = ScipyDelaunay(limits, num_points)
-        delaunay = Delaunay(limits, num_points)
+        delaunay = Triangulation(limits, num_points)
 
         assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
         assert_equal(delaunay.ndim, sp_delaunay.ndim)
@@ -142,7 +143,7 @@ class DelaunayTest(TestCase):
         """Test the implices on the grid."""
         limits = [[-1, 1], [-1, 2]]
         num_points = [2, 6]
-        delaunay = Delaunay(limits, num_points)
+        delaunay = Triangulation(limits, num_points)
 
         # Test the basic properties
         assert_equal(delaunay.nrectangles, 2 * 6)
@@ -186,7 +187,7 @@ class DelaunayTest(TestCase):
         """Test the function_value_at function."""
         eps = 1e-10
 
-        delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
+        delaunay = Triangulation([[0, 1], [0, 1]], [1, 1])
 
         test_points = np.array([[0, 0],
                                 [1 - eps, 0],
@@ -231,7 +232,7 @@ class DelaunayTest(TestCase):
     def test_multiple_dimensions(self):
         """Test delaunay in three dimensions."""
         limits = [[0, 1]] * 3
-        delaunay = Delaunay(limits, [1] * 3)
+        delaunay = Triangulation(limits, [1] * 3)
         assert_equal(delaunay.ndim, 3)
         assert_equal(delaunay.nrectangles, 1)
         assert_equal(delaunay.nsimplex, np.math.factorial(3))
@@ -262,7 +263,7 @@ class DelaunayTest(TestCase):
 
     def test_gradient(self):
         """Test the gradient_at function."""
-        delaunay = Delaunay([[0, 1], [0, 1]], [1, 1])
+        delaunay = Triangulation([[0, 1], [0, 1]], [1, 1])
 
         points = np.array([[0, 0],
                            [1, 0],
