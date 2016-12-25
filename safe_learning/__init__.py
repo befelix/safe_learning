@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from .triangulation import *
+from .functions import *
 from .lyapunov import *
 from .reinforcement_learning import *
 from . import utilities

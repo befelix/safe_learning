@@ -6,9 +6,9 @@ from numpy.testing import *
 import unittest
 import numpy as np
 
-from .triangulation import (Triangulation, ScipyDelaunay, GridWorld,
-                            PiecewiseConstant, DeterministicFunction,
-                            UncertainFunction)
+from .functions import (Triangulation, ScipyDelaunay, GridWorld,
+                        PiecewiseConstant, DeterministicFunction,
+                        UncertainFunction)
 
 
 class FunctionTest(TestCase):
