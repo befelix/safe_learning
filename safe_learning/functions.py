@@ -43,8 +43,8 @@ class UncertainFunction(Function):
         -------
         mean : ndarray
             The expected function values at the points.
-        var : ndarray
-            The variance of the estimate.
+        error_bounds : ndarray
+            Error bounds for each dimension of the estimate.
         """
         raise NotImplementedError()
 
@@ -65,7 +65,7 @@ class UncertainFunction(Function):
         mean : ndarray
             The expected function gradient at the points.
         var : ndarray
-            The variance of the estimate.
+            Error bounds for each dimension of the estimate.
         """
         raise NotImplementedError()
 
