@@ -10,7 +10,7 @@ from sklearn.utils.extmath import cartesian
 
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'PiecewiseConstant']
+           'GridWorld', 'PiecewiseConstant', 'GPyGaussianProcess']
 
 
 class Function(object):
@@ -124,7 +124,7 @@ class GPyGaussianProcess(UncertainFunction):
     def __init__(self, gaussian_process, beta=2.):
         """Initialization, see `FakeGP`."""
         super(GPyGaussianProcess, self).__init__()
-        self.ndim = gaussian_process.ndim
+        self.ndim = gaussian_process.input_dim
         self.gaussian_process = gaussian_process
 
         if callable(beta):
@@ -132,7 +132,7 @@ class GPyGaussianProcess(UncertainFunction):
         else:
             self.beta = lambda t: beta
 
-    def evaluate(self, points, full_cov=True):
+    def evaluate(self, points):
         """Return the distribution over function values.
 
         Parameters
@@ -151,8 +151,7 @@ class GPyGaussianProcess(UncertainFunction):
         error_bounds : ndarray
             Error bounds for each dimension of the estimate.
         """
-        mean, var = self.gaussian_process.predict_noiseless(points,
-                                                            full_cov=full_cov)
+        mean, var = self.gaussian_process.predict_noiseless(points)
         t = len(self.gaussian_process.X)
         return mean, self.beta(t) * np.sqrt(var)
 
