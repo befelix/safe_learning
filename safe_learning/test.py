@@ -359,10 +359,9 @@ class DelaunayTest(TestCase):
         grad = delaunay.gradient(test_points)
 
         # Compare
-        # print(grad)
         assert_allclose(grad, true_grad)
         assert_allclose(H, true_H)
-        # assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
+        assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
 
 
 if __name__ == '__main__':
