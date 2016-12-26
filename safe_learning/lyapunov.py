@@ -70,10 +70,10 @@ class LyapunovContinuous(Lyapunov):
     ----------
     discretization : ndarray
         A discrete grid on which to evaluate the Lyapunov function.
-    lyapunov_function : instance of `DeterministicFunction`
+    lyapunov_function : callable or instance of `DeterministicFunction`
         The lyapunov function. Can be called with states and returns the
         corresponding values of the Lyapunov function.
-    dynamics_model : instance of `DeterministicFunction` or `UncertainFunction`
+    dynamics : a callable or an instance of `Function`
         The dynamics model. Can be either a deterministic function or something
         uncertain that includes error bounds.
     initial_set : ndarray, optional
@@ -92,6 +92,7 @@ class LyapunovContinuous(Lyapunov):
             self.dynamics = dynamics
         else:
             self.dynamics = DeterministicFunction.from_callable(dynamics)
+        self.uncertain_dynamics = isinstance(dynamics, UncertainFunction)
 
         # Make sure Lyapunov fits into standard framework
         if isinstance(lyapunov_function, DeterministicFunction):
@@ -110,24 +111,22 @@ class LyapunovContinuous(Lyapunov):
 
         self.V, self.dV = lyapunov_function(discretization)
 
-    def v_dot_confidence(self, mean, variance):
+    def v_dot_confidence(self, mean, bounds):
         """
-        Compute the distribution over V_dot, given the dynamics distribution.
+        Compute confidence intervals for V_dot based on the dynamics estimate.
 
         Parameters
         ----------
-        dV : np.array
-            The derivatives of the Lyapunov function at grid points
         mean : np.array
-            gp mean of the dynamics (including prior dynamics as mean)
-        variance : np.array
-            gp var of the dynamics
+            expected dynamics.
+        bounds : np.array
+            Point-wise error bounds for the dynamics
 
         Returns
         -------
         mean : np.array
-            The mean of V_dot at each grid point
-        var : np.array
+            The expected V_dot at each grid point.
+        bounds : np.array
             The variance of V_dot at each grid point
         """
         # V_dot_mean = dV * mu
@@ -135,17 +134,13 @@ class LyapunovContinuous(Lyapunov):
         # Should be dV.T var dV if we considered correlation
         # by considering correlations (predicting the sum term directly).
         return (np.sum(self.dV * mean, axis=1),
-                np.sum(np.abs(self.dV) * variance, axis=1))
+                np.sum(np.abs(self.dV) * bounds, axis=1))
 
     def max_safe_levelset(self, accuracy, interval=None):
         """Find maximum level set of V in S.
 
         Parameters
         ----------
-        S : boolean array
-            Elements are True if V_dot <= L tau
-        V : np.array
-            1d array with values of Lyapunov function.
         accuracy : float
             The accuracy up to which the level set is computed
         interval : list

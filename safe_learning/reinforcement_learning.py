@@ -5,9 +5,8 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 try:
     import cvxpy
-    _CVXPY_AVAILABLE = True
 except ImportError:
-    _CVXPY_AVAILABLE = False
+    cvxpy = None
 
 
 __all__ = ['PolicyIteration']
@@ -113,7 +112,7 @@ class PolicyIteration(object):
 
     def optimize_value_function(self):
         """Solve a linear program to optimize the value function."""
-        if not _CVXPY_AVAILABLE:
+        if cvxpy is None:
             raise ImportError('This function requires the cvxpy module.')
 
         next_states = self.dynamics(self.state_space, self.policy)
