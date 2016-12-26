@@ -14,6 +14,7 @@ except ImportError:
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
                         UncertainFunction, GPyGaussianProcess)
+from .lyapunov import line_search_bisection
 
 
 class DeterministicFuctionTest(TestCase):
@@ -362,6 +363,30 @@ class DelaunayTest(TestCase):
         assert_allclose(grad, true_grad)
         assert_allclose(H, true_H)
         assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
+
+
+class LineSearchTest(TestCase):
+    """Test the line search."""
+
+    def setUp(self):
+        """Set up."""
+        self.objective = lambda x: x < 0.5
+
+    def test_simple(self):
+        """Test a simple binary optimization criterion."""
+        atol = 1e-5
+        x = line_search_bisection(self.objective, [0, 1], atol)
+        assert_allclose(x[0], 0.5, rtol=0, atol=atol)
+
+    def test_lower(self):
+        """Test what happens if the constraint cannot be satisfied."""
+        x = line_search_bisection(self.objective, [1, 2], 1e-5)
+        assert(x is None)
+
+    def test_upper(self):
+        """Test what happens if the constraint is trivially satisfied."""
+        x = line_search_bisection(self.objective, [0, 0.4], 1e-5)
+        assert_equal(x[0], x[1])
 
 
 if __name__ == '__main__':
