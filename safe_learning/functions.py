@@ -10,7 +10,7 @@ from sklearn.utils.extmath import cartesian
 
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'PiecewiseConstant', 'GPyGaussianProcess']
+           'GridWorld', 'UncertainFunction']
 
 
 class Function(object):
@@ -27,7 +27,12 @@ class UncertainFunction(Function):
     def __init__(self):
         super(UncertainFunction, self).__init__()
 
-    def evaluate(self, points, full_cov=True):
+    @classmethod
+    def from_gpy(cls, gaussian_process, beta=2.):
+        """Constructor for GPy Gaussian processes."""
+        return GPyGaussianProcess(gaussian_process, beta=beta)
+
+    def evaluate(self, points):
         """Return the distribution over function values.
 
         Parameters
@@ -35,9 +40,6 @@ class UncertainFunction(Function):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
-        full_cov : bool
-            Whether to return a full covariance matrix for each data point, or
-            only the diagonal part.
 
         Returns
         -------
@@ -76,6 +78,28 @@ class DeterministicFunction(Function):
     def __init__(self):
         """Initialization, see `Function` for details."""
         super(DeterministicFunction, self).__init__()
+
+    @classmethod
+    def from_callable(cls, function, gradient=None):
+        """Create a deterministic function from a callable.
+
+        Parameters
+        ----------
+        function : callable
+            A function that we want to evaluate.
+
+        gradient : callable, optional
+            A callable that returns the gradient
+
+        Returns
+        -------
+        instance of DeterministicFunction
+        """
+        instance = DeterministicFunction()
+        instance.evaluate = function
+        if gradient is not None:
+            instance.gradient = gradient
+        return instance
 
     def evaluate(self, points):
         """Return the function values.
@@ -140,9 +164,6 @@ class GPyGaussianProcess(UncertainFunction):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
-        full_cov : bool
-            Whether to return a full covariance matrix for each data point, or
-            only the diagonal part.
 
         Returns
         -------

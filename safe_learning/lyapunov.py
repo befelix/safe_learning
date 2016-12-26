@@ -2,11 +2,12 @@
 
 from __future__ import absolute_import, division, print_function
 
+from .functions import UncertainFunction, DeterministicFunction
+
 import numpy as np
-import GPy
 
 
-__all__ = ['LyapunovFunction']
+__all__ = ['LyapunovContinuous']
 
 
 def line_search_bisection(f, bound, accuracy):
@@ -54,52 +55,27 @@ def line_search_bisection(f, bound, accuracy):
     return bound
 
 
-class FakeGP(object):
-    """Fake GP for deterministic functions.
+class Lyapunov(object):
+    """Baseclass for Lyapunov functions."""
 
-    Parameters
-    ----------
-    function : callable
-        The function that is used as a fake GP model.
-    """
-
-    def __init__(self, function):
-        """Initialization, see `FakeGP`."""
-        self.function = function
-
-    def predict_noiseless(self, X):
-        """Predict the deterministic function values with zero variance.
-
-        Parameters
-        ----------
-        X : ndarray
-            2D array with the test inputs.
-
-        Returns
-        -------
-        mean: ndarray
-            The mean (determinstic function values).
-        var : ndarray
-            The variance (always zero).
-        """
-        mean = self.function(X)
-        var = np.zeros_like(mean)
-        return mean, var
+    def __init__(self):
+        """Initialization, see `Lyapunov` for details."""
+        super(Lyapunov, self).__init__()
 
 
-class LyapunovFunction(object):
+class LyapunovContinuous(Lyapunov):
     """A class for general Lyapunov functions.
 
     Parameters
     ----------
     discretization : ndarray
         A discrete grid on which to evaluate the Lyapunov function.
-    lyapunov_function : callable
+    lyapunov_function : instance of `DeterministicFunction`
         The lyapunov function. Can be called with states and returns the
         corresponding values of the Lyapunov function.
-    dynamics_model : callable
-        The dynamics model. Can be either a GP or a deterministic function
-        (callable).
+    dynamics_model : instance of `DeterministicFunction` or `UncertainFunction`
+        The dynamics model. Can be either a deterministic function or something
+        uncertain that includes error bounds.
     initial_set : ndarray, optional
         An array of states that are known to be safe a priori.
     beta : float, optional
@@ -107,18 +83,20 @@ class LyapunovFunction(object):
         the dynamics are modeled with a GP.
     """
 
-    def __init__(self, discretization, lyapunov_function,
-                 dynamics_model, initial_set=None, beta=2):
+    def __init__(self, discretization, lyapunov_function, dynamics,
+                 initial_set=None):
         """Initialization, see `LyapunovFunction`."""
-        super(LyapunovFunction, self).__init__()
+        super(Lyapunov, self).__init__()
 
         self.discretization = discretization
-        self.beta = beta
 
-        if isinstance(dynamics_model, GPy.core.GP):
-            self.dynamics_model = dynamics_model
-        else:
-            self.dynamics_model = FakeGP(dynamics_model)
+        self.dynamics = dynamics
+        self.uncertain_dynamics = isinstance(dynamics, UncertainFunction)
+        if (not self.uncertain_dynamics
+                and not isinstance(dynamics, DeterministicFunction)):
+            raise AttributeError('The dynamics must be either of type'
+                                 '`UncertainFunction` or'
+                                 '`DeterministicFunction`.')
 
         # Keep track of the safe sets
         self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
@@ -131,7 +109,7 @@ class LyapunovFunction(object):
         self.lyapunov_function = lyapunov_function
         self.V, self.dV = lyapunov_function(discretization)
 
-    def v_dot_distribution(self, mean, variance):
+    def v_dot_confidence(self, mean, variance):
         """
         Compute the distribution over V_dot, given the dynamics distribution.
 
@@ -156,7 +134,7 @@ class LyapunovFunction(object):
         # Should be dV.T var dV if we considered correlation
         # by considering correlations (predicting the sum term directly).
         return (np.sum(self.dV * mean, axis=1),
-                np.sum(self.dV ** 2 * variance, axis=1))
+                np.sum(np.abs(self.dV) * variance, axis=1))
 
     def max_safe_levelset(self, accuracy, interval=None):
         """Find maximum level set of V in S.
@@ -214,15 +192,17 @@ class LyapunovFunction(object):
         safe_set : ndarray
             The safe set.
         """
-        # Get the distribution over the dynamics and V_dot
-        mean, var = self.dynamics_model.predict_noiseless(self.discretization)
-        V_dot_mean, V_dot_var = self.v_dot_distribution(mean, var)
+        prediction = self.dynamics.evaluate(self.discretization)
 
-        # Upper bound on V_dot
-        V_dot_bound = V_dot_mean + self.beta * np.sqrt(V_dot_var)
+        if self.uncertain_dynamics:
+            v_dot, v_dot_error = self.v_dot_confidence(*prediction)
+            # Upper bound on V_dot
+            v_dot_bound = v_dot + v_dot_error
+        else:
+            v_dot_bound = prediction
 
         # Update the safe set
-        self.v_dot_negative[:] = V_dot_bound < threshold
+        self.v_dot_negative[:] = v_dot_bound < threshold
 
         # Make sure initial safe set is included
         if self.initial_safe_set is not None:

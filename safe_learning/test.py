@@ -16,7 +16,7 @@ from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         UncertainFunction)
 
 
-class FunctionTest(TestCase):
+class DeterministicFuctionTest(TestCase):
     """Test the base class."""
 
     def test_errors(self):
@@ -24,6 +24,18 @@ class FunctionTest(TestCase):
         f = DeterministicFunction()
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
+
+    def test_callable_constructor(self):
+        """Test the from_callable constructor."""
+        def test(a):
+            return a
+
+        c = DeterministicFunction.from_callable(test)
+        assert_equal(c.evaluate(5), test(5))
+        assert_raises(NotImplementedError, c.gradient, 5)
+
+        c = DeterministicFunction.from_callable(test, gradient=test)
+        assert_equal(c.gradient(5), test(5))
 
 
 class UncertainFunctionTest(TestCase):
@@ -35,6 +47,15 @@ class UncertainFunctionTest(TestCase):
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 
+    @unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
+    def test_gpy_constructor(self):
+        """Test the GPy constructor."""
+        x = np.array([[1, 0], [0, 1]])
+        y = np.array([[0], [1]])
+        kernel = GPy.kern.RBF(1)
+        lik = GPy.likelihoods.Gaussian(variance=0.1**2)
+        gp = GPy.core.GP(x, y, kernel, lik)
+        UncertainFunction.from_gpy(gp)
 
 @unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
 class GPyTest(TestCase):
