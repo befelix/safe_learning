@@ -13,7 +13,7 @@ except ImportError:
 
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
-                        UncertainFunction)
+                        UncertainFunction, GPyGaussianProcess)
 
 
 class DeterministicFuctionTest(TestCase):
@@ -47,31 +47,48 @@ class UncertainFunctionTest(TestCase):
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 
-    @unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
-    def test_gpy_constructor(self):
-        """Test the GPy constructor."""
-        x = np.array([[1, 0], [0, 1]])
-        y = np.array([[0], [1]])
-        kernel = GPy.kern.RBF(1)
-        lik = GPy.likelihoods.Gaussian(variance=0.1**2)
-        gp = GPy.core.GP(x, y, kernel, lik)
-        UncertainFunction.from_gpy(gp)
 
 @unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
 class GPyTest(TestCase):
     """Test the GPY GP function class."""
 
-    def __init__(self):
+    def setUp(self):
         """Create GP model."""
-        super(GPyTest, self).__init__()
         x = np.array([[1, 0], [0, 1]])
         y = np.array([[0], [1]])
-        kernel = GPy.kern.RBF(1)
+        kernel = GPy.kern.RBF(2)
         lik = GPy.likelihoods.Gaussian(variance=0.1**2)
         self.gp = GPy.core.GP(x, y, kernel, lik)
         self.beta = 2.
-        self.ufun = UncertainFunction(self.gp, beta=self.beta)
+        self.ufun = GPyGaussianProcess(self.gp, beta=self.beta)
+        self.beta_fun = lambda t: self.beta
+        self.ufun2 = GPyGaussianProcess(self.gp, beta=self.beta_fun)
         self.test_points = np.array([[5, 2], [3., 2]])
+
+    def test_evaluation(self):
+        """Make sure evaluation works."""
+        a1, b1 = self.ufun.evaluate(self.test_points)
+        a2, b2 = self.gp.predict_noiseless(self.test_points)
+        b2 = self.beta * np.sqrt(b2)
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
+
+    @unittest.skip
+    def test_gradient(self):
+        """Make sure gradient works."""
+        a1, b1 = self.ufun.gradient(self.test_points)
+        a2, b2 = self.gp.predict_jacobian(self.test_points)
+        b2 = self.beta * np.sqrt(b2)
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
+
+    def test_gpy_constructor(self):
+        """Test the GPy constructor."""
+        test = UncertainFunction.from_gpy(self.gp)
+        a1, b1 = test.evaluate(self.test_points)
+        a2, b2 = self.ufun.evaluate(self.test_points)
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
 
 
 class ScipyDelaunayTest(TestCase):

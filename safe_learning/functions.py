@@ -25,6 +25,7 @@ class UncertainFunction(Function):
     """Base class for function approximators."""
 
     def __init__(self):
+        """Initialization, see `UncertainFunction`."""
         super(UncertainFunction, self).__init__()
 
     @classmethod
