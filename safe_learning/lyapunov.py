@@ -77,10 +77,7 @@ class LyapunovContinuous(Lyapunov):
         The dynamics model. Can be either a deterministic function or something
         uncertain that includes error bounds.
     initial_set : ndarray, optional
-        An array of states that are known to be safe a priori.
-    beta : float, optional
-        The scaling factor used for the GP confidence intervals. Only used if
-        the dynamics are modeled with a GP.
+        A boolean array of states that are known to be safe a priori.
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics,
