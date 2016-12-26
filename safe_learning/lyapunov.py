@@ -90,13 +90,19 @@ class LyapunovContinuous(Lyapunov):
 
         self.discretization = discretization
 
-        self.dynamics = dynamics
-        self.uncertain_dynamics = isinstance(dynamics, UncertainFunction)
-        if (not self.uncertain_dynamics
-                and not isinstance(dynamics, DeterministicFunction)):
-            raise AttributeError('The dynamics must be either of type'
-                                 '`UncertainFunction` or'
-                                 '`DeterministicFunction`.')
+        # Make sure dynamics are of standard framework
+        if (isinstance(dynamics, DeterministicFunction)
+                or isinstance(dynamics, UncertainFunction)):
+            self.dynamics = dynamics
+        else:
+            self.dynamics = DeterministicFunction.from_callable(dynamics)
+
+        # Make sure Lyapunov fits into standard framework
+        if not isinstance(lyapunov_function, DeterministicFunction):
+            self.lyapunov_function = DeterministicFunction.from_callable(
+                lyapunov_function)
+        else:
+            self.lyapunov_function = lyapunov_function
 
         # Keep track of the safe sets
         self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
@@ -106,7 +112,6 @@ class LyapunovContinuous(Lyapunov):
             self.safe_set[:] = self.initial_safe_set
         self.cmax = 0
 
-        self.lyapunov_function = lyapunov_function
         self.V, self.dV = lyapunov_function(discretization)
 
     def v_dot_confidence(self, mean, variance):
