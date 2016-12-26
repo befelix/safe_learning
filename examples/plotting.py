@@ -14,8 +14,8 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, threshold, legend=False):
     """
 
     # Lyapunov function
-    mean, var = lyapunov.dynamics_model.predict_noiseless(lyapunov.discretization)
-    V_dot_mean, V_dot_var = lyapunov.v_dot_distribution(mean, var)
+    mean, bound = lyapunov.dynamics.evaluate(lyapunov.discretization)
+    v_dot_mean, v_dot_bound = lyapunov.v_dot_confidence(mean, bound)
     safe_set = lyapunov.safe_set
     extent = [np.min(lyapunov.discretization), np.max(lyapunov.discretization)]
 
@@ -36,19 +36,19 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, threshold, legend=False):
                  color='black', alpha=0.8)
 
     axes[0].fill_between(lyapunov.discretization[:, 0],
-                         mean[:, 0] + lyapunov.beta * np.sqrt(var[:, 0]),
-                         mean[:, 0] - lyapunov.beta * np.sqrt(var[:, 0]),
+                         mean[:, 0] - bound[:, 0],
+                         mean[:, 0] + bound[:, 0],
                          color=(0.8, 0.8, 1))
 
-    axes[0].plot(lyapunov.dynamics_model.X,
-                 lyapunov.dynamics_model.Y,
+    axes[0].plot(lyapunov.dynamics.gaussian_process.X,
+                 lyapunov.dynamics.gaussian_process.Y,
                  'x', ms=8, mew=2)
 
     # Plot V_dot
     v_dot_est_plot = plt.fill_between(
         lyapunov.discretization.squeeze(),
-        V_dot_mean + lyapunov.beta * np.sqrt(V_dot_var),
-        V_dot_mean - lyapunov.beta * np.sqrt(V_dot_var),
+        v_dot_mean - v_dot_bound,
+        v_dot_mean + v_dot_bound,
         color=(0.8, 0.8, 1))
 
     threshold_plot = plt.plot(extent, [threshold, threshold],
