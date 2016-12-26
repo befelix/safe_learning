@@ -2,7 +2,7 @@
 
 from __future__ import absolute_import, division, print_function
 
-from .functions import UncertainFunction, DeterministicFunction
+from .functions import UncertainFunction, DeterministicFunction, Function
 
 import numpy as np
 
@@ -91,18 +91,17 @@ class LyapunovContinuous(Lyapunov):
         self.discretization = discretization
 
         # Make sure dynamics are of standard framework
-        if (isinstance(dynamics, DeterministicFunction)
-                or isinstance(dynamics, UncertainFunction)):
+        if isinstance(dynamics, Function):
             self.dynamics = dynamics
         else:
             self.dynamics = DeterministicFunction.from_callable(dynamics)
 
         # Make sure Lyapunov fits into standard framework
-        if not isinstance(lyapunov_function, DeterministicFunction):
+        if isinstance(lyapunov_function, DeterministicFunction):
+            self.lyapunov_function = lyapunov_function
+        else:
             self.lyapunov_function = DeterministicFunction.from_callable(
                 lyapunov_function)
-        else:
-            self.lyapunov_function = lyapunov_function
 
         # Keep track of the safe sets
         self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
