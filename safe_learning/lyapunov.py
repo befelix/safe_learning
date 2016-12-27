@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function
 from .functions import UncertainFunction, DeterministicFunction, Function
 
 import numpy as np
-
+from collections import Sequence
 
 __all__ = ['LyapunovContinuous']
 
@@ -56,15 +56,7 @@ def line_search_bisection(f, bound, accuracy):
 
 
 class Lyapunov(object):
-    """Baseclass for Lyapunov functions."""
-
-    def __init__(self):
-        """Initialization, see `Lyapunov` for details."""
-        super(Lyapunov, self).__init__()
-
-
-class LyapunovContinuous(Lyapunov):
-    """A class for general Lyapunov functions.
+    """Baseclass for Lyapunov functions.
 
     Parameters
     ----------
@@ -76,20 +68,35 @@ class LyapunovContinuous(Lyapunov):
     dynamics : a callable or an instance of `Function`
         The dynamics model. Can be either a deterministic function or something
         uncertain that includes error bounds.
+    epsilon : float
+        The discretization constant.
     initial_set : ndarray, optional
         A boolean array of states that are known to be safe a priori.
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics,
-                 initial_set=None):
-        """Initialization, see `LyapunovFunction`."""
+                 epsilon, initial_set=None):
+        """Initialization, see `Lyapunov` for details."""
         super(Lyapunov, self).__init__()
 
         self.discretization = discretization
 
+        # Keep track of the safe sets
+        self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
+        self.safe_set = np.zeros(len(discretization), dtype=np.bool)
+        self.v_dot_negative = np.zeros(len(discretization), dtype=np.bool)
+        if initial_set is not None:
+            self.safe_set[:] = self.initial_safe_set
+        self.cmax = 0
+
+        # Discretization constant
+        self.epsilon = epsilon
+
         # Make sure dynamics are of standard framework
         if isinstance(dynamics, Function):
             self.dynamics = dynamics
+        elif isinstance(Sequence, dynamics):
+            self.dynamics = DeterministicFunction.from_callable(*dynamics)
         else:
             self.dynamics = DeterministicFunction.from_callable(dynamics)
         self.uncertain_dynamics = isinstance(dynamics, UncertainFunction)
@@ -101,40 +108,33 @@ class LyapunovContinuous(Lyapunov):
             self.lyapunov_function = DeterministicFunction.from_callable(
                 lyapunov_function)
 
-        # Keep track of the safe sets
-        self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
-        self.safe_set = np.zeros(len(discretization), dtype=np.bool)
-        self.v_dot_negative = np.zeros(len(discretization), dtype=np.bool)
-        if initial_set is not None:
-            self.safe_set[:] = self.initial_safe_set
-        self.cmax = 0
+        # Lyapunov values
+        self.V = self.lyapunov_function.evaluate(self.discretization)
 
-        self.V, self.dV = lyapunov_function(discretization)
-
-    def v_dot_confidence(self, mean, bounds):
+    def v_decrease_confidence(self, dynamics, error_bounds):
         """
-        Compute confidence intervals for V_dot based on the dynamics estimate.
+        Compute confidence intervals for the decrease along Lyapunov function.
 
         Parameters
         ----------
-        mean : np.array
-            expected dynamics.
-        bounds : np.array
-            Point-wise error bounds for the dynamics
+        dynamics : np.array
+            The dynamics evaluated at each point on the discretization.
+        error_bounds : np.array
+            Point-wise error error_bounds for the dynamics.
 
         Returns
         -------
         mean : np.array
-            The expected V_dot at each grid point.
-        bounds : np.array
-            The variance of V_dot at each grid point
+            The expected decrease in V at each grid point.
+        error_bounds : np.array
+            The error bounds for the decrease at each grid point
         """
-        # V_dot_mean = dV * mu
-        # V_dot_var = sum_i(|dV_i| * var_i)
-        # Should be dV.T var dV if we considered correlation
-        # by considering correlations (predicting the sum term directly).
-        return (np.sum(self.dV * mean, axis=1),
-                np.sum(np.abs(self.dV) * bounds, axis=1))
+        raise NotImplementedError
+
+    @property
+    def threshold(self):
+        """Return the safety threshold for the Lyapunov condition."""
+        raise NotImplementedError
 
     def max_safe_levelset(self, accuracy, interval=None):
         """Find maximum level set of V in S.
@@ -175,13 +175,16 @@ class LyapunovContinuous(Lyapunov):
                                      interval,
                                      accuracy)[0]
 
-    def update_safe_set(self, threshold, accuracy, interval=None):
+    def update_safe_set(self, accuracy, interval=None):
         """Compute the safe set.
 
         Parameters
         ----------
-        threshold : float
-            The safety threshold, in the paper threshold = -L * tau
+        accuracy : float
+            The accuracy up to which the level set is computed
+        interval : list
+            Interval within which the level set is search. Defaults
+            to [0, max(V) + accuracy]
 
         Returns
         -------
@@ -191,14 +194,14 @@ class LyapunovContinuous(Lyapunov):
         prediction = self.dynamics.evaluate(self.discretization)
 
         if self.uncertain_dynamics:
-            v_dot, v_dot_error = self.v_dot_confidence(*prediction)
+            v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
             # Upper bound on V_dot
             v_dot_bound = v_dot + v_dot_error
         else:
             v_dot_bound = prediction
 
         # Update the safe set
-        self.v_dot_negative[:] = v_dot_bound < threshold
+        self.v_dot_negative[:] = v_dot_bound < self.threshold
 
         # Make sure initial safe set is included
         if self.initial_safe_set is not None:
@@ -206,3 +209,168 @@ class LyapunovContinuous(Lyapunov):
 
         self.cmax = self.max_safe_levelset(accuracy, interval)
         self.safe_set[:] = self.V <= self.cmax
+
+
+class LyapunovContinuous(Lyapunov):
+    """A class for general Lyapunov functions.
+
+    Parameters
+    ----------
+    discretization : ndarray
+        A discrete grid on which to evaluate the Lyapunov function.
+    lyapunov_function : instance of `DeterministicFunction`
+        The lyapunov function. Can be called with states and returns the
+        corresponding values of the Lyapunov function. For continuous-time
+        systems, this function must include the derivative. One can also pass
+        a tuple of callables (lyapunov_function, lyapunov_gradient).
+    dynamics : a callable or an instance of `Function`
+        The dynamics model. Can be either a deterministic function or something
+        uncertain that includes error bounds.
+    epsilon : float
+        The discretization constant.
+    initial_set : ndarray, optional
+        A boolean array of states that are known to be safe a priori.
+    """
+
+    def __init__(self, discretization, lyapunov_function, dynamics, epsilon,
+                 lipschitz, initial_set=None):
+        """Initialization, see `LyapunovFunction`."""
+        super(LyapunovContinuous, self).__init__(discretization,
+                                                 lyapunov_function,
+                                                 dynamics,
+                                                 epsilon,
+                                                 initial_set=initial_set)
+
+        self.lipschitz = lipschitz
+        self.dV = self.lyapunov_function.gradient(self.discretization)
+
+    @property
+    def threshold(self):
+        """Return the safety threshold for the Lyapunov condition."""
+        return -self.lipschitz * self.epsilon
+
+    @staticmethod
+    def lipschitz_constant(dynamics_bound, lipschitz_dynamics,
+                           lipschitz_lyapunov, lipschitz_lyapunov_derivative):
+        """Compute the Lipschitz constant of dot{V}.
+
+        Note
+        ----
+        All of the following parameters can be either floats or ndarrays. If
+        they are ndarrays, they should represent the local properties of the
+        functions at the discretization points within an epsilon-ball.
+
+        Parameters
+        ----------
+        dynamics_bound : float
+            The largest absolute value that the dynamics can achieve.
+        lipschitz_dynamics : float
+            The Lipschitz constant of the dynamics.
+        lipschitz_lyapunov : float
+            The Lipschitz constant of the Lyapunov function.
+        lipschitz_lyapunov_derivative : float
+            The Lipschitz constant of the derivative of the Lyapunov function.
+        """
+        return (dynamics_bound * lipschitz_lyapunov_derivative
+                + lipschitz_lyapunov * lipschitz_dynamics)
+
+    def v_decrease_confidence(self, dynamics, error_bounds):
+        """
+        Compute confidence intervals for the decrease along Lyapunov function.
+
+        Parameters
+        ----------
+        dynamics : np.array
+            The dynamics evaluated at each point on the discretization.
+        error_bounds : np.array
+            Point-wise error error_bounds for the dynamics.
+
+        Returns
+        -------
+        mean : np.array
+            The expected decrease in V at each grid point.
+        error_bounds : np.array
+            The error bounds for the decrease at each grid point
+        """
+        # V_dot_mean = dV * mu
+        # V_dot_var = sum_i(|dV_i| * var_i)
+        return (np.sum(self.dV * dynamics, axis=1),
+                np.sum(np.abs(self.dV) * error_bounds, axis=1))
+
+
+class LyapunovDiscrete(Lyapunov):
+    """A class for general Lyapunov functions.
+
+    Parameters
+    ----------
+    discretization : ndarray
+        A discrete grid on which to evaluate the Lyapunov function.
+    lyapunov_function : callable or instance of `DeterministicFunction`
+        The lyapunov function. Can be called with states and returns the
+        corresponding values of the Lyapunov function.
+    dynamics : a callable or an instance of `Function`
+        The dynamics model. Can be either a deterministic function or something
+        uncertain that includes error bounds.
+    lipschitz_dynamics : ndarray or float
+        The Lipschitz constant of the dynamics. Either globally, or locally
+        for each point in the discretization (within a radius given by the
+        discretization constant.
+    lipschitz_lyapunov : ndarray or float
+        The Lipschitz constant of the lyapunov function. Either globally, or
+        locally for each point in the discretization (within a radius given by
+        the discretization constant.
+    epsilon : float
+        The discretization constant.
+    initial_set : ndarray, optional
+        A boolean array of states that are known to be safe a priori.
+    """
+
+    def __init__(self, discretization, lyapunov_function, dynamics,
+                 lipschitz_dynamics, lipschitz_lyapunov, epsilon,
+                 initial_set=None):
+        """Initialization, see `LyapunovFunction`."""
+        super(LyapunovDiscrete, self).__init__(discretization,
+                                               lyapunov_function,
+                                               dynamics,
+                                               epsilon,
+                                               initial_set=initial_set)
+
+        self.lipschitz_dynamics = lipschitz_dynamics
+        self.lipschitz_lyapunov = lipschitz_lyapunov
+
+        self.V, self.dV = lyapunov_function(discretization)
+
+    @property
+    def threshold(self):
+        """Return the safety threshold for the Lyapunov condition."""
+        lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
+        return lv * (1. + lf) * self.epsilon
+
+    def v_decrease_confidence(self, dynamics, error_bounds):
+        """
+        Compute confidence intervals for the decrease along Lyapunov function.
+
+        Parameters
+        ----------
+        dynamics : np.array
+            The dynamics evaluated at each point on the discretization.
+        error_bounds : np.array
+            Point-wise error error_bounds for the dynamics.
+
+        Returns
+        -------
+        mean : np.array
+            The expected decrease in V at each grid point.
+        error_bounds : np.array
+            The error bounds for the decrease at each grid point
+        """
+        dynamics = self.lyapunov_function(dynamics) - self.V
+
+        # Condition checks if lipschitz constants are given per dimension
+        if (self.lipschitz_dynamics.ndim == 2
+                and self.lipschitz_dynamics.shape[1] > 1):
+            bound = np.sum(self.lipschitz_dynamics * error_bounds, axis=1)
+        else:
+            bound = self.lipschitz_dynamics * np.sum(error_bounds, axis=1)
+
+        return dynamics, bound

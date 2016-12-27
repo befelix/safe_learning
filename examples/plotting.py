@@ -15,7 +15,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, threshold, legend=False):
 
     # Lyapunov function
     mean, bound = lyapunov.dynamics.evaluate(lyapunov.discretization)
-    v_dot_mean, v_dot_bound = lyapunov.v_dot_confidence(mean, bound)
+    v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(mean, bound)
     safe_set = lyapunov.safe_set
     extent = [np.min(lyapunov.discretization), np.max(lyapunov.discretization)]
 
