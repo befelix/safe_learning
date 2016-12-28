@@ -5,16 +5,17 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import *
 import unittest
 import numpy as np
+import mock
+
 try:
     import GPy
-    _GPY_AVAILABLE = True
 except ImportError:
-    _GPY_AVAILABLE = False
+    GPy = None
 
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
                         UncertainFunction, GPyGaussianProcess)
-from .lyapunov import line_search_bisection
+from .lyapunov import line_search_bisection, Lyapunov
 
 
 class DeterministicFuctionTest(TestCase):
@@ -49,7 +50,7 @@ class UncertainFunctionTest(TestCase):
         assert_raises(NotImplementedError, f.gradient, None)
 
 
-@unittest.skipIf(not _GPY_AVAILABLE, 'GPy module not installed.')
+@unittest.skipIf(GPy is None, 'GPy module not installed.')
 class GPyTest(TestCase):
     """Test the GPY GP function class."""
 
@@ -387,6 +388,81 @@ class LineSearchTest(TestCase):
         """Test what happens if the constraint is trivially satisfied."""
         x = line_search_bisection(self.objective, [0, 0.4], 1e-5)
         assert_equal(x[0], x[1])
+
+
+class LyapunovTest(TestCase):
+    """Test the Lyapunov base class."""
+
+    def setUp(self):
+        """Initialize a lyapunov function."""
+        self.discretization = np.array([[0], [1], [2], [3]])
+        self.lyapunov_function = DeterministicFunction.from_callable(
+            lambda x: np.abs(x))
+        self.dynamics = DeterministicFunction.from_callable(
+            lambda x: np.zeros_like(x))
+        self.epsilon = 1
+        self.lyap = Lyapunov(self.discretization, self.lyapunov_function,
+                             self.dynamics, self.epsilon)
+
+    def test_errors(self):
+        """Test the NotImplementedErrors."""
+        assert_raises(NotImplementedError,
+                      self.lyap.v_decrease_confidence, None, None)
+        assert_raises(NotImplementedError, lambda: self.lyap.threshold)
+
+    @mock.patch('safe_learning.lyapunov.line_search_bisection')
+    def test_max_levelset(self, lsb):
+        """Test the function to compute the maximum levelset."""
+        accuracy = 0.1
+        interval = [0, -0.3]
+        self.lyap.max_safe_levelset(0.1, interval)
+        lsb.assert_called_with(self.lyap._levelset_is_safe,
+                               interval, accuracy)
+
+        v = self.lyapunov_function.evaluate(self.discretization)
+        self.lyap.max_safe_levelset(accuracy)
+
+        assert(lsb.call_args[0][1][0] == 0)
+        assert_allclose(lsb.call_args[0][1][1], np.max(v) + accuracy)
+
+    def test_levelset_is_safe(self):
+        """Test the helper method for safe levelset construction."""
+        self.lyap.v_dot_negative = np.array([True, False, False, False])
+
+        assert(self.lyap._levelset_is_safe(0.5))
+        assert(not self.lyap._levelset_is_safe(1.1))
+
+        s = self.lyap.max_safe_levelset(0.01)
+        assert(s < 1.)
+        assert(s >= 0.99)
+
+    @mock.patch('safe_learning.lyapunov.Lyapunov.threshold',
+                new_callable=mock.PropertyMock)
+    @mock.patch('safe_learning.lyapunov.Lyapunov.v_decrease_confidence')
+    def test_update(self, decrease_confidence, threshold):
+        """Test the update step."""
+        acc = 0.1
+        threshold.return_value = -0.15
+        decrease_confidence.return_value = np.array([-0.5, -0.2, 0, -1]), None
+
+        self.lyap.update_safe_set(acc)
+
+        assert(self.lyap.cmax < 2)
+        assert(self.lyap.cmax > 1.9)
+
+        assert_equal(self.lyap.safe_set, np.array([True, True, False, False]))
+        assert_equal(self.lyap.v_dot_negative,
+                     np.array([True, True, False, True]))
+
+        self.lyap.initial_safe_set = np.array([False, False, True, False])
+        self.lyap.update_safe_set(acc)
+        assert(self.lyap.cmax >= 3)
+        assert(self.lyap.cmax <= 3 + acc)
+
+        assert(np.all(self.lyap.safe_set))
+        assert(np.all(self.lyap.v_dot_negative))
+
+        # TODO: Test uncertain dynamics.
 
 
 if __name__ == '__main__':

@@ -2,12 +2,11 @@
 
 from __future__ import absolute_import, division, print_function
 
-from .functions import UncertainFunction, DeterministicFunction, Function
-
 import numpy as np
-from collections import Sequence
 
-__all__ = ['LyapunovContinuous']
+from .functions import UncertainFunction
+
+__all__ = ['LyapunovContinuous', 'LyapunovDiscrete']
 
 
 def line_search_bisection(f, bound, accuracy):
@@ -56,7 +55,7 @@ def line_search_bisection(f, bound, accuracy):
 
 
 class Lyapunov(object):
-    """Baseclass for Lyapunov functions.
+    """Base class for Lyapunov functions.
 
     Parameters
     ----------
@@ -82,10 +81,12 @@ class Lyapunov(object):
         self.discretization = discretization
 
         # Keep track of the safe sets
-        self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
         self.safe_set = np.zeros(len(discretization), dtype=np.bool)
         self.v_dot_negative = np.zeros(len(discretization), dtype=np.bool)
+        self.initial_safe_set = initial_set
         if initial_set is not None:
+            self.initial_safe_set = np.asarray(initial_set, dtype=np.bool)
+            self.initial_safe_set = self.initial_safe_set.squeeze()
             self.safe_set[:] = self.initial_safe_set
         self.cmax = 0
 
@@ -93,25 +94,16 @@ class Lyapunov(object):
         self.epsilon = epsilon
 
         # Make sure dynamics are of standard framework
-        if isinstance(dynamics, Function):
-            self.dynamics = dynamics
-        elif isinstance(Sequence, dynamics):
-            self.dynamics = DeterministicFunction.from_callable(*dynamics)
-        else:
-            self.dynamics = DeterministicFunction.from_callable(dynamics)
+        self.dynamics = dynamics
         self.uncertain_dynamics = isinstance(dynamics, UncertainFunction)
 
         # Make sure Lyapunov fits into standard framework
-        if isinstance(lyapunov_function, DeterministicFunction):
-            self.lyapunov_function = lyapunov_function
-        else:
-            self.lyapunov_function = DeterministicFunction.from_callable(
-                lyapunov_function)
+        self.lyapunov_function = lyapunov_function
 
         # Lyapunov values
-        self.V = self.lyapunov_function.evaluate(self.discretization)
+        self.V = self.lyapunov_function.evaluate(self.discretization).squeeze()
 
-    def v_decrease_confidence(self, dynamics, error_bounds):
+    def v_decrease_confidence(self, dynamics, error_bounds=None):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
@@ -119,15 +111,17 @@ class Lyapunov(object):
         ----------
         dynamics : np.array
             The dynamics evaluated at each point on the discretization.
-        error_bounds : np.array
-            Point-wise error error_bounds for the dynamics.
+        error_bounds : np.array, optional
+            Point-wise error error_bounds for the dynamics. If None, the error
+            is assumed to be zero.
 
         Returns
         -------
         mean : np.array
             The expected decrease in V at each grid point.
         error_bounds : np.array
-            The error bounds for the decrease at each grid point
+            The error bounds for the decrease at each grid point. This is None
+            if the error_bound is None.
         """
         raise NotImplementedError
 
@@ -135,6 +129,22 @@ class Lyapunov(object):
     def threshold(self):
         """Return the safety threshold for the Lyapunov condition."""
         raise NotImplementedError
+
+    def _levelset_is_safe(self, c):
+        """
+        Return true if V(c) is subset of S.
+
+        Parameters
+        ----------
+        c : float
+            The level set value
+
+        Returns
+        -------
+        safe : boolean
+        """
+        # All points that have V<=c should be safe (have S=True)
+        return np.all(self.v_dot_negative[self.V <= c])
 
     def max_safe_levelset(self, accuracy, interval=None):
         """Find maximum level set of V in S.
@@ -152,28 +162,13 @@ class Lyapunov(object):
         c : float
             The value of the maximum level set
         """
-        def levelset_is_safe(c):
-            """
-            Return true if V(c) is subset of S.
-
-            Parameters
-            ----------
-            c : float
-                The level set value
-
-            Returns
-            -------
-            safe : boolean
-            """
-            # All points that have V<=c should be safe (have S=True)
-            return np.all(self.v_dot_negative[self.V <= c])
-
         if interval is None:
             interval = [0, np.max(self.V) + accuracy]
 
-        return line_search_bisection(levelset_is_safe,
-                                     interval,
-                                     accuracy)[0]
+        bound = line_search_bisection(self._levelset_is_safe,
+                                      interval,
+                                      accuracy)
+        return bound[0]
 
     def update_safe_set(self, accuracy, interval=None):
         """Compute the safe set.
@@ -198,7 +193,7 @@ class Lyapunov(object):
             # Upper bound on V_dot
             v_dot_bound = v_dot + v_dot_error
         else:
-            v_dot_bound = prediction
+            v_dot_bound, _ = self.v_decrease_confidence(prediction)
 
         # Update the safe set
         self.v_dot_negative[:] = v_dot_bound < self.threshold
