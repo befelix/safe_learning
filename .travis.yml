@@ -30,6 +30,6 @@ install:
 script:
   - flake8 safe_learning --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
   - flake8 safe_learning --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
-  - nosetests --with-doctest --with-coverage --cover-min-percentage=55 --cover-erase --cover-package=safe_learning safe_learning
+  - nosetests --with-doctest --with-coverage --cover-min-percentage=70 --cover-erase --cover-package=safe_learning safe_learning
   - pydocstyle safe_learning --match='(?!__init__).*\.py'
 
