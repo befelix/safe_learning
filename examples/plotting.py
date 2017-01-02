@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_lyapunov_1d(lyapunov, true_dynamics, threshold, legend=False):
+def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     """Plot the lyapunov function of a 1D system
 
     Parameters
@@ -12,7 +12,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, threshold, legend=False):
     true_dynamics: callable
     legend: bool, optional
     """
-
+    threshold = lyapunov.threshold
     # Lyapunov function
     mean, bound = lyapunov.dynamics.evaluate(lyapunov.discretization)
     v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(mean, bound)

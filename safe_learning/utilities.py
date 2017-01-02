@@ -18,10 +18,11 @@ import numpy as np
 import scipy.linalg
 import scipy.interpolate
 
+from .functions import DeterministicFunction
 
-__all__ = ['combinations', 'linearly_spaced_combinations',
-           'lqr', 'quadratic_lyapunov_function', 'sample_gp_function',
-           'ellipse_bounds']
+
+__all__ = ['combinations', 'linearly_spaced_combinations', 'lqr',
+           'QuadraticFunction', 'sample_gp_function', 'ellipse_bounds']
 
 
 def combinations(arrays):
@@ -97,32 +98,32 @@ def lqr(A, B, Q, R):
     return K, P
 
 
-def quadratic_lyapunov_function(x, P):
-    """
-    Compute V(x) and dV(x)/dx for a quadratic Lyapunov function.
+class QuadraticFunction(DeterministicFunction):
+    """A quadratic Lyapunov function.
 
     V(x) = x.T P x
     dV(x)/dx = 2 x.T P
 
-    Equivalent, but slower implementation:
-    np.array([ xi.dot(p.dot(xi.T)) for xi in x])
-
     Parameters
     ----------
-    x : np.array
-        2d array that has a state vector xi on each row
-    P : np.array
-        2d cost matrix for lyapunov function
-
-    Returns
-    -------
-    V : np.array
-        1d array with V(x)
-    dV : np.array
-        2d array with dV(x)/dx on each row
+    matrix : np.array
+        2d cost matrix for lyapunov function.
     """
-    x = np.asarray(x)
-    return np.sum(x.dot(P) * x, axis=1), 2 * x.dot(P)
+
+    def __init__(self, matrix):
+        """Initialization, see `QuadraticLyapunovFunction`."""
+        super(QuadraticFunction, self).__init__()
+        self.matrix = matrix
+
+    def evaluate(self, points):
+        """See `DeterministicFunction.evaluate`."""
+        points = np.asarray(points)
+        return np.sum(points.dot(self.matrix) * points, axis=1)
+
+    def gradient(self, points):
+        """See `DeterministicFunction.gradient`."""
+        points = np.asarray(points)
+        return 2 * points.dot(self.matrix)
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,

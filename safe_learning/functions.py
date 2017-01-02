@@ -201,6 +201,12 @@ class GPyGaussianProcess(UncertainFunction):
         t = len(self.gaussian_process.X)
         return mean, self.beta(t) * np.sqrt(var)
 
+    def add_data_point(self, x, y):
+        """Add data points to the GP model."""
+        x_new = np.vstack((self.gaussian_process.X, x))
+        y_new = np.vstack((self.gaussian_process.Y, y))
+        self.gaussian_process.set_XY(x_new, y_new)
+
 
 class ScipyDelaunay(spatial.Delaunay):
     """
