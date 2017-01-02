@@ -15,7 +15,7 @@ except ImportError:
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
                         UncertainFunction, GPyGaussianProcess)
-from .lyapunov import line_search_bisection, Lyapunov
+from .lyapunov import line_search_bisection, Lyapunov, LyapunovContinuous
 
 
 class DeterministicFuctionTest(TestCase):
@@ -485,6 +485,37 @@ class LyapunovTest(TestCase):
 
         assert(self.lyap.cmax >= 3.)
         assert(self.lyap.cmax <= 3 + acc)
+
+
+class LyapunovContinuousTest(unittest.TestCase):
+    """Test Continuous-time Lyapunov functions."""
+
+    def test_init(self):
+        """Test the initialization."""
+        discretization = np.array([1, 2, 3])
+        lyap_fun = mock.create_autospec(DeterministicFunction)
+        dynamics = mock.create_autospec(DeterministicFunction)
+        l = 0.3
+        eps = 0.5
+
+        lyap_fun.gradient.return_value = np.ones((3, 1)) * 0.5
+        lyap = LyapunovContinuous(discretization, lyap_fun, dynamics, 0.3, 0.5)
+        assert_allclose(lyap.threshold, -l * eps)
+
+        dynamics = np.array([[1, 2, 3]]).T
+        a1, a2 = lyap.v_decrease_confidence(dynamics)
+        assert(a2 is None)
+        true_mean = true_error = 0.5 * dynamics.squeeze()
+        assert_allclose(a1, true_mean)
+
+        a1, a2 = lyap.v_decrease_confidence(dynamics, dynamics)
+        assert_allclose(a1, true_mean)
+        assert_allclose(a2, true_error)
+
+    def test_lipschitz_constant(self):
+        """Test the Lipschitz constant that is returned."""
+        a = LyapunovContinuous.lipschitz_constant(1, 2, 3, 4)
+        assert_allclose(a, 10)
 
 
 if __name__ == '__main__':

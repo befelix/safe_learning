@@ -289,8 +289,13 @@ class LyapunovContinuous(Lyapunov):
         """
         # V_dot_mean = dV * mu
         # V_dot_var = sum_i(|dV_i| * var_i)
-        return (np.sum(self.dV * dynamics, axis=1),
-                np.sum(np.abs(self.dV) * error_bounds, axis=1))
+        mean = np.sum(self.dV * dynamics, axis=1)
+        error = None
+        if error_bounds is None:
+            error = None
+        else:
+            error = np.sum(np.abs(self.dV) * error_bounds, axis=1)
+        return mean, error
 
 
 class LyapunovDiscrete(Lyapunov):
