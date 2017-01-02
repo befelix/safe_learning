@@ -410,6 +410,16 @@ class LyapunovTest(TestCase):
                       self.lyap.v_decrease_confidence, None, None)
         assert_raises(NotImplementedError, lambda: self.lyap.threshold)
 
+    def test_safe_set_init(self):
+        """Test the safe set initialization."""
+        initial_set = [0, 1, 0, 1]
+        lyap = Lyapunov(self.discretization, self.lyapunov_function,
+                        self.dynamics, self.epsilon, initial_set=initial_set)
+
+        initial_set = np.array([False, True, False, True])
+        assert_equal(initial_set, lyap.initial_safe_set)
+        assert_equal(initial_set, lyap.safe_set)
+
     @mock.patch('safe_learning.lyapunov.line_search_bisection')
     def test_max_levelset(self, lsb):
         """Test the function to compute the maximum levelset."""
@@ -462,7 +472,19 @@ class LyapunovTest(TestCase):
         assert(np.all(self.lyap.safe_set))
         assert(np.all(self.lyap.v_dot_negative))
 
-        # TODO: Test uncertain dynamics.
+        # Test uncertain dynamics.
+        dynamics = mock.create_autospec(UncertainFunction)
+        dynamics.return_value = np.array([3.2]), np.array([1.4])
+
+        v1 = np.array([-0.5, -0.5, -0.5, -0.5])
+        v2 = np.array([0., 0.4, -0.3, 0.6])
+        decrease_confidence.return_value = (v1, v2)
+        lyap = Lyapunov(self.discretization, self.lyapunov_function,
+                        dynamics, self.epsilon)
+        lyap.update_safe_set(acc)
+
+        assert(self.lyap.cmax >= 3.)
+        assert(self.lyap.cmax <= 3 + acc)
 
 
 if __name__ == '__main__':
