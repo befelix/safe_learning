@@ -269,7 +269,7 @@ class LyapunovContinuous(Lyapunov):
         return (dynamics_bound * lipschitz_lyapunov_derivative
                 + lipschitz_lyapunov * lipschitz_dynamics)
 
-    def v_decrease_confidence(self, dynamics, error_bounds):
+    def v_decrease_confidence(self, dynamics, error_bounds=None):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
@@ -341,7 +341,7 @@ class LyapunovDiscrete(Lyapunov):
         lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
         return lv * (1. + lf) * self.epsilon
 
-    def v_decrease_confidence(self, dynamics, error_bounds):
+    def v_decrease_confidence(self, dynamics, error_bounds=None):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
