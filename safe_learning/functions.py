@@ -10,7 +10,7 @@ from sklearn.utils.extmath import cartesian
 
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'UncertainFunction']
+           'GridWorld', 'UncertainFunction', 'FunctionStack']
 
 
 class Function(object):
@@ -132,6 +132,46 @@ class DeterministicFunction(Function):
             The function gradient at the points.
         """
         raise NotImplementedError()
+
+
+class FunctionStack(UncertainFunction):
+    """A combination of multiple 1d (uncertain) functions for each dim.
+
+    Parameters
+    ----------
+    functions : list
+        The functions. There should be one for each dimension of the output.
+    """
+
+    def __init__(self, *functions):
+        """Initialization, see `FunctionStack`."""
+        super(FunctionStack, self).__init__()
+        self.functions = functions
+        self.deterministic = [isinstance(fun, DeterministicFunction)
+                              for fun in functions]
+        self.deterministic = np.array(self.deterministic)
+        self.num_fun = len(self.functions)
+
+    def evaluate(self, points):
+        """Evaluation, see `UncertainFunction.evaluate`."""
+        mean = np.empty((len(points), self.num_fun), dtype=np.float)
+        error = np.empty_like(mean)
+        error[:, self.deterministic] = 0.
+
+        for i, (fun, deterministic) in enumerate(
+                zip(self.functions, self.deterministic)):
+            prediction = fun.evaluate(points)
+            if deterministic:
+                mean[:, i] = prediction.squeeze()
+            else:
+                mean[:, i] = prediction[0].squeeze()
+                error[:, i] = prediction[1].squeeze()
+
+        return mean, error
+
+    def gradient(self, points):
+        """Gradient, see `UncertainFunction.gradient`."""
+        super(FunctionStack, self).gradient(points)
 
 
 class GPyGaussianProcess(UncertainFunction):
