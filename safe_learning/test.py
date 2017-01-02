@@ -92,6 +92,18 @@ class GPyTest(TestCase):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
+    def test_new_data(self):
+        """Test addting data points to the GP."""
+        x = np.array([[1.2, 2.3]])
+        y = np.array([[2.4]])
+        self.ufun.add_data_point(x, y)
+
+        gp = self.ufun.gaussian_process
+        assert_allclose(gp.X, np.array([[1, 0],
+                                        [0, 1],
+                                        [1.2, 2.3]]))
+        assert_allclose(gp.Y, np.array([[0], [1], [2.4]]))
+
 
 class ScipyDelaunayTest(TestCase):
     """Test the fake replacement for Scipy."""

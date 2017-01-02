@@ -202,7 +202,17 @@ class GPyGaussianProcess(UncertainFunction):
         return mean, self.beta(t) * np.sqrt(var)
 
     def add_data_point(self, x, y):
-        """Add data points to the GP model."""
+        """Add data points to the GP model.
+
+        Parameters
+        ----------
+        x : ndarray
+            A 2d array with the new states to add to the GP model. Each new
+            state is on a new row.
+        y : ndarray
+            A 2d array with the new measurements to add to the GP model. Each
+            measurements is on a new row.
+        """
         x_new = np.vstack((self.gaussian_process.X, x))
         y_new = np.vstack((self.gaussian_process.Y, y))
         self.gaussian_process.set_XY(x_new, y_new)
