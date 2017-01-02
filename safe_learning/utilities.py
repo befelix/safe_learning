@@ -9,20 +9,16 @@ Author: Felix Berkenkamp, Learning & Adaptive Systems Group, ETH Zurich
         (GitHub: befelix)
 """
 
-
 from __future__ import division, print_function
 
 from collections import Sequence
 
 import numpy as np
-import scipy.linalg
 import scipy.interpolate
-
-from .functions import DeterministicFunction
-
+import scipy.linalg
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr',
-           'QuadraticFunction', 'sample_gp_function', 'ellipse_bounds']
+           'sample_gp_function', 'ellipse_bounds']
 
 
 def combinations(arrays):
@@ -96,34 +92,6 @@ def lqr(A, B, Q, R):
     K = np.linalg.solve(R, B.T.dot(P))
 
     return K, P
-
-
-class QuadraticFunction(DeterministicFunction):
-    """A quadratic Lyapunov function.
-
-    V(x) = x.T P x
-    dV(x)/dx = 2 x.T P
-
-    Parameters
-    ----------
-    matrix : np.array
-        2d cost matrix for lyapunov function.
-    """
-
-    def __init__(self, matrix):
-        """Initialization, see `QuadraticLyapunovFunction`."""
-        super(QuadraticFunction, self).__init__()
-        self.matrix = matrix
-
-    def evaluate(self, points):
-        """See `DeterministicFunction.evaluate`."""
-        points = np.asarray(points)
-        return np.sum(points.dot(self.matrix) * points, axis=1)
-
-    def gradient(self, points):
-        """See `DeterministicFunction.gradient`."""
-        points = np.asarray(points)
-        return 2 * points.dot(self.matrix)
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,

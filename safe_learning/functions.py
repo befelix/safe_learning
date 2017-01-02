@@ -10,7 +10,8 @@ from sklearn.utils.extmath import cartesian
 
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'UncertainFunction', 'FunctionStack']
+           'GridWorld', 'UncertainFunction', 'FunctionStack',
+           'QuadraticFunction']
 
 
 class Function(object):
@@ -822,3 +823,31 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(self.ndim * npoints, self.nindex))
+
+
+class QuadraticFunction(DeterministicFunction):
+    """A quadratic Lyapunov function.
+
+    V(x) = x.T P x
+    dV(x)/dx = 2 x.T P
+
+    Parameters
+    ----------
+    matrix : np.array
+        2d cost matrix for lyapunov function.
+    """
+
+    def __init__(self, matrix):
+        """Initialization, see `QuadraticLyapunovFunction`."""
+        super(QuadraticFunction, self).__init__()
+        self.matrix = matrix
+
+    def evaluate(self, points):
+        """See `DeterministicFunction.evaluate`."""
+        points = np.asarray(points)
+        return np.sum(points.dot(self.matrix) * points, axis=1)
+
+    def gradient(self, points):
+        """See `DeterministicFunction.gradient`."""
+        points = np.asarray(points)
+        return 2 * points.dot(self.matrix)
