@@ -14,7 +14,8 @@ except ImportError:
 
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
-                        UncertainFunction, GPyGaussianProcess)
+                        UncertainFunction, GPyGaussianProcess,
+                        QuadraticFunction)
 from .lyapunov import line_search_bisection, Lyapunov, LyapunovContinuous
 
 
@@ -103,6 +104,35 @@ class GPyTest(TestCase):
                                         [0, 1],
                                         [1.2, 2.3]]))
         assert_allclose(gp.Y, np.array([[0], [1], [2.4]]))
+
+
+class QuadraticFunctionTest(unittest.TestCase):
+    """Test the quadratic function."""
+
+    def setUp(self):
+        """Set up the test."""
+        self.points = np.array([[0, 0],
+                                [0, 1],
+                                [1, 0],
+                                [1, 1]])
+        P = np.array([[1., 0.1],
+                      [0.2, 2.]])
+        self.quad = QuadraticFunction(P)
+
+    def test_evaluate(self):
+        """Test the evaluation of the quadratic function."""
+        fval = self.quad.evaluate(self.points)
+        true_fval = np.array([0., 2., 1., 3.3])
+        assert_allclose(fval, true_fval)
+
+    def test_gradient(self):
+        """Test the gradient of the quadratic function."""
+        fval = self.quad.gradient(self.points)
+        true_fval = np.array([[0., 0.],
+                              [0.4, 4.],
+                              [2., .2],
+                              [2.4, 4.2]])
+        assert_allclose(fval, true_fval)
 
 
 class ScipyDelaunayTest(TestCase):
