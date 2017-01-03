@@ -11,7 +11,13 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     threshold: float
     true_dynamics: callable
     legend: bool, optional
+    continuous : bool, optional
+        Whether the system is continuous-time or discrete-time.
     """
+    if lyapunov.is_continuous:
+        v_dec_string = '\dot{V}'
+    else:
+        v_dec_string = '\Delta V'
     threshold = lyapunov.threshold
     # Lyapunov function
     mean, bound = lyapunov.dynamics.evaluate(lyapunov.discretization)
@@ -26,8 +32,8 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     axes[0].set_title('GP model of the dynamics')
     axes[1].set_xlim(extent)
     axes[1].set_xlabel('$x$')
-    axes[1].set_ylabel(r'Upper bound of $\dot{V}(x)$')
-    axes[1].set_title(r'Determining stability with $\dot{V}(x)$')
+    axes[1].set_ylabel(r'Upper bound of ${}(x)$'.format(v_dec_string))
+    axes[1].set_title(r'Determining stability with ${}(x)$'.format(v_dec_string))
 
     # Plot dynamics
     axes[0].plot(lyapunov.discretization,
@@ -53,11 +59,15 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     threshold_plot = plt.plot(extent, [threshold, threshold],
                               'k-.', label=r'Safety threshold ($L \tau$ )')
+
+    # Plot the true V_dot or Delta_V
+    evaluated_true_dynamics = true_dynamics(lyapunov.discretization,
+                                            noise=False)
+    delta_v = lyapunov.v_decrease_confidence(evaluated_true_dynamics)
     v_dot_true_plot = axes[1].plot(lyapunov.discretization,
-                                   lyapunov.dV * true_dynamics(lyapunov.discretization,
-                                                               noise=False),
+                                   delta_v,
                                    color='k',
-                                   label=r'True $\dot{V}(x)$')
+                                   label=r'True ${}(x)$'.format(v_dec_string))
 
     # Create twin axis
     ax2 = axes[1].twinx()
@@ -69,10 +79,13 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     V_safe = np.ma.masked_where(~safe_set, lyapunov.V)
     unsafe_plot = ax2.plot(lyapunov.discretization, V_unsafe,
                            color='b',
-                           label=r'$V(x)$ (unsafe, $\dot{V}(x) > L \tau$)')
+                           label=r'$V(x)$ (unsafe, ${}(x) > L \tau$)'.format(
+                               v_dec_string))
     safe_plot = ax2.plot(lyapunov.discretization, V_safe,
                          color='r',
-                         label=r'$V(x)$ (safe, $\dot{V}(x) \leq L \tau$)')
+                         label=r'$V(x)$ (safe, ${}(x) \leq L \tau$)'.format(
+                             v_dec_string
+                         ))
 
     if legend:
         lns = unsafe_plot + safe_plot + threshold_plot + v_dot_true_plot
