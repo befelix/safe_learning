@@ -377,6 +377,6 @@ class LyapunovDiscrete(Lyapunov):
             return dynamics
 
         # Compute the error bound
-        bound = self.lipschitz_dynamics * np.sum(error_bounds, axis=1)
+        bound = self.lipschitz_lyapunov * np.sum(error_bounds, axis=1)
 
         return dynamics, bound
