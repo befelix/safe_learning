@@ -103,6 +103,16 @@ class Lyapunov(object):
         # Lyapunov values
         self.V = self.lyapunov_function.evaluate(self.discretization).squeeze()
 
+    @property
+    def is_discrete(self):
+        """Whether the system is discrete-time."""
+        return isinstance(self, LyapunovDiscrete)
+
+    @property
+    def is_continuous(self):
+        """Whether the system is continuous-time."""
+        return isinstance(self, LyapunovContinuous)
+
     def v_decrease_confidence(self, dynamics, error_bounds=None):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
@@ -290,7 +300,7 @@ class LyapunovContinuous(Lyapunov):
         # V_dot_mean = dV * mu
         # V_dot_var = sum_i(|dV_i| * var_i)
         mean = np.sum(self.dV * dynamics, axis=1)
-        error = None
+
         if error_bounds is None:
             error = None
         else:
@@ -338,8 +348,6 @@ class LyapunovDiscrete(Lyapunov):
         self.lipschitz_dynamics = lipschitz_dynamics
         self.lipschitz_lyapunov = lipschitz_lyapunov
 
-        self.V, self.dV = lyapunov_function(discretization)
-
     @property
     def threshold(self):
         """Return the safety threshold for the Lyapunov condition."""
@@ -364,13 +372,11 @@ class LyapunovDiscrete(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
-        dynamics = self.lyapunov_function(dynamics) - self.V
+        dynamics = self.lyapunov_function.evaluate(dynamics) - self.V
+        if error_bounds is None:
+            return dynamics
 
-        # Condition checks if lipschitz constants are given per dimension
-        if (self.lipschitz_dynamics.ndim == 2
-                and self.lipschitz_dynamics.shape[1] > 1):
-            bound = np.sum(self.lipschitz_dynamics * error_bounds, axis=1)
-        else:
-            bound = self.lipschitz_dynamics * np.sum(error_bounds, axis=1)
+        # Compute the error bound
+        bound = self.lipschitz_dynamics * np.sum(error_bounds, axis=1)
 
         return dynamics, bound
