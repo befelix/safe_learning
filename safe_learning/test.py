@@ -419,6 +419,33 @@ class DelaunayTest(TestCase):
         assert_allclose(H, true_H)
         assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
 
+    def test_1d(self):
+        """Test the triangulation for 1D inputs."""
+        delaunay = Triangulation([[0, 1]], 2, vertex_values=[0, 0.5, 0])
+        vertex_values = delaunay.vertex_values
+
+        test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T
+
+        simplices = delaunay.find_simplex(test_points)
+        true_simplices = np.array([0, 0, 1, 1, 1, 1])
+        assert_allclose(simplices, true_simplices)
+
+        values = delaunay.evaluate(test_points)
+        true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])
+        assert_allclose(values, true_values)
+
+        value_constraint = delaunay.evaluate_constraint(test_points)
+        values = value_constraint.toarray().dot(vertex_values)
+        assert_allclose(values, true_values)
+
+        gradient = delaunay.gradient(test_points)
+        true_gradient = np.array([1, 1, -1, -1, -1, -1])[:, None]
+        assert_allclose(gradient, true_gradient)
+
+        gradient_constraint = delaunay.gradient_constraint(test_points)
+        gradient = gradient_constraint.toarray().dot(vertex_values)
+        assert_allclose(gradient.reshape(-1, 1), true_gradient)
+
 
 class LineSearchTest(TestCase):
     """Test the line search."""

@@ -304,7 +304,7 @@ class GridWorld(object):
         if not (isinstance(num_points, Sequence) or
                 isinstance(num_points, np.ndarray)):
             num_points = [num_points] * len(limits)
-        self.num_points = np.atleast_1d(np.asarray(num_points, dtype=np.int))
+        self.num_points = np.asarray(num_points, dtype=np.int)
 
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
@@ -518,6 +518,50 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         return np.zeros((len(points), self.nindex))
 
 
+class _Delaunay1D(object):
+    """A simple class that behaves like scipy.Delaunay for 1D inputs.
+
+    Parameters
+    ----------
+    points : ndarray
+        Coordinates of points to triangulate, shape (2, 1).
+    """
+
+    def __init__(self, points):
+        """Initialization, see `_Delaunay1D`."""
+        if points.shape[1] > 1:
+            raise AttributeError('This only works for 1D inputs.')
+        if points.shape[0] > 2:
+            raise AttributeError('This only works for two points')
+
+        self.points = points
+        self.nsimplex = len(points) - 1
+
+        self._min = np.min(points)
+        self._max = np.max(points)
+
+        self.simplices = np.array([[0, 1]])
+
+    def find_simplex(self, points):
+        """Find the simplices containing the given points.
+
+        Parameters
+        ----------
+        points : ndarray
+            2D array of coordinates of points for which to find simplices.
+
+        Returns
+        -------
+        indices : ndarray
+            Indices of simplices containing each point. Points outside the
+            triangulation get the value -1.
+        """
+        points = points.squeeze()
+        out_of_bounds = points > self._max
+        out_of_bounds |= points < self._min
+        return np.where(out_of_bounds, -1, 0)
+
+
 class Triangulation(GridWorld, DeterministicFunction):
     """
     Efficient Delaunay triangulation on regular grids.
@@ -546,8 +590,12 @@ class Triangulation(GridWorld, DeterministicFunction):
                                             vertex_values=vertex_values)
 
         # Get triangulation
-        hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
-        self.triangulation = spatial.Delaunay(hyperrectangle_corners)
+        if len(limits) == 1:
+            corners = np.array([[0], self.unit_maxes])
+            self.triangulation = _Delaunay1D(corners)
+        else:
+            hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
+            self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
         # Some statistics about the triangulation
