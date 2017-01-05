@@ -192,10 +192,22 @@ class GridworldTest(TestCase):
         index = grid.state_to_index(test_point)
         assert_equal(index, 0)
 
-    def test_1d_numpoints(self):
-        """Check 1-dimensional numpoints argument."""
+    def test_integer_numpoints(self):
+        """Check integer numpoints argument."""
         grid = GridWorld([[1, 2], [3, 4]], 2)
         assert_equal(grid.num_points, np.array([2, 2]))
+
+    def test_0d(self):
+        """Check that initialization works for 1d-discretization."""
+        grid = GridWorld([[0, 1]], 2)
+
+        test = np.array([[0.1, 0.4, 0.9]]).T
+        res = np.array([0, 1, 2])
+        assert_allclose(grid.state_to_index(test), res)
+
+        res = np.array([0, 0, 1])
+        assert_allclose(grid.state_to_rectangle(test), res)
+        assert_allclose(grid.rectangle_to_state(res), res[:, None] * 0.5)
 
 
 class PiecewiseConstantTest(TestCase):
