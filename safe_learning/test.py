@@ -585,7 +585,7 @@ class LyapunovContinuousTest(unittest.TestCase):
 
         dynamics = np.array([[1, 2, 3]]).T
         a1, a2 = lyap.v_decrease_confidence(dynamics)
-        assert(a2 is None)
+        assert(a2 == 0)
         true_mean = true_error = 0.5 * dynamics.squeeze()
         assert_allclose(a1, true_mean)
 

@@ -302,7 +302,7 @@ class LyapunovContinuous(Lyapunov):
         mean = np.sum(self.dV * dynamics, axis=1)
 
         if error_bounds is None:
-            error = None
+            error = 0
         else:
             error = np.sum(np.abs(self.dV) * error_bounds, axis=1)
         return mean, error
@@ -374,9 +374,9 @@ class LyapunovDiscrete(Lyapunov):
         """
         dynamics = self.lyapunov_function.evaluate(dynamics) - self.V
         if error_bounds is None:
-            return dynamics
-
-        # Compute the error bound
-        bound = self.lipschitz_lyapunov * np.sum(error_bounds, axis=1)
+            bound = 0
+        else:
+            # Compute the error bound
+            bound = self.lipschitz_lyapunov * np.sum(error_bounds, axis=1)
 
         return dynamics, bound
