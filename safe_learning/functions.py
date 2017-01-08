@@ -788,13 +788,16 @@ class Triangulation(GridWorld, DeterministicFunction):
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def _get_weights_gradient(self, points):
+    def _get_weights_gradient(self, points, index=False):
         """Return the linear gradient weights asscoiated with points.
 
         Parameters
         ----------
         points : 2d array
             Each row represents one point
+        index : bool
+            Whether the indices of the triangles are provided instead of the
+            points.
 
         Returns
         -------
@@ -803,7 +806,10 @@ class Triangulation(GridWorld, DeterministicFunction):
         simplices : ndarray
             The indeces of the simplices associated with each points
         """
-        simplex_ids = self.find_simplex(points)
+        if index:
+            simplex_ids = points
+        else:
+            simplex_ids = self.find_simplex(points)
         simplices = self.simplices(simplex_ids)
 
         # Get hyperplane equations
@@ -837,7 +843,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         # Return function values if desired
         return np.einsum('ijk,ik->ij', weights, self.vertex_values[simplices])
 
-    def gradient_constraint(self, points):
+    def gradient_constraint(self, points, index=False):
         """
         Return the gradients at the respective points.
 
@@ -851,6 +857,8 @@ class Triangulation(GridWorld, DeterministicFunction):
         ----------
         points : 2d array
             Each row contains one state at which to evaluate the gradient.
+        index : bool
+            Whether the simplex indeces are provided instead of points.
 
         Returns
         -------
@@ -859,7 +867,7 @@ class Triangulation(GridWorld, DeterministicFunction):
             `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
             to the true gradients
         """
-        weights, simplices = self._get_weights_gradient(points)
+        weights, simplices = self._get_weights_gradient(points, index=index)
 
         # Some numbers for convenience
         nsimp = self.ndim + 1
