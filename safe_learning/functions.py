@@ -661,6 +661,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         # Convert to basic hyperrectangle coordinates and find simplex
         unit_coordinates = points % self.unit_maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
+        simplex_ids = np.atleast_1d(simplex_ids)
 
         # Adjust for the hyperrectangle index
         rectangles = self.state_to_rectangle(points, offset=False)

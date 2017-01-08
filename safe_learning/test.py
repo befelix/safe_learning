@@ -425,10 +425,13 @@ class DelaunayTest(TestCase):
         vertex_values = delaunay.vertex_values
 
         test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T
+        test_point = test_points[[0], :]
 
         simplices = delaunay.find_simplex(test_points)
         true_simplices = np.array([0, 0, 1, 1, 1, 1])
         assert_allclose(simplices, true_simplices)
+        assert_allclose(delaunay.find_simplex(test_point),
+                        true_simplices[[0]])
 
         values = delaunay.evaluate(test_points)
         true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])
