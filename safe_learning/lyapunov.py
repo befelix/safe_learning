@@ -178,7 +178,11 @@ class Lyapunov(object):
         bound = line_search_bisection(self._levelset_is_safe,
                                       interval,
                                       accuracy)
-        return bound[0]
+
+        if bound is None:
+            return 0
+        else:
+            return bound[0]
 
     def update_safe_set(self, accuracy, interval=None):
         """Compute the safe set.
