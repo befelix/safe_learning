@@ -122,7 +122,7 @@ class QuadraticFunctionTest(unittest.TestCase):
     def test_evaluate(self):
         """Test the evaluation of the quadratic function."""
         fval = self.quad.evaluate(self.points)
-        true_fval = np.array([0., 2., 1., 3.3])
+        true_fval = np.array([[0., 2., 1., 3.3]]).T
         assert_allclose(fval, true_fval)
 
     def test_gradient(self):
@@ -221,7 +221,7 @@ class PiecewiseConstantTest(TestCase):
         assert_allclose(pwc.vertex_values, np.array([1, 2, 3]))
 
     def test_evaluation(self):
-        """Simple tests."""
+        """Evaluation tests for piecewise constant function."""
         limits = [[-1, 1], [-1, 1]]
         npoints = 3
         pwc = PiecewiseConstant(limits, npoints)
@@ -231,11 +231,11 @@ class PiecewiseConstantTest(TestCase):
         pwc.vertex_values = vertex_values
 
         test = pwc.evaluate(vertex_points)
-        assert_allclose(test, vertex_values)
+        assert_allclose(test, vertex_values[:, None])
 
         outside_point = np.array([[-1.5, -1.5]])
         test1 = pwc.evaluate(outside_point)
-        assert_allclose(test1, -2)
+        assert_allclose(test1, np.array([[-2]]))
 
         # Test constraint evaluation
         test2 = pwc.evaluate_constraint(vertex_points)
@@ -331,19 +331,19 @@ class DelaunayTest(TestCase):
         # Test value property
         values = np.random.rand(delaunay.nindex)
         delaunay.vertex_values = values
-        v1 = H.dot(values)
+        v1 = H.dot(values)[:, None]
         v2 = delaunay.evaluate(test_points)
         assert_allclose(v1, v2)
 
         # Test the projections
-        test_point = np.array([-0.5, -0.5])
+        test_point = np.array([[-0.5, -0.5]])
         delaunay.vertex_values = np.array([0, 1, 1])
         unprojected = delaunay.evaluate(test_point)
         delaunay.project = True
         projected = delaunay.evaluate(test_point)
 
-        assert_allclose(projected, np.array([0, 0]))
-        assert_allclose(unprojected, np.array([-1, -1]))
+        assert_allclose(projected, np.array([[0]]))
+        assert_allclose(unprojected, np.array([[-1]]))
 
     def test_multiple_dimensions(self):
         """Test delaunay in three dimensions."""
@@ -375,7 +375,7 @@ class DelaunayTest(TestCase):
 
         delaunay.vertex_values = values
         result = delaunay.evaluate(test_points)
-        assert_allclose(result, true_values, atol=1e-5)
+        assert_allclose(result, true_values[:, None], atol=1e-5)
 
     def test_gradient(self):
         """Test the gradient_at function."""
@@ -434,11 +434,11 @@ class DelaunayTest(TestCase):
                         true_simplices[[0]])
 
         values = delaunay.evaluate(test_points)
-        true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])
+        true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])[:, None]
         assert_allclose(values, true_values)
 
         value_constraint = delaunay.evaluate_constraint(test_points)
-        values = value_constraint.toarray().dot(vertex_values)
+        values = value_constraint.toarray().dot(vertex_values)[:, None]
         assert_allclose(values, true_values)
 
         gradient = delaunay.gradient(test_points)

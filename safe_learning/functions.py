@@ -46,7 +46,7 @@ class UncertainFunction(Function):
         Returns
         -------
         mean : ndarray
-            The expected function values at the points.
+            A 2D array with the expected function values at the points.
         error_bounds : ndarray
             Error bounds for each dimension of the estimate.
         """
@@ -115,7 +115,7 @@ class DeterministicFunction(Function):
         Returns
         -------
         values : ndarray
-            The function values at the points.
+            A 2D array with the function values at the points.
         """
         raise NotImplementedError()
 
@@ -473,7 +473,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
             The function values at the points.
         """
         nodes = self.state_to_index(points)
-        return self.vertex_values[nodes]
+        return self.vertex_values[nodes][:, None]
 
     def evaluate_constraint(self, points):
         """
@@ -515,7 +515,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         gradient : ndarray
             The function gradient at the points.
         """
-        return np.zeros((len(points), self.nindex))
+        return np.broadcast_to(0, (len(points), self.nindex))
 
 
 class _Delaunay1D(object):
@@ -752,8 +752,10 @@ class Triangulation(GridWorld, DeterministicFunction):
             The function values at the points.
         """
         weights, simplices = self._get_weights(points)
+
         # Return function values if desired
-        return np.einsum('ij,ij->i', weights, self.vertex_values[simplices])
+        result = np.einsum('ij,ij->i', weights, self.vertex_values[simplices])
+        return result[:, None]
 
     def evaluate_constraint(self, points):
         """
@@ -894,7 +896,7 @@ class QuadraticFunction(DeterministicFunction):
     def evaluate(self, points):
         """See `DeterministicFunction.evaluate`."""
         points = np.asarray(points)
-        return np.sum(points.dot(self.matrix) * points, axis=1)
+        return np.sum(points.dot(self.matrix) * points, axis=1)[:, None]
 
     def gradient(self, points):
         """See `DeterministicFunction.gradient`."""

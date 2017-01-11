@@ -206,14 +206,14 @@ class Lyapunov(object):
             v_dot_bound, _ = self.v_decrease_confidence(prediction)
 
         # Update the safe set
-        self.v_dot_negative[:] = v_dot_bound < self.threshold
+        self.v_dot_negative = v_dot_bound < self.threshold
 
         # Make sure initial safe set is included
         if self.initial_safe_set is not None:
             self.v_dot_negative |= self.initial_safe_set
 
         self.cmax = self.max_safe_levelset(accuracy, interval)
-        self.safe_set[:] = self.V <= self.cmax
+        self.safe_set = self.V <= self.cmax
 
 
 class LyapunovContinuous(Lyapunov):
@@ -372,7 +372,8 @@ class LyapunovDiscrete(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
-        dynamics = self.lyapunov_function.evaluate(dynamics) - self.V
+        dynamics = self.lyapunov_function.evaluate(dynamics)[:, 0] - self.V
+
         if error_bounds is None:
             bound = 0
         else:

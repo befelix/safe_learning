@@ -72,7 +72,7 @@ class PolicyIteration(object):
         """Return the vertex values."""
         return self.value_function.vertex_values
 
-    def get_future_values(self, states, actions, out=None):
+    def get_future_values(self, states, actions):
         """Return the value at the current states.
 
         Parameters
@@ -81,8 +81,6 @@ class PolicyIteration(object):
             The states at which to evaluate.
         actions : ndarray
             The actions taken in the corresponding states.
-        out : ndarray, optional
-            The array to which to write the results.
 
         Returns
         -------
@@ -91,24 +89,22 @@ class PolicyIteration(object):
         next_states = self.dynamics(states, actions)
         rewards = self.reward_function(states, actions, next_states)
 
-        expected_values = self.value_function.evaluate(next_states)
-
-        if out is None:
-            out = np.empty(len(states), dtype=np.float)
+        expected_values = self.value_function.evaluate(next_states).squeeze()
+        expected_values *= self.gamma
 
         # Perform value update
-        out[:] = rewards + self.gamma * expected_values
+        updated_values = np.add(rewards, expected_values, out=expected_values)
 
         # Adapt values of terminal states
         if self.terminal_states is not None:
-            out[self.terminal_states] = self.terminal_reward
+            updated_values[self.terminal_states] = self.terminal_reward
 
-        return out
+        return updated_values
 
     def update_value_function(self):
         """Perform one round of value updates."""
-        self.get_future_values(self.state_space, self.policy,
-                               out=self.value_function.vertex_values)
+        vertex_values = self.get_future_values(self.state_space, self.policy)
+        self.value_function.vertex_values = vertex_values
 
     def optimize_value_function(self):
         """Solve a linear program to optimize the value function."""
@@ -151,9 +147,9 @@ class PolicyIteration(object):
 
         # Compute values for each action
         for i, action in enumerate(self.action_space):
-            self.get_future_values(self.state_space,
-                                   np.broadcast_to(action, action_size),
-                                   out=values[:, i])
+            action_array = np.broadcast_to(action, action_size)
+            values[:, i] = self.get_future_values(self.state_space,
+                                                  action_array)
 
         # Select best action for policy
         self.policy[:] = self.action_space[np.argmax(values, axis=1)]
