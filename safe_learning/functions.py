@@ -86,9 +86,6 @@ class UncertainFunction(Function):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
-        full_cov : bool
-            Whether to return a full covariance tensor for each data point, or
-            only the diagonal part.
 
         Returns
         -------
@@ -274,9 +271,6 @@ class GPyGaussianProcess(UncertainFunction):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
-        full_cov : bool
-            Whether to return a full covariance tensor for each data point, or
-            only the diagonal part.
 
         Returns
         -------
