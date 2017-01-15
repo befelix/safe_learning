@@ -98,8 +98,10 @@ class DeterministicFunction(Function):
         instance of DeterministicFunction
         """
         instance = DeterministicFunction()
+        function.__doc__ = DeterministicFunction.evaluate.__doc__
         instance.evaluate = function
         if gradient is not None:
+            gradient.__doc__ = DeterministicFunction.gradient.__doc__
             instance.gradient = gradient
         return instance
 
