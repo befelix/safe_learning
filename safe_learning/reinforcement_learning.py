@@ -12,6 +12,10 @@ except ImportError:
 __all__ = ['PolicyIteration']
 
 
+class OptimizationError(Exception):
+    pass
+
+
 class PolicyIteration(object):
     """A class for policy iteration.
 
@@ -36,35 +40,27 @@ class PolicyIteration(object):
     terminal_states : ndarray (bool)
         A boolean vector which indicates terminal states. Defaults to False for
         all states. Terminal states get a terminal reward and are not updated.
-    terminal_reward : float
-        The reward associated with terminal states.
     """
 
     def __init__(self, state_space, action_space, dynamics, reward_function,
-                 function_approximator, gamma=0.98, terminal_states=None,
-                 terminal_reward=None):
+                 function_approximator, gamma=0.98, terminal_states=None):
         """Initialization.
 
         See `PolicyIteration` for details.
         """
         super(PolicyIteration, self).__init__()
+
         self.state_space = state_space
         self.action_space = action_space
         self.dynamics = dynamics
         self.reward_function = reward_function
         self.value_function = function_approximator
         self.gamma = gamma
+        self.terminal_states = terminal_states
 
         # Random initial policy
         self.policy = np.random.choice(action_space, size=len(state_space))
         values = np.zeros(len(state_space), dtype=np.float)
-
-        self.terminal_reward = terminal_reward
-        self.terminal_states = None
-        if terminal_states is not None:
-            self.terminal_states = terminal_states
-            values[self.terminal_states] = self.terminal_reward
-
         self.value_function.vertex_values = values
 
     @property
@@ -72,13 +68,19 @@ class PolicyIteration(object):
         """Return the vertex values."""
         return self.value_function.vertex_values
 
-    def get_future_values(self, states, actions):
+    @property
+    def _not_terminal(self):
+        """Return index of states that are not terminal."""
+        if self.terminal_states is None:
+            return slice(0, len(self.state_space))
+        else:
+            return ~self.terminal_states
+
+    def get_future_values(self, actions):
         """Return the value at the current states.
 
         Parameters
         ----------
-        states : ndarray
-            The states at which to evaluate.
         actions : ndarray
             The actions taken in the corresponding states.
 
@@ -86,6 +88,7 @@ class PolicyIteration(object):
         -------
         The expected long term reward corresponding to the states and actions.
         """
+        states = self.state_space
         next_states = self.dynamics(states, actions)
         rewards = self.reward_function(states, actions, next_states)
 
@@ -97,13 +100,14 @@ class PolicyIteration(object):
 
         # Adapt values of terminal states
         if self.terminal_states is not None:
-            updated_values[self.terminal_states] = self.terminal_reward
+            terminal = self.terminal_states
+            updated_values[terminal] = rewards[terminal]
 
         return updated_values
 
     def update_value_function(self):
         """Perform one round of value updates."""
-        vertex_values = self.get_future_values(self.state_space, self.policy)
+        vertex_values = self.get_future_values(self.policy)
         self.value_function.vertex_values = vertex_values
 
     def optimize_value_function(self):
@@ -115,7 +119,6 @@ class PolicyIteration(object):
         rewards = self.reward_function(self.state_space,
                                        self.policy,
                                        next_states)
-        rewards[self.terminal_states] = self.terminal_reward
 
         # Define random variables
         values = cvxpy.Variable(self.value_function.nindex)
@@ -127,14 +130,20 @@ class PolicyIteration(object):
 
         future_values = rewards + self.gamma * value_matrix * values
 
-        constraints = [values <= future_values,
-                       values[self.terminal_states] == self.terminal_reward]
+        if self.terminal_states is None:
+            constraints = [values <= future_values]
+        else:
+            terminal = self.terminal_states
+            not_terminal = ~self.terminal_states
+            constraints = [values[not_terminal] <= future_values[not_terminal],
+                           values[terminal] == rewards[terminal]]
 
         prob = cvxpy.Problem(objective, constraints)
         prob.solve()
 
         if not prob.status == cvxpy.OPTIMAL:
-            raise ValueError('Optimization problem is {}'.format(prob.status))
+            raise OptimizationError('Optimization problem is {}'
+                                    .format(prob.status))
 
         self.value_function.vertex_values[:] = values.value.squeeze()
 
@@ -144,12 +153,12 @@ class PolicyIteration(object):
         values = np.empty((len(self.state_space), len(self.action_space)),
                           dtype=np.float)
         action_size = (len(self.state_space), 1)
+        action_array = np.broadcast_to(0, action_size)
 
         # Compute values for each action
         for i, action in enumerate(self.action_space):
-            action_array = np.broadcast_to(action, action_size)
-            values[:, i] = self.get_future_values(self.state_space,
-                                                  action_array)
+            action_array.base[()] = action
+            values[:, i] = self.get_future_values(action_array)
 
         # Select best action for policy
         self.policy[:] = self.action_space[np.argmax(values, axis=1)]
