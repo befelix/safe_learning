@@ -85,6 +85,7 @@ class PolicyIteration(object):
         states = self.state_space
         next_states = self.dynamics.evaluate(states, actions)
         rewards = self.reward_function.evaluate(states, actions, next_states)
+        rewards = rewards.squeeze()
 
         expected_values = self.value_function.evaluate(next_states).squeeze()
         expected_values *= self.gamma
