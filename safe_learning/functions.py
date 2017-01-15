@@ -11,7 +11,15 @@ from sklearn.utils.extmath import cartesian
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction']
+           'QuadraticFunction', 'GPyGaussianProcess', 'as_function']
+
+
+def as_function(function):
+    """Convert a callable to a function."""
+    if hasattr(function, 'evaluate'):
+        return function
+    else:
+        return DeterministicFunction.from_callable(function)
 
 
 class Function(object):
