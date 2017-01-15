@@ -85,12 +85,24 @@ class GPyTest(TestCase):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
+        # Test multiple inputs
+        a1, b1 = self.ufun.evaluate(self.test_points[:, [0]],
+                                    self.test_points[:, [1]])
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
+
     @unittest.skip
     def test_gradient(self):
         """Make sure gradient works."""
         a1, b1 = self.ufun.gradient(self.test_points)
         a2, b2 = self.gp.predict_jacobian(self.test_points)
         b2 = self.beta * np.sqrt(b2)
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
+
+        # Test multiple inputs
+        a1, b1 = self.ufun.gradient(self.test_points[:, [0]],
+                                    self.test_points[:, [1]])
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 

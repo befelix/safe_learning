@@ -60,15 +60,6 @@ class UncertainFunction(Function):
 
         return DeterministicFunction.from_callable(new_evaluate, new_gradient)
 
-    def test_mean_function(self):
-        """Test the conversion to a deterministic function."""
-        f = UncertainFunction()
-        f.evaluate = lambda x: (1, 2)
-        f.gradient = lambda x: (3, 4)
-        fd = f.to_mean_function()
-        assert(fd.evaluate(None) == 1)
-        assert(fd.gradient(None) == 3)
-
     def evaluate(self, points):
         """Return the distribution over function values.
 
@@ -212,6 +203,19 @@ class FunctionStack(UncertainFunction):
         super(FunctionStack, self).gradient(points)
 
 
+def concatenate_inputs(function):
+    """Concatenate the numpy array inputs to the functions."""
+    def new_function(self, *args):
+        """A function that concatenates inputs."""
+        if len(args) == 1:
+            return function(self, np.atleast_2d(args[0]))
+        else:
+            args_2d = map(np.atleast_2d, args)
+            return function(self, np.hstack(args_2d))
+
+    return new_function
+
+
 class GPyGaussianProcess(UncertainFunction):
     """An `UncertainFunction` for GPy Gaussian processes.
 
@@ -222,6 +226,11 @@ class GPyGaussianProcess(UncertainFunction):
     beta : float
         The scaling factor for the standard deviation to create confidence
         intervals.
+
+    Notes
+    -----
+    The evaluate and gradient functions can be called with multiple arguments,
+    in which case they are concatenated before being passed to the GP.
     """
 
     def __init__(self, gaussian_process, beta=2.):
@@ -235,6 +244,7 @@ class GPyGaussianProcess(UncertainFunction):
         else:
             self.beta = lambda t: beta
 
+    @concatenate_inputs
     def evaluate(self, points):
         """Return the distribution over function values.
 
@@ -255,6 +265,7 @@ class GPyGaussianProcess(UncertainFunction):
         t = len(self.gaussian_process.X)
         return mean, self.beta(t) * np.sqrt(var)
 
+    @concatenate_inputs
     def gradient(self, points):
         """Return the distribution over the gradient.
 
