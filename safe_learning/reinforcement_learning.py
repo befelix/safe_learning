@@ -70,14 +70,6 @@ class PolicyIteration(object):
         """Return the vertex values."""
         return self.value_function.vertex_values
 
-    @property
-    def _not_terminal(self):
-        """Return index of states that are not terminal."""
-        if self.terminal_states is None:
-            return slice(0, len(self.state_space))
-        else:
-            return ~self.terminal_states
-
     def get_future_values(self, actions):
         """Return the value at the current states.
 
