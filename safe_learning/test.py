@@ -50,6 +50,15 @@ class UncertainFunctionTest(TestCase):
         assert_raises(NotImplementedError, f.evaluate, None)
         assert_raises(NotImplementedError, f.gradient, None)
 
+    def test_mean_function(self):
+        """Test the conversion to a deterministic function."""
+        f = UncertainFunction()
+        f.evaluate = lambda x: (1, 2)
+        f.gradient = lambda x: (3, 4)
+        fd = f.to_mean_function()
+        assert(fd.evaluate(None) == 1)
+        assert(fd.gradient(None) == 3)
+
 
 @unittest.skipIf(GPy is None, 'GPy module not installed.')
 class GPyTest(TestCase):
@@ -82,14 +91,6 @@ class GPyTest(TestCase):
         a1, b1 = self.ufun.gradient(self.test_points)
         a2, b2 = self.gp.predict_jacobian(self.test_points)
         b2 = self.beta * np.sqrt(b2)
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
-
-    def test_gpy_constructor(self):
-        """Test the GPy constructor."""
-        test = UncertainFunction.from_gpy(self.gp)
-        a1, b1 = test.evaluate(self.test_points)
-        a2, b2 = self.ufun.evaluate(self.test_points)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 

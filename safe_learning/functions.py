@@ -29,10 +29,37 @@ class UncertainFunction(Function):
         """Initialization, see `UncertainFunction`."""
         super(UncertainFunction, self).__init__()
 
-    @classmethod
-    def from_gpy(cls, gaussian_process, beta=2.):
-        """Constructor for GPy Gaussian processes."""
-        return GPyGaussianProcess(gaussian_process, beta=beta)
+    def to_mean_function(self):
+        """Turn the uncertain function into a deterministic 'mean' function."""
+        def _only_first_output(function):
+            """Remove all but the first output of a function.
+
+            Parameters
+            ----------
+            function : callable
+
+            Returns
+            -------
+            function : callable
+                The modified function.
+            """
+            def new_function(*points):
+                return function(*points)[0]
+            return new_function
+
+        new_evaluate = _only_first_output(self.evaluate)
+        new_gradient = _only_first_output(self.gradient)
+
+        return DeterministicFunction.from_callable(new_evaluate, new_gradient)
+
+    def test_mean_function(self):
+        """Test the conversion to a deterministic function."""
+        f = UncertainFunction()
+        f.evaluate = lambda x: (1, 2)
+        f.gradient = lambda x: (3, 4)
+        fd = f.to_mean_function()
+        assert(fd.evaluate(None) == 1)
+        assert(fd.gradient(None) == 3)
 
     def evaluate(self, points):
         """Return the distribution over function values.
