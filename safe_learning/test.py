@@ -15,7 +15,7 @@ except ImportError:
 from .functions import (Triangulation, ScipyDelaunay, GridWorld,
                         PiecewiseConstant, DeterministicFunction,
                         UncertainFunction, GPyGaussianProcess,
-                        QuadraticFunction)
+                        QuadraticFunction, DimensionError)
 from .lyapunov import line_search_bisection, Lyapunov, LyapunovContinuous
 
 
@@ -152,6 +152,18 @@ class ScipyDelaunayTest(TestCase):
 
 class GridworldTest(TestCase):
     """Test the general GridWorld definitions."""
+
+    def test_dimensions_error(self):
+        """Test dimension errors."""
+        limits = [[-1.1, 1.5], [2.2, 2.4]]
+        num_points = [7, 8]
+        grid = GridWorld(limits, num_points)
+
+        assert_raises(DimensionError, grid._check_dimensions,
+                      np.array([[1, 2, 3]]))
+
+        assert_raises(DimensionError, grid._check_dimensions,
+                      np.array([[1]]))
 
     def test_index_state_conversion(self):
         """Test all index conversions."""

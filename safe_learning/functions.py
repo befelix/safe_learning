@@ -286,6 +286,10 @@ class ScipyDelaunay(spatial.Delaunay):
         super(ScipyDelaunay, self).__init__(points)
 
 
+class DimensionError(Exception):
+    pass
+
+
 class GridWorld(object):
     """Base class for function approximators on a regular grid.
 
@@ -323,6 +327,17 @@ class GridWorld(object):
         self.vertex_values = None
         if vertex_values is not None:
             self.vertex_values = np.asarray(vertex_values)
+
+    def _check_dimensions(self, states):
+        """Raise an error if the states have the wrong dimension.
+
+        Parameters
+        ----------
+        states : ndarray
+        """
+        if not states.shape[1] == self.ndim:
+            raise DimensionError('the input argument has the wrong '
+                                 'dimensions.')
 
     def _center_states(self, states, clip=True):
         """Center the states to the interval [0, x].
@@ -377,6 +392,7 @@ class GridWorld(object):
             The indices that correspond to the physical states.
         """
         states = np.atleast_2d(states)
+        self._check_dimensions(states)
         states = np.clip(states, self.limits[:, 0], self.limits[:, 1])
         states = (states - self.offset) / self.unit_maxes
         ijk_index = np.rint(states).astype(np.int)
@@ -397,8 +413,10 @@ class GridWorld(object):
         rectangles : ndarray (int)
             The indices that correspond to rectangles of the physical states.
         """
+        states = np.atleast_2d(states)
         # clip to domain (find closest rectangle)
         if offset:
+            self._check_dimensions(states)
             states = self._center_states(states, clip=True)
 
         ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
