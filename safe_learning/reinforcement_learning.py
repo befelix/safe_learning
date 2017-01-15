@@ -24,9 +24,9 @@ class PolicyIteration(object):
     Parameters
     ----------
     state_space : ndarray
-        An array of physical states with one state vector on each row.
+        An 2d array of physical states with one state vector on each row.
     action_space : ndarray
-        An array of available actions with one action vector on each row.
+        An 2d array of available actions with one action vector on each row.
     dynamics : callable
         A function that can be called with states and actions as inputs and
         returns future states.
@@ -61,7 +61,11 @@ class PolicyIteration(object):
         self.terminal_states = terminal_states
 
         # Random initial policy
-        self.policy = np.random.choice(action_space, size=len(state_space))
+        action_index = np.random.randint(low=0,
+                                         high=len(action_space),
+                                         size=len(state_space))
+        self.policy = self.action_space[action_index]
+
         values = np.zeros(len(state_space), dtype=np.float)
         self.value_function.vertex_values = values
 
@@ -156,4 +160,4 @@ class PolicyIteration(object):
             values[:, i] = self.get_future_values(action_array)
 
         # Select best action for policy
-        self.policy[:] = self.action_space[np.argmax(values, axis=1)]
+        self.policy = self.action_space[np.argmax(values, axis=1)]
