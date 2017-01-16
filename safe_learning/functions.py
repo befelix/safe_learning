@@ -368,6 +368,18 @@ class GridWorld(object):
         if vertex_values is not None:
             self.vertex_values = np.asarray(vertex_values)
 
+    @property
+    def all_points(self):
+        """Return all the discrete points of the discretization.
+
+        Returns
+        -------
+        points : ndarray
+            An array with all the discrete points with size
+            (self.nindex, self.ndim).
+        """
+        return self.index_to_state(np.arange(self.nindex))
+
     def _check_dimensions(self, states):
         """Raise an error if the states have the wrong dimension.
 
