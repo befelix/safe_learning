@@ -106,8 +106,7 @@ class PolicyIteration(object):
 
     def update_value_function(self):
         """Perform one round of value updates."""
-        vertex_values = self.get_future_values(self.policy)
-        self.value_function.vertex_values = vertex_values
+        self.value_function.vertex_values = self.get_future_values(self.policy)
 
     def optimize_value_function(self):
         """Solve a linear program to optimize the value function."""
@@ -151,12 +150,13 @@ class PolicyIteration(object):
         # Initialize
         values = np.empty((len(self.state_space), len(self.action_space)),
                           dtype=np.float)
-        action_size = (len(self.state_space), 1)
-        action_array = np.broadcast_to(0, action_size)
+
+        action_size = (len(self.state_space), self.action_space.shape[1])
+        action_array = np.broadcast_to(np.zeros(action_size[1]), action_size)
 
         # Compute values for each action
         for i, action in enumerate(self.action_space):
-            action_array.base[()] = action
+            action_array.base[:] = action
             values[:, i] = self.get_future_values(action_array)
 
         # Select best action for policy
