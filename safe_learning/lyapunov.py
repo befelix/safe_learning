@@ -101,7 +101,7 @@ class Lyapunov(object):
         self.lyapunov_function = lyapunov_function
 
         # Lyapunov values
-        self.V = self.lyapunov_function.evaluate(self.discretization).squeeze()
+        self.V = self.lyapunov_function(self.discretization).squeeze()
 
     @property
     def is_discrete(self):
@@ -200,7 +200,7 @@ class Lyapunov(object):
         safe_set : ndarray
             The safe set.
         """
-        prediction = self.dynamics.evaluate(self.discretization)
+        prediction = self.dynamics(self.discretization)
 
         if self.uncertain_dynamics:
             v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
@@ -376,7 +376,7 @@ class LyapunovDiscrete(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
-        dynamics = self.lyapunov_function.evaluate(dynamics)[:, 0] - self.V
+        dynamics = self.lyapunov_function(dynamics)[:, 0] - self.V
 
         if error_bounds is None:
             bound = 0

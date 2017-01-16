@@ -20,7 +20,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
         v_dec_string = '\Delta V'
     threshold = lyapunov.threshold
     # Lyapunov function
-    mean, bound = lyapunov.dynamics.evaluate(lyapunov.discretization)
+    mean, bound = lyapunov.dynamics(lyapunov.discretization)
     v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(mean, bound)
     safe_set = lyapunov.safe_set
     extent = [np.min(lyapunov.discretization), np.max(lyapunov.discretization)]

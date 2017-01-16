@@ -582,8 +582,11 @@ class LyapunovTest(TestCase):
         assert(np.all(self.lyap.v_dot_negative))
 
         # Test uncertain dynamics.
-        dynamics = mock.create_autospec(UncertainFunction)
-        dynamics.return_value = np.array([3.2]), np.array([1.4])
+        dynamics = UncertainFunction.from_callable(
+            lambda x: np.array([3.2]), np.array([1.4])
+        )
+        # dynamics = mock.create_autospec(UncertainFunction)
+        # dynamics.return_value = np.array([3.2]), np.array([1.4])
 
         v1 = np.array([-0.5, -0.5, -0.5, -0.5])
         v2 = np.array([0., 0.4, -0.3, 0.6])
@@ -602,12 +605,14 @@ class LyapunovContinuousTest(unittest.TestCase):
     def test_init(self):
         """Test the initialization."""
         discretization = np.array([1, 2, 3])
-        lyap_fun = mock.create_autospec(DeterministicFunction)
+        lyap_fun = DeterministicFunction.from_callable(
+            lambda x: np.ones((3, 1)),
+            lambda x: np.ones((3, 1)) * 0.5)
+
         dynamics = mock.create_autospec(DeterministicFunction)
         l = 0.3
         eps = 0.5
 
-        lyap_fun.gradient.return_value = np.ones((3, 1)) * 0.5
         lyap = LyapunovContinuous(discretization, lyap_fun, dynamics, 0.3, 0.5)
         assert_allclose(lyap.threshold, -l * eps)
 

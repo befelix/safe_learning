@@ -29,6 +29,46 @@ class Function(object):
         super(Function, self).__init__()
         self.ndim = None
 
+    def __call__(self, points, gradient=False):
+        """Equivalent to `self.evaluate() or `self.gradient()`.
+
+        Parameters
+        ----------
+        points : ndarray
+        gradients : bool
+
+        Returns
+        -------
+        array : ndarray
+            `self.evaluate` if gradient is False, `self.evaluate` otherwise.
+        """
+        if gradient:
+            return self.gradient(points)
+        else:
+            return self.evaluate(points)
+
+    @classmethod
+    def from_callable(cls, function, gradient=None):
+        """Create a deterministic function from a callable.
+
+        Parameters
+        ----------
+        function : callable
+            A function that we want to evaluate.
+
+        gradient : callable, optional
+            A callable that returns the gradient
+
+        Returns
+        -------
+        instance of DeterministicFunction
+        """
+        instance = cls()
+        instance.evaluate = function
+        if gradient is not None:
+            instance.gradient = gradient
+        return instance
+
 
 class UncertainFunction(Function):
     """Base class for function approximators."""
@@ -103,30 +143,6 @@ class DeterministicFunction(Function):
     def __init__(self):
         """Initialization, see `Function` for details."""
         super(DeterministicFunction, self).__init__()
-
-    @classmethod
-    def from_callable(cls, function, gradient=None):
-        """Create a deterministic function from a callable.
-
-        Parameters
-        ----------
-        function : callable
-            A function that we want to evaluate.
-
-        gradient : callable, optional
-            A callable that returns the gradient
-
-        Returns
-        -------
-        instance of DeterministicFunction
-        """
-        instance = DeterministicFunction()
-        function.__doc__ = DeterministicFunction.evaluate.__doc__
-        instance.evaluate = function
-        if gradient is not None:
-            gradient.__doc__ = DeterministicFunction.gradient.__doc__
-            instance.gradient = gradient
-        return instance
 
     def evaluate(self, points):
         """Return the function values.

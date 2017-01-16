@@ -8,9 +8,6 @@ try:
 except ImportError:
     cvxpy = None
 
-from .functions import as_function
-
-
 __all__ = ['PolicyIteration']
 
 
@@ -54,8 +51,8 @@ class PolicyIteration(object):
 
         self.state_space = state_space
         self.action_space = action_space
-        self.dynamics = as_function(dynamics)
-        self.reward_function = as_function(reward_function)
+        self.dynamics = dynamics
+        self.reward_function = reward_function
         self.value_function = function_approximator
         self.gamma = gamma
         self.terminal_states = terminal_states
@@ -87,11 +84,11 @@ class PolicyIteration(object):
         The expected long term reward corresponding to the states and actions.
         """
         states = self.state_space
-        next_states = self.dynamics.evaluate(states, actions)
-        rewards = self.reward_function.evaluate(states, actions, next_states)
+        next_states = self.dynamics(states, actions)
+        rewards = self.reward_function(states, actions, next_states)
         rewards = rewards.squeeze()
 
-        expected_values = self.value_function.evaluate(next_states).squeeze()
+        expected_values = self.value_function(next_states).squeeze()
         expected_values *= self.gamma
 
         # Perform value update
@@ -113,10 +110,10 @@ class PolicyIteration(object):
         if cvxpy is None:
             raise ImportError('This function requires the cvxpy module.')
 
-        next_states = self.dynamics.evaluate(self.state_space, self.policy)
-        rewards = self.reward_function.evaluate(self.state_space,
-                                                self.policy,
-                                                next_states)
+        next_states = self.dynamics(self.state_space, self.policy)
+        rewards = self.reward_function(self.state_space,
+                                       self.policy,
+                                       next_states)
 
         # Define random variables
         values = cvxpy.Variable(self.value_function.nindex)
