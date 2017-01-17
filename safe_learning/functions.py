@@ -988,7 +988,7 @@ class QuadraticFunction(DeterministicFunction):
     def evaluate(self, points):
         """See `DeterministicFunction.evaluate`."""
         points = np.asarray(points)
-        return np.sum(points.dot(self.matrix) * points, axis=1)[:, None]
+        return np.sum(points.dot(self.matrix) * points, axis=1, keepdims=True)
 
     @concatenate_inputs
     def gradient(self, points):

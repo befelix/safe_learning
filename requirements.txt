@@ -1,0 +1,4 @@
+numpy >= 11.2
+scitkit-learn >= 0.18
+scipy >= 0.18
+
