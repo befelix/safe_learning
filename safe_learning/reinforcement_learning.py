@@ -69,7 +69,7 @@ class PolicyIteration(object):
     @property
     def values(self):
         """Return the vertex values."""
-        return self.value_function.vertex_values
+        return self.value_function.vertex_values[:, 0]
 
     def get_future_values(self, actions):
         """Return the value at the current states.
@@ -140,7 +140,7 @@ class PolicyIteration(object):
             raise OptimizationError('Optimization problem is {}'
                                     .format(prob.status))
 
-        self.value_function.vertex_values[:] = values.value.squeeze()
+        self.value_function.vertex_values[:] = values.value
 
     def update_policy(self):
         """Optimize the policy for a given value function."""

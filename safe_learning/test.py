@@ -242,8 +242,8 @@ class PiecewiseConstantTest(TestCase):
         """Test initialisation."""
         limits = [[-1, 1], [-1, 1]]
         npoints = 3
-        pwc = PiecewiseConstant(limits, npoints, [1, 2, 3])
-        assert_allclose(pwc.vertex_values, np.array([1, 2, 3]))
+        pwc = PiecewiseConstant(limits, npoints, np.arange(16))
+        assert_allclose(pwc.vertex_values, np.arange(16)[:, None])
 
     def test_evaluation(self):
         """Evaluation tests for piecewise constant function."""
@@ -252,11 +252,11 @@ class PiecewiseConstantTest(TestCase):
         pwc = PiecewiseConstant(limits, npoints)
 
         vertex_points = pwc.index_to_state(np.arange(pwc.nindex))
-        vertex_values = np.sum(vertex_points, axis=1)
+        vertex_values = np.sum(vertex_points, axis=1, keepdims=True)
         pwc.vertex_values = vertex_values
 
         test = pwc.evaluate(vertex_points)
-        assert_allclose(test, vertex_values[:, None])
+        assert_allclose(test, vertex_values)
 
         outside_point = np.array([[-1.5, -1.5]])
         test1 = pwc.evaluate(outside_point)
@@ -325,7 +325,7 @@ class DelaunayTest(TestCase):
                      delaunay.find_simplex(np.array([[100., 100.]])))
 
     def test_values(self):
-        """Test the function_value_at function."""
+        """Test the evaluation function."""
         eps = 1e-10
 
         delaunay = Triangulation([[0, 1], [0, 1]], [1, 1])
@@ -362,7 +362,7 @@ class DelaunayTest(TestCase):
 
         # Test the projections
         test_point = np.array([[-0.5, -0.5]])
-        delaunay.vertex_values = np.array([0, 1, 1])
+        delaunay.vertex_values = np.array([0, 1, 1, 1])
         unprojected = delaunay.evaluate(test_point)
         delaunay.project = True
         projected = delaunay.evaluate(test_point)
@@ -463,7 +463,7 @@ class DelaunayTest(TestCase):
         assert_allclose(values, true_values)
 
         value_constraint = delaunay.evaluate_constraint(test_points)
-        values = value_constraint.toarray().dot(vertex_values)[:, None]
+        values = value_constraint.toarray().dot(vertex_values)
         assert_allclose(values, true_values)
 
         gradient = delaunay.gradient(test_points)

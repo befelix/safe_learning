@@ -206,13 +206,13 @@ class FunctionStack(UncertainFunction):
 
 def concatenate_inputs(function):
     """Concatenate the numpy array inputs to the functions."""
-    def new_function(self, *args):
+    def new_function(self, *args, **kwargs):
         """A function that concatenates inputs."""
         if len(args) == 1:
-            return function(self, np.atleast_2d(args[0]))
+            return function(self, np.atleast_2d(args[0]), **kwargs)
         else:
             args_2d = map(np.atleast_2d, args)
-            return function(self, np.hstack(args_2d))
+            return function(self, np.hstack(args_2d), **kwargs)
 
     return new_function
 
@@ -314,7 +314,7 @@ class ScipyDelaunay(spatial.Delaunay):
 
     Parameters
     ----------
-    limits: 2d array-like
+    limits: array-like
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
     num_points: 1d array-like
         The number of points with which to grid each dimension.
@@ -345,7 +345,7 @@ class GridWorld(object):
         The number of points with which to grid each dimension.
     """
 
-    def __init__(self, limits, num_points, vertex_values=None):
+    def __init__(self, limits, num_points):
         """Initialization, see `GridWorld`."""
         super(GridWorld, self).__init__()
 
@@ -367,10 +367,6 @@ class GridWorld(object):
         self.nrectangles = np.prod(self.num_points)
         self.nindex = np.prod(self.num_points + 1)
         self.ndim = len(limits)
-
-        self.vertex_values = None
-        if vertex_values is not None:
-            self.vertex_values = np.asarray(vertex_values)
 
     @property
     def all_points(self):
@@ -523,18 +519,33 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
     ----------
     limits: 2d array-like
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
-    num_points: 1d array-like
+    num_points: 1d arraylike
         The number of points with which to grid each dimension.
-    vertex_values: 1d array_like, optional
-        The values at the vertices of the grid.
+    vertex_values: arraylike, optional
+        A 2D array with the values at the vertices of the grid on each row.
     """
 
     def __init__(self, limits, num_points, vertex_values=None):
         """Initialization, see `PiecewiseConstant`."""
-        super(PiecewiseConstant, self).__init__(limits, num_points,
-                                                vertex_values=vertex_values)
+        super(PiecewiseConstant, self).__init__(limits, num_points)
 
-    @concatenate_inputs
+        self._vertex_values = None
+        self.vertex_values = vertex_values
+
+    @property
+    def vertex_values(self):
+        """Return the vertex values."""
+        return self._vertex_values
+
+    @vertex_values.setter
+    def vertex_values(self, values):
+        """Set the vertex values."""
+        if values is None:
+            self._vertex_values = values
+        else:
+            values = np.asarray(values).reshape(self.nindex, -1)
+            self._vertex_values = values
+
     def evaluate(self, points):
         """Return the function values.
 
@@ -550,9 +561,8 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
             The function values at the points.
         """
         nodes = self.state_to_index(points)
-        return self.vertex_values[nodes][:, None]
+        return self.vertex_values[nodes]
 
-    @concatenate_inputs
     def evaluate_constraint(self, points):
         """
         Obtain function values at points from triangulation.
@@ -563,8 +573,8 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
 
         Parameters
         ----------
-        points : 2d array
-            Each row represents one point
+        points : ndarray
+            A 2d array where each row represents one point.
 
         Returns
         -------
@@ -578,7 +588,6 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    @concatenate_inputs
     def gradient(self, points):
         """Return the gradient.
 
@@ -594,7 +603,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         gradient : ndarray
             The function gradient at the points.
         """
-        return np.broadcast_to(0, (len(points), self.nindex))
+        return np.broadcast_to(0, (len(points), self.ndim))
 
 
 class _Delaunay1D(object):
@@ -653,20 +662,22 @@ class Triangulation(GridWorld, DeterministicFunction):
 
     Parameters
     ----------
-    limits: 2d array-like
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
-    num_points: 1d array-like
-        The number of points with which to grid each dimension.
-    vertex_values: 1d array_like, optional
-        The values at the vertices of the grid.
+    limits: arraylike
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)].
+    num_points: arraylike
+        1D array with the number of points with which to grid each dimension.
+    vertex_values: arraylike, optional
+        A 2D array with the values at the vertices of the grid on each row.
     project: bool, optional
         Whether to project points onto the limits.
     """
 
     def __init__(self, limits, num_points, vertex_values=None, project=False):
         """Initialization."""
-        super(Triangulation, self).__init__(limits, num_points,
-                                            vertex_values=vertex_values)
+        super(Triangulation, self).__init__(limits, num_points)
+
+        self._vertex_values = None
+        self.vertex_values = vertex_values
 
         # Get triangulation
         if len(limits) == 1:
@@ -685,6 +696,20 @@ class Triangulation(GridWorld, DeterministicFunction):
         self._update_hyperplanes()
 
         self.project = project
+
+    @property
+    def vertex_values(self):
+        """Return the vertex values."""
+        return self._vertex_values
+
+    @vertex_values.setter
+    def vertex_values(self, values):
+        """Set the vertex values."""
+        if values is None:
+            self._vertex_values = values
+        else:
+            values = np.asarray(values).reshape(self.nindex, -1)
+            self._vertex_values = values
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
@@ -816,7 +841,6 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         return weights, simplices
 
-    @concatenate_inputs
     def evaluate(self, points):
         """Return the function values.
 
@@ -834,10 +858,11 @@ class Triangulation(GridWorld, DeterministicFunction):
         weights, simplices = self._get_weights(points)
 
         # Return function values if desired
-        result = np.einsum('ij,ij->i', weights, self.vertex_values[simplices])
-        return result[:, None]
+        result = np.einsum('ij,ijk->ik',
+                           weights,
+                           self.vertex_values[simplices])
+        return result
 
-    @concatenate_inputs
     def evaluate_constraint(self, points):
         """
         Obtain function values at points from triangulation.
@@ -907,7 +932,6 @@ class Triangulation(GridWorld, DeterministicFunction):
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
         return weights, simplices
 
-    @concatenate_inputs
     def gradient(self, points):
         """Return the gradient.
 
@@ -919,13 +943,18 @@ class Triangulation(GridWorld, DeterministicFunction):
         Returns
         -------
         gradient : ndarray
-            The function gradient at the points.
+            The function gradient at the points. A 3D array with the gradient
+            at the ith data points for the jth output with regard to the kth
+            dimension stored at (i, j, k). The jth dimension is squeezed out
+            for 1D functions.
         """
         weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
-        return np.einsum('ijk,ik->ij', weights, self.vertex_values[simplices])
+        res = np.einsum('ijk,ikl->ilj', weights, self.vertex_values[simplices])
+        if res.shape[1] == 1:
+            res = res.squeeze(axis=1)
+        return res
 
-    @concatenate_inputs
     def gradient_constraint(self, points, index=False):
         """
         Return the gradients at the respective points.
