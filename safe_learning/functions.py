@@ -11,15 +11,7 @@ from sklearn.utils.extmath import cartesian
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction', 'GPyGaussianProcess', 'as_function']
-
-
-def as_function(function):
-    """Convert a callable to a function."""
-    if hasattr(function, 'evaluate'):
-        return function
-    else:
-        return DeterministicFunction.from_callable(function)
+           'QuadraticFunction', 'GPyGaussianProcess']
 
 
 class Function(object):
@@ -29,23 +21,19 @@ class Function(object):
         super(Function, self).__init__()
         self.ndim = None
 
-    def __call__(self, points, gradient=False):
-        """Equivalent to `self.evaluate() or `self.gradient()`.
+    def __call__(self, *points):
+        """Equivalent to `self.evaluate()`.
 
         Parameters
         ----------
         points : ndarray
-        gradients : bool
 
         Returns
         -------
         array : ndarray
-            `self.evaluate` if gradient is False, `self.evaluate` otherwise.
+            The values of the evaluated function.
         """
-        if gradient:
-            return self.gradient(points)
-        else:
-            return self.evaluate(points)
+        return self.evaluate(*points)
 
     @classmethod
     def from_callable(cls, function, gradient=None):
@@ -100,7 +88,7 @@ class UncertainFunction(Function):
 
         return DeterministicFunction.from_callable(new_evaluate, new_gradient)
 
-    def evaluate(self, points):
+    def evaluate(self, *points):
         """Return the distribution over function values.
 
         Parameters
@@ -118,7 +106,7 @@ class UncertainFunction(Function):
         """
         raise NotImplementedError()
 
-    def gradient(self, points):
+    def gradient(self, *points):
         """Return the distribution over the gradient.
 
         Parameters
@@ -144,7 +132,7 @@ class DeterministicFunction(Function):
         """Initialization, see `Function` for details."""
         super(DeterministicFunction, self).__init__()
 
-    def evaluate(self, points):
+    def evaluate(self, *points):
         """Return the function values.
 
         Parameters
@@ -160,7 +148,7 @@ class DeterministicFunction(Function):
         """
         raise NotImplementedError()
 
-    def gradient(self, points):
+    def gradient(self, *points):
         """Return the gradient.
 
         Parameters
@@ -194,7 +182,7 @@ class FunctionStack(UncertainFunction):
         self.deterministic = np.array(self.deterministic)
         self.num_fun = len(self.functions)
 
-    def evaluate(self, points):
+    def evaluate(self, *points):
         """Evaluation, see `UncertainFunction.evaluate`."""
         mean = np.empty((len(points), self.num_fun), dtype=np.float)
         error = np.empty_like(mean)
@@ -202,7 +190,7 @@ class FunctionStack(UncertainFunction):
 
         for i, (fun, deterministic) in enumerate(
                 zip(self.functions, self.deterministic)):
-            prediction = fun.evaluate(points)
+            prediction = fun.evaluate(*points)
             if deterministic:
                 mean[:, i] = prediction.squeeze()
             else:
@@ -211,9 +199,9 @@ class FunctionStack(UncertainFunction):
 
         return mean, error
 
-    def gradient(self, points):
+    def gradient(self, *points):
         """Gradient, see `UncertainFunction.gradient`."""
-        super(FunctionStack, self).gradient(points)
+        super(FunctionStack, self).gradient(*points)
 
 
 def concatenate_inputs(function):
@@ -546,6 +534,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         super(PiecewiseConstant, self).__init__(limits, num_points,
                                                 vertex_values=vertex_values)
 
+    @concatenate_inputs
     def evaluate(self, points):
         """Return the function values.
 
@@ -563,6 +552,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         nodes = self.state_to_index(points)
         return self.vertex_values[nodes][:, None]
 
+    @concatenate_inputs
     def evaluate_constraint(self, points):
         """
         Obtain function values at points from triangulation.
@@ -588,6 +578,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
+    @concatenate_inputs
     def gradient(self, points):
         """Return the gradient.
 
@@ -825,6 +816,7 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         return weights, simplices
 
+    @concatenate_inputs
     def evaluate(self, points):
         """Return the function values.
 
@@ -845,6 +837,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         result = np.einsum('ij,ij->i', weights, self.vertex_values[simplices])
         return result[:, None]
 
+    @concatenate_inputs
     def evaluate_constraint(self, points):
         """
         Obtain function values at points from triangulation.
@@ -914,6 +907,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
         return weights, simplices
 
+    @concatenate_inputs
     def gradient(self, points):
         """Return the gradient.
 
@@ -931,6 +925,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         # Return function values if desired
         return np.einsum('ijk,ik->ij', weights, self.vertex_values[simplices])
 
+    @concatenate_inputs
     def gradient_constraint(self, points, index=False):
         """
         Return the gradients at the respective points.
@@ -989,11 +984,13 @@ class QuadraticFunction(DeterministicFunction):
         super(QuadraticFunction, self).__init__()
         self.matrix = matrix
 
+    @concatenate_inputs
     def evaluate(self, points):
         """See `DeterministicFunction.evaluate`."""
         points = np.asarray(points)
         return np.sum(points.dot(self.matrix) * points, axis=1)[:, None]
 
+    @concatenate_inputs
     def gradient(self, points):
         """See `DeterministicFunction.gradient`."""
         points = np.asarray(points)
