@@ -323,7 +323,7 @@ class ScipyDelaunay(spatial.Delaunay):
     def __init__(self, limits, num_points):
         self.numpoints = num_points
         self.limits = np.asarray(limits, dtype=np.float)
-        params = [np.linspace(limit[0], limit[1], n + 1) for limit, n in
+        params = [np.linspace(limit[0], limit[1], n) for limit, n in
                   zip(limits, num_points)]
         output = np.meshgrid(*params)
         points = np.array([par.ravel() for par in output]).T
@@ -356,16 +356,21 @@ class GridWorld(object):
             num_points = [num_points] * len(limits)
         self.num_points = np.asarray(num_points, dtype=np.int)
 
+        if np.any(self.num_points < 2):
+            raise DimensionError('There must be at least 2 points in each '
+                                 'dimension.')
+
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
-        self.unit_maxes = (self.limits[:, 1] - self.offset) / self.num_points
+        self.unit_maxes = ((self.limits[:, 1] - self.offset)
+                           / (self.num_points - 1))
         self.offset_limits = np.stack((np.zeros_like(self.limits[:, 0]),
                                        self.limits[:, 1] - self.offset),
                                       axis=1)
 
         # Statistics about the grid
-        self.nrectangles = np.prod(self.num_points)
-        self.nindex = np.prod(self.num_points + 1)
+        self.nrectangles = np.prod(self.num_points - 1)
+        self.nindex = np.prod(self.num_points)
         self.ndim = len(limits)
 
     @property
@@ -427,7 +432,7 @@ class GridWorld(object):
             The states with physical units that correspond to the indices.
         """
         indices = np.atleast_1d(indices)
-        ijk_index = np.vstack(np.unravel_index(indices, self.num_points + 1)).T
+        ijk_index = np.vstack(np.unravel_index(indices, self.num_points)).T
         return ijk_index * self.unit_maxes + self.offset
 
     def state_to_index(self, states):
@@ -448,7 +453,7 @@ class GridWorld(object):
         states = np.clip(states, self.limits[:, 0], self.limits[:, 1])
         states = (states - self.offset) / self.unit_maxes
         ijk_index = np.rint(states).astype(np.int)
-        return np.ravel_multi_index(ijk_index.T, self.num_points + 1)
+        return np.ravel_multi_index(ijk_index.T, self.num_points)
 
     def state_to_rectangle(self, states, offset=True):
         """Convert physical states to its closest rectangle index.
@@ -472,8 +477,7 @@ class GridWorld(object):
             states = self._center_states(states, clip=True)
 
         ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
-        return np.ravel_multi_index(ijk_index.T,
-                                    self.num_points)
+        return np.ravel_multi_index(ijk_index.T, self.num_points - 1)
 
     def rectangle_to_state(self, rectangles):
         """
@@ -491,8 +495,9 @@ class GridWorld(object):
             corresponding rectangles.
         """
         rectangles = np.atleast_1d(rectangles)
-        ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
-        return (ijk_index * self.unit_maxes) + self.offset
+        ijk_index = np.vstack(np.unravel_index(rectangles,
+                                               self.num_points - 1))
+        return (ijk_index.T * self.unit_maxes) + self.offset
 
     def rectangle_corner_index(self, rectangles):
         """Return the index of the bottom-left corner of the rectangle.
@@ -507,9 +512,10 @@ class GridWorld(object):
         corners : ndarray (int)
             The indices of the bottom-left corners of the rectangles.
         """
-        ijk_index = np.vstack(np.unravel_index(rectangles, self.num_points)).T
-        return np.ravel_multi_index(np.atleast_2d(ijk_index).T,
-                                    self.num_points + 1)
+        ijk_index = np.vstack(np.unravel_index(rectangles,
+                                               self.num_points - 1))
+        return np.ravel_multi_index(np.atleast_2d(ijk_index),
+                                    self.num_points)
 
 
 class PiecewiseConstant(GridWorld, DeterministicFunction):

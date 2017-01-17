@@ -224,7 +224,7 @@ class GridworldTest(TestCase):
 
     def test_0d(self):
         """Check that initialization works for 1d-discretization."""
-        grid = GridWorld([[0, 1]], 2)
+        grid = GridWorld([[0, 1]], 3)
 
         test = np.array([[0.1, 0.4, 0.9]]).T
         res = np.array([0, 1, 2])
@@ -241,7 +241,7 @@ class PiecewiseConstantTest(TestCase):
     def test_init(self):
         """Test initialisation."""
         limits = [[-1, 1], [-1, 1]]
-        npoints = 3
+        npoints = 4
         pwc = PiecewiseConstant(limits, npoints, np.arange(16))
         assert_allclose(pwc.vertex_values, np.arange(16)[:, None])
 
@@ -281,9 +281,9 @@ class DelaunayTest(TestCase):
     """Test the generalized Delaunay triangulation."""
 
     def test_find_simplex(self):
-        """Test the implices on the grid."""
+        """Test the simplices on the grid."""
         limits = [[-1, 1], [-1, 2]]
-        num_points = [2, 6]
+        num_points = [3, 7]
         delaunay = Triangulation(limits, num_points)
 
         # Test the basic properties
@@ -292,7 +292,7 @@ class DelaunayTest(TestCase):
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
         assert_equal(delaunay.offset, np.array([-1, -1]))
         assert_equal(delaunay.unit_maxes,
-                     np.array([2, 3]) / np.array(num_points))
+                     np.array([2, 3]) / (np.array(num_points) - 1))
         assert_equal(delaunay.nrectangles, 2 * 6)
 
         # test the simplex indices
@@ -328,7 +328,7 @@ class DelaunayTest(TestCase):
         """Test the evaluation function."""
         eps = 1e-10
 
-        delaunay = Triangulation([[0, 1], [0, 1]], [1, 1])
+        delaunay = Triangulation([[0, 1], [0, 1]], [2, 2])
 
         test_points = np.array([[0, 0],
                                 [1 - eps, 0],
@@ -373,7 +373,7 @@ class DelaunayTest(TestCase):
     def test_multiple_dimensions(self):
         """Test delaunay in three dimensions."""
         limits = [[0, 1]] * 3
-        delaunay = Triangulation(limits, [1] * 3)
+        delaunay = Triangulation(limits, [2] * 3)
         assert_equal(delaunay.ndim, 3)
         assert_equal(delaunay.nrectangles, 1)
         assert_equal(delaunay.nsimplex, np.math.factorial(3))
@@ -404,7 +404,7 @@ class DelaunayTest(TestCase):
 
     def test_gradient(self):
         """Test the gradient_at function."""
-        delaunay = Triangulation([[0, 1], [0, 1]], [1, 1])
+        delaunay = Triangulation([[0, 1], [0, 1]], [2, 2])
 
         points = np.array([[0, 0],
                            [1, 0],
@@ -419,6 +419,8 @@ class DelaunayTest(TestCase):
         # --> x
 
         values = np.zeros(delaunay.nindex)
+        print(delaunay.nindex)
+        print(nodes)
         values[nodes] = [1, 2, 3, 1]
 
         test_points = np.array([[0.01, 0.01],
@@ -446,7 +448,7 @@ class DelaunayTest(TestCase):
 
     def test_1d(self):
         """Test the triangulation for 1D inputs."""
-        delaunay = Triangulation([[0, 1]], 2, vertex_values=[0, 0.5, 0])
+        delaunay = Triangulation([[0, 1]], 3, vertex_values=[0, 0.5, 0])
         vertex_values = delaunay.vertex_values
 
         test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T
