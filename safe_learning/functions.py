@@ -894,16 +894,15 @@ class Triangulation(GridWorld, DeterministicFunction):
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(npoints, self.nindex))
 
-    def _get_weights_gradient(self, points, index=False):
-        """Return the linear gradient weights asscoiated with points.
+    def _get_weights_gradient(self, points=None, indices=None):
+        """Return the linear gradient weights associated with points.
 
         Parameters
         ----------
-        points : 2d array
-            Each row represents one point
-        index : bool
-            Whether the indices of the triangles are provided instead of the
-            points.
+        points : ndarray
+            Each row represents one point.
+        indices : ndarray
+            Each row represents one index. Ignored if points
 
         Returns
         -------
@@ -912,8 +911,8 @@ class Triangulation(GridWorld, DeterministicFunction):
         simplices : ndarray
             The indeces of the simplices associated with each points
         """
-        if index:
-            simplex_ids = points
+        if points is None:
+            simplex_ids = indices
         else:
             simplex_ids = self.find_simplex(points)
         simplices = self.simplices(simplex_ids)
@@ -955,7 +954,7 @@ class Triangulation(GridWorld, DeterministicFunction):
             res = res.squeeze(axis=1)
         return res
 
-    def gradient_constraint(self, points, index=False):
+    def gradient_constraint(self, points=None, indices=None):
         """
         Return the gradients at the respective points.
 
@@ -967,10 +966,10 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         Parameters
         ----------
-        points : 2d array
+        points : ndarray
             Each row contains one state at which to evaluate the gradient.
-        index : bool
-            Whether the simplex indeces are provided instead of points.
+        indices : ndarray
+            The simplex indices. Ignored if points are provided.
 
         Returns
         -------
@@ -979,7 +978,8 @@ class Triangulation(GridWorld, DeterministicFunction):
             `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
             to the true gradients
         """
-        weights, simplices = self._get_weights_gradient(points, index=index)
+        weights, simplices = self._get_weights_gradient(points=points,
+                                                        indices=indices)
 
         # Some numbers for convenience
         nsimp = self.ndim + 1
