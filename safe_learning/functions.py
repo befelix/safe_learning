@@ -385,6 +385,10 @@ class GridWorld(object):
         """
         return self.index_to_state(np.arange(self.nindex))
 
+    def __len__(self):
+        """Return the number of points in the discretization."""
+        return self.nindex
+
     def _check_dimensions(self, states):
         """Raise an error if the states have the wrong dimension.
 
