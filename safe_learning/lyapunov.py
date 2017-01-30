@@ -71,14 +71,22 @@ class Lyapunov(object):
         The discretization constant.
     initial_set : ndarray, optional
         A boolean array of states that are known to be safe a priori.
+    policy : ndarray, optional
+        The control policy used at each state (Same number of rows as the
+        discretization).
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics,
-                 epsilon, initial_set=None):
+                 epsilon, initial_set=None, policy=None):
         """Initialization, see `Lyapunov` for details."""
         super(Lyapunov, self).__init__()
 
         self.discretization = discretization
+        if policy is None:
+            self.policy = np.empty((len(self.discretization), 0),
+                                   dtype=np.float)
+        else:
+            self.policy = policy
 
         # Keep track of the safe sets
         self.safe_set = np.zeros(len(discretization), dtype=np.bool)
@@ -200,7 +208,7 @@ class Lyapunov(object):
         safe_set : ndarray
             The safe set.
         """
-        prediction = self.dynamics(self.discretization)
+        prediction = self.dynamics(self.discretization, self.policy)
 
         if self.uncertain_dynamics:
             v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
@@ -242,13 +250,14 @@ class LyapunovContinuous(Lyapunov):
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics, epsilon,
-                 lipschitz, initial_set=None):
+                 lipschitz, initial_set=None, policy=None):
         """Initialization, see `LyapunovFunction`."""
         super(LyapunovContinuous, self).__init__(discretization,
                                                  lyapunov_function,
                                                  dynamics,
                                                  epsilon,
-                                                 initial_set=initial_set)
+                                                 initial_set=initial_set,
+                                                 policy=policy)
 
         self.lipschitz = lipschitz
         self.dV = self.lyapunov_function.gradient(self.discretization)
@@ -337,17 +346,21 @@ class LyapunovDiscrete(Lyapunov):
         The discretization constant.
     initial_set : ndarray, optional
         A boolean array of states that are known to be safe a priori.
+    policy : ndarray, optional
+        The control policy used at each state (Same number of rows as the
+        discretization).
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics,
                  lipschitz_dynamics, lipschitz_lyapunov, epsilon,
-                 initial_set=None):
+                 initial_set=None, policy=None):
         """Initialization, see `LyapunovFunction`."""
         super(LyapunovDiscrete, self).__init__(discretization,
                                                lyapunov_function,
                                                dynamics,
                                                epsilon,
-                                               initial_set=initial_set)
+                                               initial_set=initial_set,
+                                               policy=policy)
 
         self.lipschitz_dynamics = lipschitz_dynamics
         self.lipschitz_lyapunov = lipschitz_lyapunov
