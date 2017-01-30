@@ -192,6 +192,38 @@ class Lyapunov(object):
         else:
             return bound[0]
 
+    def safety_constraint(self, policy):
+        """Return the safe set for a given policy.
+
+        Parameters
+        ----------
+        policy : ndarray
+            The policy used at each discretization point.
+
+        Returns
+        -------
+        constraint : ndarray
+            A boolean array indicating where the safety constraint is
+            fulfilled.
+        """
+        prediction = self.dynamics(self.discretization, policy)
+
+        if self.uncertain_dynamics:
+            v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
+            # Upper bound on V_dot
+            v_dot_bound = v_dot + v_dot_error
+        else:
+            v_dot_bound, _ = self.v_decrease_confidence(prediction)
+
+        # Update the safe set
+        v_dot_negative = v_dot_bound < self.threshold
+
+        # Make sure initial safe set is included
+        if self.initial_safe_set is not None:
+            v_dot_negative |= self.initial_safe_set
+
+        return v_dot_negative
+
     def update_safe_set(self, accuracy, interval=None):
         """Compute the safe set.
 
@@ -202,28 +234,8 @@ class Lyapunov(object):
         interval : list
             Interval within which the level set is search. Defaults
             to [0, max(V) + accuracy]
-
-        Returns
-        -------
-        safe_set : ndarray
-            The safe set.
         """
-        prediction = self.dynamics(self.discretization, self.policy)
-
-        if self.uncertain_dynamics:
-            v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
-            # Upper bound on V_dot
-            v_dot_bound = v_dot + v_dot_error
-        else:
-            v_dot_bound, _ = self.v_decrease_confidence(prediction)
-
-        # Update the safe set
-        self.v_dot_negative = v_dot_bound < self.threshold
-
-        # Make sure initial safe set is included
-        if self.initial_safe_set is not None:
-            self.v_dot_negative |= self.initial_safe_set
-
+        self.v_dot_negative = self.safety_constraint(self.policy)
         self.cmax = self.max_safe_levelset(accuracy, interval)
         self.safe_set = self.V <= self.cmax
 

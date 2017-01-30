@@ -142,8 +142,15 @@ class PolicyIteration(object):
 
         self.value_function.vertex_values[:] = values.value
 
-    def update_policy(self):
-        """Optimize the policy for a given value function."""
+    def update_policy(self, constraint=None):
+        """Optimize the policy for a given value function.
+
+        Parameters
+        ----------
+        constraint : callable
+            A function that can be called with a policy and returns whether
+            the safety constraint is fulfilled for those particular states.
+        """
         # Initialize
         values = np.empty((len(self.state_space), len(self.action_space)),
                           dtype=np.float)
@@ -155,6 +162,11 @@ class PolicyIteration(object):
         for i, action in enumerate(self.action_space):
             action_array.base[:] = action
             values[:, i] = self.get_future_values(action_array)
+
+            if constraint is not None:
+                safe = constraint(action_array)
+                unsafe = np.logical_not(safe, out=safe)
+                values[unsafe, i] = -np.inf
 
         # Select best action for policy
         self.policy = self.action_space[np.argmax(values, axis=1)]
