@@ -7,12 +7,9 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     Parameters
     ----------
-    lyapunov: LyapunovFunction
-    threshold: float
-    true_dynamics: callable
-    legend: bool, optional
-    continuous : bool, optional
-        Whether the system is continuous-time or discrete-time.
+    lyapunov : LyapunovFunction
+    true_dynamics : callable
+    legend : bool, optional
     """
     if lyapunov.is_continuous:
         v_dec_string = '\dot{V}'
