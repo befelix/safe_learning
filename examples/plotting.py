@@ -45,8 +45,8 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
                          mean[:, 0] + bound[:, 0],
                          color=(0.8, 0.8, 1))
 
-    axes[0].plot(lyapunov.dynamics.gaussian_process.X,
-                 lyapunov.dynamics.gaussian_process.Y,
+    axes[0].plot(lyapunov.dynamics.gaussian_process.X[:, 0],
+                 lyapunov.dynamics.gaussian_process.Y[:, 0],
                  'x', ms=8, mew=2)
 
     # Plot V_dot
