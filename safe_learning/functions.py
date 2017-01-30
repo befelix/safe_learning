@@ -206,12 +206,12 @@ class FunctionStack(UncertainFunction):
         super(FunctionStack, self).gradient(*points)
 
 
-def concatenate_inputs(start):
+def concatenate_inputs(start=0):
     """Concatenate the numpy array inputs to the functions.
 
     Parameters
     ----------
-    start : int
+    start : int, optional
         The attribute number at which to start concatenating.
     """
     def wrap(function):
@@ -1089,7 +1089,7 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
 
     if interpolation == 'linear':
 
-        @concatenate_inputs(start=0)
+        @concatenate_inputs()
         def evaluate_gp_function_linear(x, noise=True):
             """
             Evaluate the GP sample function with linear interpolation.
@@ -1114,7 +1114,7 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
         cho_factor = linalg.cho_factor(cov)
         alpha = linalg.cho_solve(cho_factor, output)
 
-        @concatenate_inputs(start=0)
+        @concatenate_inputs()
         def evaluate_gp_function_kernel(x, noise=True):
             """
             Evaluate the GP sample function with kernel interpolation.
