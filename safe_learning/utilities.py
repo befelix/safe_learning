@@ -18,7 +18,7 @@ import scipy.interpolate
 import scipy.linalg
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr',
-           'sample_gp_function', 'ellipse_bounds']
+           'ellipse_bounds']
 
 
 def combinations(arrays):
@@ -92,90 +92,6 @@ def lqr(A, B, Q, R):
     K = np.linalg.solve(R, B.T.dot(P))
 
     return K, P
-
-
-def sample_gp_function(kernel, bounds, num_samples, noise_var,
-                       interpolation='linear', mean_function=None):
-    """
-    Sample a function from a gp with corresponding kernel within its bounds.
-
-    Parameters
-    ----------
-    kernel : instance of GPy.kern.*
-    bounds : list of tuples
-        [(x1_min, x1_max), (x2_min, x2_max), ...]
-    num_samples : int or list
-        If integer draws the corresponding number of samples in all
-        dimensions and test all possible input combinations. If a list then
-        the list entries correspond to the number of linearly spaced samples of
-        the corresponding input
-    noise_var : float
-        Variance of the observation noise of the GP function
-    interpolation : string
-        If 'linear' interpolate linearly between samples, if 'kernel' use the
-        corresponding mean RKHS-function of the GP.
-    mean_function : callable
-        Mean of the sample function
-
-    Returns
-    -------
-    function : object
-        function(x, noise=True)
-        A function that takes as inputs new locations x to be evaluated and
-        returns the corresponding noisy function values. If noise=False is
-        set the true function values are returned (useful for plotting).
-    """
-    inputs = linearly_spaced_combinations(bounds, num_samples)
-    cov = kernel.K(inputs) + np.eye(inputs.shape[0]) * 1e-6
-    output = np.random.multivariate_normal(np.zeros(inputs.shape[0]),
-                                           cov)
-
-    if interpolation == 'linear':
-
-        def evaluate_gp_function_linear(x, noise=True):
-            """
-            Evaluate the GP sample function with linear interpolation.
-
-            Parameters
-            ----------
-            x : np.array
-                2D array with inputs
-            noise : bool
-                Whether to include prediction noise
-            """
-            x = np.atleast_2d(x)
-            y = scipy.interpolate.griddata(inputs, output, x, method='linear')
-            y = np.atleast_2d(y)
-            if mean_function is not None:
-                y += mean_function(x)
-            if noise:
-                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
-            return y
-        return evaluate_gp_function_linear
-    elif interpolation == 'kernel':
-        cho_factor = scipy.linalg.cho_factor(cov)
-        alpha = scipy.linalg.cho_solve(cho_factor, output)
-
-        def evaluate_gp_function_kernel(x, noise=True):
-            """
-            Evaluate the GP sample function with kernel interpolation.
-
-            Parameters
-            ----------
-            x : np.array
-                2D array with inputs
-            noise : bool
-                Whether to include prediction noise.
-            """
-            x = np.atleast_2d(x)
-            y = kernel.K(x, inputs).dot(alpha)
-            y = y[:, None]
-            if mean_function is not None:
-                y += mean_function(x)
-            if noise:
-                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
-            return y
-        return evaluate_gp_function_kernel
 
 
 def ellipse_bounds(P, level, n=100):

@@ -510,7 +510,7 @@ class LyapunovTest(TestCase):
         self.lyapunov_function = DeterministicFunction.from_callable(
             lambda x: np.abs(x))
         self.dynamics = DeterministicFunction.from_callable(
-            lambda x: np.zeros_like(x))
+            lambda x, u: np.zeros_like(x))
         self.epsilon = 1
         self.lyap = Lyapunov(self.discretization, self.lyapunov_function,
                              self.dynamics, self.epsilon)
@@ -585,7 +585,7 @@ class LyapunovTest(TestCase):
 
         # Test uncertain dynamics.
         dynamics = UncertainFunction.from_callable(
-            lambda x: np.array([3.2]), np.array([1.4])
+            lambda x, u: np.array([3.2]), np.array([1.4])
         )
         # dynamics = mock.create_autospec(UncertainFunction)
         # dynamics.return_value = np.array([3.2]), np.array([1.4])

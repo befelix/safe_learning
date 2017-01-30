@@ -5,13 +5,15 @@ from __future__ import absolute_import, print_function, division
 from collections import Sequence
 
 import numpy as np
-from scipy import spatial, sparse
+from scipy import spatial, sparse, interpolate, linalg
 from sklearn.utils.extmath import cartesian
+
+from .utilities import linearly_spaced_combinations
 
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction', 'GPyGaussianProcess']
+           'QuadraticFunction', 'GPyGaussianProcess', 'sample_gp_function']
 
 
 class Function(object):
@@ -204,17 +206,30 @@ class FunctionStack(UncertainFunction):
         super(FunctionStack, self).gradient(*points)
 
 
-def concatenate_inputs(function):
-    """Concatenate the numpy array inputs to the functions."""
-    def new_function(self, *args, **kwargs):
-        """A function that concatenates inputs."""
-        if len(args) == 1:
-            return function(self, np.atleast_2d(args[0]), **kwargs)
-        else:
-            args_2d = map(np.atleast_2d, args)
-            return function(self, np.hstack(args_2d), **kwargs)
+def concatenate_inputs(start):
+    """Concatenate the numpy array inputs to the functions.
 
-    return new_function
+    Parameters
+    ----------
+    start : int
+        The attribute number at which to start concatenating.
+    """
+    def wrap(function):
+        def wrapped_function(*args, **kwargs):
+            """A function that concatenates inputs."""
+            to_concatenate = map(np.atleast_2d, args[start:])
+
+            if len(to_concatenate) == 1:
+                concatenated = to_concatenate
+            else:
+                concatenated = [np.hstack(to_concatenate)]
+
+            args = list(args[:start]) + concatenated
+            return function(*args, **kwargs)
+
+        return wrapped_function
+
+    return wrap
 
 
 class GPyGaussianProcess(UncertainFunction):
@@ -245,7 +260,7 @@ class GPyGaussianProcess(UncertainFunction):
         else:
             self.beta = lambda t: beta
 
-    @concatenate_inputs
+    @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Return the distribution over function values.
 
@@ -266,7 +281,7 @@ class GPyGaussianProcess(UncertainFunction):
         t = len(self.gaussian_process.X)
         return mean, self.beta(t) * np.sqrt(var)
 
-    @concatenate_inputs
+    @concatenate_inputs(start=1)
     def gradient(self, points):
         """Return the distribution over the gradient.
 
@@ -1023,14 +1038,100 @@ class QuadraticFunction(DeterministicFunction):
         super(QuadraticFunction, self).__init__()
         self.matrix = matrix
 
-    @concatenate_inputs
+    @concatenate_inputs(start=1)
     def evaluate(self, points):
         """See `DeterministicFunction.evaluate`."""
         points = np.asarray(points)
         return np.sum(points.dot(self.matrix) * points, axis=1, keepdims=True)
 
-    @concatenate_inputs
+    @concatenate_inputs(start=1)
     def gradient(self, points):
         """See `DeterministicFunction.gradient`."""
         points = np.asarray(points)
         return 2 * points.dot(self.matrix)
+
+
+def sample_gp_function(kernel, bounds, num_samples, noise_var,
+                       interpolation='linear', mean_function=None):
+    """
+    Sample a function from a gp with corresponding kernel within its bounds.
+
+    Parameters
+    ----------
+    kernel : instance of GPy.kern.*
+    bounds : list of tuples
+        [(x1_min, x1_max), (x2_min, x2_max), ...]
+    num_samples : int or list
+        If integer draws the corresponding number of samples in all
+        dimensions and test all possible input combinations. If a list then
+        the list entries correspond to the number of linearly spaced samples of
+        the corresponding input
+    noise_var : float
+        Variance of the observation noise of the GP function
+    interpolation : string
+        If 'linear' interpolate linearly between samples, if 'kernel' use the
+        corresponding mean RKHS-function of the GP.
+    mean_function : callable
+        Mean of the sample function
+
+    Returns
+    -------
+    function : object
+        function(x, noise=True)
+        A function that takes as inputs new locations x to be evaluated and
+        returns the corresponding noisy function values. If noise=False is
+        set the true function values are returned (useful for plotting).
+    """
+    inputs = linearly_spaced_combinations(bounds, num_samples)
+    cov = kernel.K(inputs) + np.eye(inputs.shape[0]) * 1e-6
+    output = np.random.multivariate_normal(np.zeros(inputs.shape[0]),
+                                           cov)
+
+    if interpolation == 'linear':
+
+        @concatenate_inputs(start=0)
+        def evaluate_gp_function_linear(x, noise=True):
+            """
+            Evaluate the GP sample function with linear interpolation.
+
+            Parameters
+            ----------
+            x : np.array
+                2D array with inputs
+            noise : bool
+                Whether to include prediction noise
+            """
+            x = np.atleast_2d(x)
+            y = interpolate.griddata(inputs, output, x, method='linear')
+            y = np.atleast_2d(y)
+            if mean_function is not None:
+                y += mean_function(x)
+            if noise:
+                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
+            return y
+        return evaluate_gp_function_linear
+    elif interpolation == 'kernel':
+        cho_factor = linalg.cho_factor(cov)
+        alpha = linalg.cho_solve(cho_factor, output)
+
+        @concatenate_inputs(start=0)
+        def evaluate_gp_function_kernel(x, noise=True):
+            """
+            Evaluate the GP sample function with kernel interpolation.
+
+            Parameters
+            ----------
+            x : np.array
+                2D array with inputs
+            noise : bool
+                Whether to include prediction noise.
+            """
+            x = np.atleast_2d(x)
+            y = kernel.K(x, inputs).dot(alpha)
+            y = y[:, None]
+            if mean_function is not None:
+                y += mean_function(x)
+            if noise:
+                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
+            return y
+        return evaluate_gp_function_kernel

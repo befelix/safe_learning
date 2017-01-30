@@ -15,9 +15,10 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
         v_dec_string = '\dot{V}'
     else:
         v_dec_string = '\Delta V'
+
     threshold = lyapunov.threshold
     # Lyapunov function
-    mean, bound = lyapunov.dynamics(lyapunov.discretization)
+    mean, bound = lyapunov.dynamics(lyapunov.discretization, lyapunov.policy)
     v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(mean, bound)
     safe_set = lyapunov.safe_set
     extent = [np.min(lyapunov.discretization), np.max(lyapunov.discretization)]
@@ -35,6 +36,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     # Plot dynamics
     axes[0].plot(lyapunov.discretization,
                  true_dynamics(lyapunov.discretization,
+                               lyapunov.policy,
                                noise=False),
                  color='black', alpha=0.8)
 
@@ -59,6 +61,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     # Plot the true V_dot or Delta_V
     evaluated_true_dynamics = true_dynamics(lyapunov.discretization,
+                                            lyapunov.policy,
                                             noise=False)
     delta_v, _ = lyapunov.v_decrease_confidence(evaluated_true_dynamics)
     v_dot_true_plot = axes[1].plot(lyapunov.discretization.squeeze(),
