@@ -5,7 +5,12 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import *
 import unittest
 import numpy as np
-import mock
+import sys
+
+if sys.version_info.major <= 2:
+    import mock
+else:
+    from unittest import mock
 
 try:
     import GPy

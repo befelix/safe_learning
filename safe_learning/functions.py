@@ -217,7 +217,7 @@ def concatenate_inputs(start):
     def wrap(function):
         def wrapped_function(*args, **kwargs):
             """A function that concatenates inputs."""
-            to_concatenate = map(np.atleast_2d, args[start:])
+            to_concatenate = list(map(np.atleast_2d, args[start:]))
 
             if len(to_concatenate) == 1:
                 concatenated = to_concatenate
