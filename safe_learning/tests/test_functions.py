@@ -417,8 +417,6 @@ class DelaunayTest(TestCase):
         # --> x
 
         values = np.zeros(delaunay.nindex)
-        print(delaunay.nindex)
-        print(nodes)
         values[nodes] = [1, 2, 3, 1]
 
         test_points = np.array([[0.01, 0.01],
