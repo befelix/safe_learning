@@ -65,7 +65,6 @@ class PolicyIterationTest(unittest.TestCase):
         """Test the value function optimization."""
         pass
 
-    # @mock.patch('safe_learning.reinforcement_learning.PolicyIteration')
     def test_future_values(self):
         """Test future values."""
         dynamics = mock.Mock()
@@ -98,6 +97,36 @@ class PolicyIterationTest(unittest.TestCase):
         # true_values[rl.terminal_states] = rewards()[rl.terminal_states]
         #
         # assert_allclose(future_values, true_values)
+
+    @mock.patch('safe_learning.reinforcement_learning.'
+                'PolicyIteration.get_future_values')
+    def test_policy_update(self, future_value_mock):
+        """Test the policy update."""
+        dynamics = mock.Mock()
+        rewards = mock.Mock()
+        value_function = mock.Mock()
+
+        states = np.arange(4)[:, None]
+        actions = np.arange(2)[:, None]
+        rl = PolicyIteration(states,
+                             actions,
+                             dynamics,
+                             rewards,
+                             value_function)
+
+        future_value_mock.return_value = np.arange(4, dtype=np.float)
+        rl.update_policy()
+
+        assert_allclose(rl.policy, 0)
+
+        def constraint(action):
+            if np.all(action.base == 0):
+                return np.array([1, 1, 0, 0], dtype=np.bool)
+            else:
+                return np.ones(4, dtype=np.bool)
+
+        rl.update_policy(constraint=constraint)
+        assert_allclose(rl.policy, np.array([[0, 0, 1, 1]], dtype=np.float).T)
 
 
 if __name__ == '__main__':
