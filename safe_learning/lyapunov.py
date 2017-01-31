@@ -392,7 +392,8 @@ class LyapunovDiscrete(Lyapunov):
         dynamics : np.array
             The dynamics evaluated at each point on the discretization.
         error_bounds : np.array
-            Point-wise error error_bounds for the dynamics.
+            Point-wise error error_bounds for the dynamics. Have to be strictly
+            positive.
 
         Returns
         -------

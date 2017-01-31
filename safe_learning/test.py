@@ -7,6 +7,13 @@ import unittest
 import numpy as np
 import sys
 
+from .functions import (Triangulation, ScipyDelaunay, GridWorld,
+                        PiecewiseConstant, DeterministicFunction,
+                        UncertainFunction, GPyGaussianProcess,
+                        QuadraticFunction, DimensionError)
+from .lyapunov import (line_search_bisection, Lyapunov, LyapunovContinuous,
+                       LyapunovDiscrete)
+
 if sys.version_info.major <= 2:
     import mock
 else:
@@ -16,12 +23,6 @@ try:
     import GPy
 except ImportError:
     GPy = None
-
-from .functions import (Triangulation, ScipyDelaunay, GridWorld,
-                        PiecewiseConstant, DeterministicFunction,
-                        UncertainFunction, GPyGaussianProcess,
-                        QuadraticFunction, DimensionError)
-from .lyapunov import line_search_bisection, Lyapunov, LyapunovContinuous
 
 
 class DeterministicFuctionTest(TestCase):
@@ -637,6 +638,37 @@ class LyapunovContinuousTest(unittest.TestCase):
         """Test the Lipschitz constant that is returned."""
         a = LyapunovContinuous.lipschitz_constant(1, 2, 3, 4)
         assert_allclose(a, 10)
+
+
+class LyapunovDiscreteTest(unittest.TestCase):
+    """Test Continuous-time Lyapunov functions."""
+
+    def test_init(self):
+        """Test the initialization."""
+        discretization = np.array([1, 2, 3])
+        lyap_fun = DeterministicFunction.from_callable(
+            lambda x: np.arange(3)[:, None],
+            lambda x: np.ones((3, 1)) * 0.5)
+
+        dynamics = mock.create_autospec(DeterministicFunction)
+        lf = 0.4
+        lv = 0.3
+        eps = 0.5
+
+        lyap = LyapunovDiscrete(discretization, lyap_fun, dynamics, lf, lv,
+                                eps)
+        assert_allclose(lyap.threshold, lv * (1 + lf) * eps)
+
+        dynamics = np.array([[1, 2, 3]]).T
+        a1, a2 = lyap.v_decrease_confidence(dynamics)
+        assert(a2 == 0)
+        true_mean = np.zeros(3)
+        true_error = lv * (np.arange(3) + 1)
+        assert_allclose(a1, true_mean)
+
+        a1, a2 = lyap.v_decrease_confidence(dynamics, dynamics)
+        assert_allclose(a1, true_mean)
+        assert_allclose(a2, true_error)
 
 
 if __name__ == '__main__':
