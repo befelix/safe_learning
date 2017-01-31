@@ -17,7 +17,7 @@ import numpy as np
 import scipy.interpolate
 import scipy.linalg
 
-__all__ = ['combinations', 'linearly_spaced_combinations', 'lqr',
+__all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds']
 
 
@@ -68,30 +68,60 @@ def linearly_spaced_combinations(bounds, num_samples):
     return combinations(inputs)
 
 
-def lqr(A, B, Q, R):
-    """
-    Compute the continuous time LQR-controller.
+def lqr(a, b, q, r):
+    """Compute the continuous time LQR-controller.
+
+    The optimal control input is `u = -k.dot(x)`.
 
     Parameters
     ----------
-    A : np.array
-    B : np.array
-    Q : np.array
-    R : np.array
+    a : np.array
+    b : np.array
+    q : np.array
+    r : np.array
 
     Returns
     -------
-    K : np.array
+    k : np.array
         Controller matrix
-    P : np.array
+    p : np.array
         Cost to go matrix
     """
-    P = scipy.linalg.solve_continuous_are(A, B, Q, R)
+    p = scipy.linalg.solve_continuous_are(a, b, q, r)
 
     # LQR gain
-    K = np.linalg.solve(R, B.T.dot(P))
+    k = np.linalg.solve(r, b.T.dot(p))
 
-    return K, P
+    return k, p
+
+
+def dlqr(a, b, q, r):
+    """Compute the discrete-time LQR controller.
+
+    The optimal control input is `u = -k.dot(x)`.
+
+    Parameters
+    ----------
+    a : np.array
+    b : np.array
+    q : np.array
+    r : np.array
+
+    Returns
+    -------
+    k : np.array
+        Controller matrix
+    p : np.array
+        Cost to go matrix
+    """
+    p = scipy.linalg.solve_discrete_are(a, b, q, r)
+
+    # LQR gain
+    tmp1 = np.linalg.multi_dot((b.T, p, b))
+    tmp2 = np.linalg.multi_dot((b.T, p, a))
+    k = np.linalg.solve(tmp1 + r, tmp2)
+
+    return k, p
 
 
 def ellipse_bounds(P, level, n=100):

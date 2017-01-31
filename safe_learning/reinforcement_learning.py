@@ -49,8 +49,8 @@ class PolicyIteration(object):
         """
         super(PolicyIteration, self).__init__()
 
-        self.state_space = state_space
-        self.action_space = action_space
+        self.state_space = np.asarray(state_space)
+        self.action_space = np.asarray(action_space)
         self.dynamics = dynamics
         self.reward_function = reward_function
         self.value_function = function_approximator

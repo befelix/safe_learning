@@ -33,7 +33,7 @@ pydocstyle $module --match='(?!__init__).*\.py' 2>&1 | grep -v "WARNING: __all__
 
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"
-nosetests --with-doctest --with-coverage --cover-min-percentage=70 --cover-erase --cover-package=$module $module
+nosetests --with-doctest --nocapture --with-coverage --cover-min-percentage=80 --cover-erase --cover-package=$module $module
 
 # Export html
 coverage html
