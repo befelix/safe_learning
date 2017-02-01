@@ -62,14 +62,18 @@ class PolicyIteration(object):
                                          high=len(action_space),
                                          size=len(state_space))
         self.policy = self.action_space[action_index]
-
-        values = np.zeros(len(state_space), dtype=np.float)
-        self.value_function.vertex_values = values
+        self.values = np.zeros(len(state_space), dtype=np.float)
 
     @property
     def values(self):
         """Return the vertex values."""
         return self.value_function.vertex_values[:, 0]
+
+    @values.setter
+    def values(self, values):
+        """Set the vertex values."""
+        values = np.asarray(values)
+        self.value_function.vertex_values = values.reshape(-1, 1)
 
     def get_future_values(self, actions):
         """Return the value at the current states.
@@ -89,10 +93,9 @@ class PolicyIteration(object):
         rewards = rewards.squeeze()
 
         expected_values = self.value_function(next_states).squeeze()
-        expected_values *= self.gamma
 
         # Perform value update
-        updated_values = np.add(rewards, expected_values, out=expected_values)
+        updated_values = rewards + self.gamma * expected_values
 
         # Adapt values of terminal states
         if self.terminal_states is not None:

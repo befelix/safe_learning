@@ -63,7 +63,57 @@ class PolicyIterationTest(unittest.TestCase):
     @unittest.skipIf(cvxpy is None, 'Skipping cvxpy tests.')
     def test_optimization(self):
         """Test the value function optimization."""
-        pass
+        dynamics = mock.Mock()
+        dynamics.return_value = 'states'
+
+        rewards = mock.Mock()
+        rewards.return_value = np.arange(4, dtype=np.float)
+
+        # transition probabilities
+        trans_probs = np.array([[0, .5, .5, 0],
+                                [.2, .1, .3, .5],
+                                [.3, .2, .4, .1],
+                                [0, 0, 0, 1]],
+                               dtype=np.float)
+
+        value_function = mock.Mock()
+        value_function.evaluate_constraint.return_value = trans_probs
+        value_function.nindex = 4
+        value_function.vertex_values = np.zeros((4, 1))
+
+        states = np.arange(4)[:, None]
+        actions = np.arange(2)[:, None]
+        rl = PolicyIteration(states,
+                             actions,
+                             dynamics,
+                             rewards,
+                             value_function)
+
+        true_values = np.linalg.solve(np.eye(4) - rl.gamma * trans_probs,
+                                      rewards.return_value)
+
+        rl.optimize_value_function()
+
+        dynamics.assert_called_with(rl.state_space, rl.policy)
+        rewards.assert_called_with(rl.state_space, rl.policy, 'states')
+
+        assert_allclose(rl.values, true_values)
+
+        rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
+        rl.optimize_value_function()
+
+        trans_probs2 = np.array([[0, .5, .5, 0, 0],
+                                 [.2, .1, .3, .5, 0],
+                                 [.3, .2, .4, .1, 0],
+                                 [0, 0, 0, 0, 1],
+                                 [0, 0, 0, 0, 1]],
+                                dtype=np.float)
+        rewards2 = np.zeros(5)
+        rewards2[:4] = rewards()
+        true_values = np.linalg.solve(np.eye(5) - rl.gamma * trans_probs2,
+                                      rewards2)
+
+        assert_allclose(rl.values, true_values[:4])
 
     def test_future_values(self):
         """Test future values."""
@@ -90,13 +140,13 @@ class PolicyIterationTest(unittest.TestCase):
         dynamics.assert_called_with(rl.state_space, rl.policy)
         rewards.assert_called_with(rl.state_space, rl.policy, 'states')
 
-        assert_allclose(future_values, true_values)
+        assert_allclose(true_values, future_values)
 
-        # rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
-        # future_values = rl.get_future_values(rl.policy)
-        # true_values[rl.terminal_states] = rewards()[rl.terminal_states]
-        #
-        # assert_allclose(future_values, true_values)
+        rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
+        future_values = rl.get_future_values(rl.policy)
+        true_values[rl.terminal_states] = rewards()[rl.terminal_states]
+
+        assert_allclose(future_values, true_values)
 
     @mock.patch('safe_learning.reinforcement_learning.'
                 'PolicyIteration.get_future_values')
