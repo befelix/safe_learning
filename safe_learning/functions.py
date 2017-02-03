@@ -880,6 +880,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         values : ndarray
             The function values at the points.
         """
+        points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
 
         # Return function values if desired
@@ -906,6 +907,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         values
             A sparse matrix B so that evaluate(points) = B.dot(vertex_values).
         """
+        points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
         # Construct sparse matrix for optimization
 
@@ -972,6 +974,7 @@ class Triangulation(GridWorld, DeterministicFunction):
             dimension stored at (i, j, k). The jth dimension is squeezed out
             for 1D functions.
         """
+        points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
         res = np.einsum('ijk,ikl->ilj', weights, self.vertex_values[simplices])
@@ -1003,6 +1006,7 @@ class Triangulation(GridWorld, DeterministicFunction):
             `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
             to the true gradients
         """
+        points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points=points,
                                                         indices=indices)
 
