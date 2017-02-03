@@ -384,7 +384,7 @@ class GridWorld(object):
         # Statistics about the grid
         self.nrectangles = np.prod(self.num_points - 1)
         self.nindex = np.prod(self.num_points)
-        self.ndim = len(limits)
+        self.ndim = len(self.limits)
 
     @property
     def all_points(self):
