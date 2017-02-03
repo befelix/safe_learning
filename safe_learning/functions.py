@@ -1052,7 +1052,7 @@ class QuadraticFunction(DeterministicFunction):
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,
-                       interpolation='linear', mean_function=None):
+                       interpolation='kernel', mean_function=None):
     """
     Sample a function from a gp with corresponding kernel within its bounds.
 
@@ -1072,7 +1072,8 @@ def sample_gp_function(kernel, bounds, num_samples, noise_var,
         If 'linear' interpolate linearly between samples, if 'kernel' use the
         corresponding mean RKHS-function of the GP.
     mean_function : callable
-        Mean of the sample function
+        Mean of the sample function. Note that if you are trying to pass a GPy
+        mapping then you need to pass `mapping.f`.
 
     Returns
     -------
