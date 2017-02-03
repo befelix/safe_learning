@@ -14,6 +14,9 @@ __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'QuadraticFunction', 'GPyGaussianProcess', 'sample_gp_function']
 
 
+_EPS = np.finfo(np.float).eps
+
+
 class Function(object):
     """A generic function class."""
 
@@ -423,12 +426,11 @@ class GridWorld(object):
         -------
         offset_states : ndarray
         """
-        states = np.atleast_2d(states) - self.offset[None, :]
-        eps = np.finfo(states.dtype).eps
+        states = np.atleast_2d(states).astype(np.float) - self.offset[None, :]
         if clip:
             np.clip(states,
-                    self.offset_limits[:, 0] + 2 * eps,
-                    self.offset_limits[:, 1] - 2 * eps,
+                    self.offset_limits[:, 0] + 2 * _EPS,
+                    self.offset_limits[:, 1] - 2 * _EPS,
                     out=states)
         return states
 
