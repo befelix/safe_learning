@@ -11,8 +11,6 @@ Author: Felix Berkenkamp, Learning & Adaptive Systems Group, ETH Zurich
 
 from __future__ import division, print_function
 
-from collections import Sequence
-
 import numpy as np
 import scipy.interpolate
 import scipy.linalg
@@ -56,9 +54,9 @@ def linearly_spaced_combinations(bounds, num_samples):
         is of size l x d, that is, every row contains one combination of
         inputs.
     """
+    bounds = np.atleast_2d(bounds)
     num_vars = len(bounds)
-    if not isinstance(num_samples, Sequence):
-        num_samples = [num_samples] * num_vars
+    num_samples = np.broadcast_to(num_samples, num_vars)
 
     # Create linearly spaced test inputs
     inputs = [np.linspace(b[0], b[1], n) for b, n in zip(bounds,

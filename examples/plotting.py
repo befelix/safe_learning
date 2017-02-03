@@ -28,6 +28,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     # Format axes
     axes[0].set_title('GP model of the dynamics')
+    axes[0].set_xlim(extent)
     axes[1].set_xlim(extent)
     axes[1].set_xlabel('$x$')
     axes[1].set_ylabel(r'Upper bound of ${}(x)$'.format(v_dec_string))
