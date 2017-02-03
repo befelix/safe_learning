@@ -2,8 +2,6 @@
 
 from __future__ import absolute_import, print_function, division
 
-from collections import Sequence
-
 import numpy as np
 from scipy import spatial, sparse, interpolate, linalg
 from sklearn.utils.extmath import cartesian
@@ -364,12 +362,9 @@ class GridWorld(object):
         """Initialization, see `GridWorld`."""
         super(GridWorld, self).__init__()
 
-        self.limits = np.asarray(limits, dtype=np.float)
-
-        if not (isinstance(num_points, Sequence) or
-                isinstance(num_points, np.ndarray)):
-            num_points = [num_points] * len(limits)
-        self.num_points = np.asarray(num_points, dtype=np.int)
+        self.limits = np.atleast_2d(limits)
+        num_points = np.broadcast_to(num_points, len(self.limits))
+        self.num_points = num_points.astype(np.int, copy=False)
 
         if np.any(self.num_points < 2):
             raise DimensionError('There must be at least 2 points in each '
@@ -705,7 +700,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         self.vertex_values = vertex_values
 
         # Get triangulation
-        if len(limits) == 1:
+        if len(self.limits) == 1:
             corners = np.array([[0], self.unit_maxes])
             self.triangulation = _Delaunay1D(corners)
         else:
