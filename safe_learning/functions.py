@@ -299,10 +299,13 @@ class GPyGaussianProcess(UncertainFunction):
         var : ndarray
             Error bounds for each dimension of the estimate.
         """
-        mean, var = self.gaussian_process.predict_jacobian(points)
+        _, var = self.gaussian_process.predict_noiseless(points)
+        mean_dx, var_dx = self.gaussian_process.predictive_gradients(points)
+        mean_dx = mean_dx.squeeze(-1)
 
+        std_dx = 0.5 / np.sqrt(var) * var_dx
         t = len(self.gaussian_process.X)
-        return mean, self.beta(t) * np.sqrt(var)
+        return mean_dx, self.beta(t) * std_dx
 
     def add_data_point(self, x, y):
         """Add data points to the GP model.

@@ -5,6 +5,7 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import *
 import unittest
 import numpy as np
+from scipy.optimize import check_grad
 
 from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
@@ -73,7 +74,7 @@ class GPyTest(TestCase):
         self.ufun = GPyGaussianProcess(self.gp, beta=self.beta)
         self.beta_fun = lambda t: self.beta
         self.ufun2 = GPyGaussianProcess(self.gp, beta=self.beta_fun)
-        self.test_points = np.array([[5, 2], [3., 2]])
+        self.test_points = np.array([[0.9, 0.1], [3., 2]])
 
     def test_evaluation(self):
         """Make sure evaluation works."""
@@ -89,20 +90,18 @@ class GPyTest(TestCase):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    @unittest.skip
     def test_gradient(self):
         """Make sure gradient works."""
-        a1, b1 = self.ufun.gradient(self.test_points)
-        a2, b2 = self.gp.predict_jacobian(self.test_points)
-        b2 = self.beta * np.sqrt(b2)
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
+        error_mean = check_grad(lambda x: self.ufun.evaluate(x)[0],
+                                lambda x: self.ufun.gradient(x)[0],
+                                self.test_points[0])
 
-        # Test multiple inputs
-        a1, b1 = self.ufun.gradient(self.test_points[:, [0]],
-                                    self.test_points[:, [1]])
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
+        error_std = check_grad(lambda x: self.ufun.evaluate(x)[1],
+                               lambda x: self.ufun.gradient(x)[1],
+                               self.test_points[0])
+
+        assert_allclose(error_mean, 0, atol=1e-8)
+        assert_allclose(error_std, 0, atol=1e-7)
 
     def test_new_data(self):
         """Test addting data points to the GP."""
