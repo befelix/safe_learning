@@ -240,7 +240,7 @@ class PiecewiseConstantTest(TestCase):
         limits = [[-1, 1], [-1, 1]]
         npoints = 4
         pwc = PiecewiseConstant(limits, npoints, np.arange(16))
-        assert_allclose(pwc.vertex_values, np.arange(16)[:, None])
+        assert_allclose(pwc.parameters, np.arange(16)[:, None])
 
     def test_evaluation(self):
         """Evaluation tests for piecewise constant function."""
@@ -250,7 +250,7 @@ class PiecewiseConstantTest(TestCase):
 
         vertex_points = pwc.index_to_state(np.arange(pwc.nindex))
         vertex_values = np.sum(vertex_points, axis=1, keepdims=True)
-        pwc.vertex_values = vertex_values
+        pwc.parameters = vertex_values
 
         test = pwc.evaluate(vertex_points)
         assert_allclose(test, vertex_values)
@@ -352,14 +352,14 @@ class DelaunayTest(TestCase):
 
         # Test value property
         values = np.random.rand(delaunay.nindex)
-        delaunay.vertex_values = values
+        delaunay.parameters = values
         v1 = H.dot(values)[:, None]
         v2 = delaunay.evaluate(test_points)
         assert_allclose(v1, v2)
 
         # Test the projections
         test_point = np.array([[-0.5, -0.5]])
-        delaunay.vertex_values = np.array([0, 1, 1, 1])
+        delaunay.parameters = np.array([0, 1, 1, 1])
         unprojected = delaunay.evaluate(test_point)
         delaunay.project = True
         projected = delaunay.evaluate(test_point)
@@ -395,7 +395,7 @@ class DelaunayTest(TestCase):
         true_values = np.hstack((corner_values,
                                  np.array([1 / 6, 1 / 6, 1 / 6, 1 / 2])))
 
-        delaunay.vertex_values = values
+        delaunay.parameters = values
         result = delaunay.evaluate(test_points)
         assert_allclose(result, true_values[:, None], atol=1e-5)
 
@@ -433,7 +433,7 @@ class DelaunayTest(TestCase):
 
         # Evaluate gradient with and without values
         H = delaunay.gradient_parameter_derivative(test_points).toarray()
-        delaunay.vertex_values = values
+        delaunay.parameters = values
         grad = delaunay.gradient(test_points)
 
         # Compare
@@ -444,7 +444,7 @@ class DelaunayTest(TestCase):
     def test_1d(self):
         """Test the triangulation for 1D inputs."""
         delaunay = Triangulation([[0, 1]], 3, vertex_values=[0, 0.5, 0])
-        vertex_values = delaunay.vertex_values
+        vertex_values = delaunay.parameters
 
         test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T
         test_point = test_points[[0], :]

@@ -598,15 +598,15 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         super(PiecewiseConstant, self).__init__(limits, num_points)
 
         self._parameters = None
-        self.vertex_values = vertex_values
+        self.parameters = vertex_values
 
     @property
-    def vertex_values(self):
+    def parameters(self):
         """Return the vertex values."""
         return self._parameters
 
-    @vertex_values.setter
-    def vertex_values(self, values):
+    @parameters.setter
+    def parameters(self, values):
         """Set the vertex values."""
         if values is None:
             self._parameters = values
@@ -628,7 +628,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
             The function values at the points.
         """
         nodes = self.state_to_index(points)
-        return self.vertex_values[nodes]
+        return self.parameters[nodes]
 
     def parameter_derivative(self, points):
         """
@@ -646,7 +646,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         Returns
         -------
         values
-            A sparse matrix B so that evaluate(points) = B.dot(vertex_values).
+            A sparse matrix B so that evaluate(points) = B.dot(parameters).
         """
         npoints = len(points)
         weights = np.ones(npoints, dtype=np.int)
@@ -743,8 +743,8 @@ class Triangulation(GridWorld, DeterministicFunction):
         """Initialization."""
         super(Triangulation, self).__init__(limits, num_points)
 
-        self._vertex_values = None
-        self.vertex_values = vertex_values
+        self._parameters = None
+        self.parameters = vertex_values
 
         # Get triangulation
         if len(self.limits) == 1:
@@ -765,18 +765,18 @@ class Triangulation(GridWorld, DeterministicFunction):
         self.project = project
 
     @property
-    def vertex_values(self):
+    def parameters(self):
         """Return the vertex values."""
-        return self._vertex_values
+        return self._parameters
 
-    @vertex_values.setter
-    def vertex_values(self, values):
+    @parameters.setter
+    def parameters(self, values):
         """Set the vertex values."""
         if values is None:
-            self._vertex_values = values
+            self._parameters = values
         else:
             values = np.asarray(values).reshape(self.nindex, -1)
-            self._vertex_values = values
+            self._parameters = values
 
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
@@ -928,7 +928,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         # Return function values if desired
         result = np.einsum('ij,ijk->ik',
                            weights,
-                           self.vertex_values[simplices])
+                           self.parameters[simplices])
         return result
 
     def parameter_derivative(self, points):
@@ -947,7 +947,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         Returns
         -------
         values
-            A sparse matrix B so that evaluate(points) = B.dot(vertex_values).
+            A sparse matrix B so that evaluate(points) = B.dot(parameters).
         """
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
@@ -1019,7 +1019,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
-        res = np.einsum('ijk,ikl->ilj', weights, self.vertex_values[simplices])
+        res = np.einsum('ijk,ikl->ilj', weights, self.parameters[simplices])
         if res.shape[1] == 1:
             res = res.squeeze(axis=1)
         return res

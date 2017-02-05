@@ -30,10 +30,9 @@ class PolicyIteration(object):
     reward_function : callable
         A function that takes the state, action, and next state as input and
         returns the reward corresponding to this transition.
-    function_approximator : callable
-        The function approximator for the value function. It takes the states
-        as inputs together with the vertex_values and returns the corresponding
-        function values on the continuous domain.
+    function_approximator : instance of `DeterministicFunction`
+        The function approximator for the value function. It is used to
+        evaluate the value function at states.
     gamma : float
         The discount factor for reinforcement learning.
     terminal_states : ndarray (bool)
@@ -67,13 +66,13 @@ class PolicyIteration(object):
     @property
     def values(self):
         """Return the vertex values."""
-        return self.value_function.vertex_values[:, 0]
+        return self.value_function.parameters[:, 0]
 
     @values.setter
     def values(self, values):
         """Set the vertex values."""
         values = np.asarray(values)
-        self.value_function.vertex_values = values.reshape(-1, 1)
+        self.value_function.parameters = values.reshape(-1, 1)
 
     def get_future_values(self, actions):
         """Return the value at the current states.
@@ -106,7 +105,7 @@ class PolicyIteration(object):
 
     def update_value_function(self):
         """Perform one round of value updates."""
-        self.value_function.vertex_values = self.get_future_values(self.policy)
+        self.value_function.parameters = self.get_future_values(self.policy)
 
     def optimize_value_function(self):
         """Solve a linear program to optimize the value function."""
@@ -143,7 +142,7 @@ class PolicyIteration(object):
             raise OptimizationError('Optimization problem is {}'
                                     .format(prob.status))
 
-        self.value_function.vertex_values[:] = values.value
+        self.value_function.parameters[:] = values.value
 
     def update_policy(self, constraint=None):
         """Optimize the policy for a given value function.

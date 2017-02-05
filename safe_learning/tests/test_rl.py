@@ -58,7 +58,7 @@ class PolicyIterationTest(unittest.TestCase):
         disc_error = np.max(np.diff(rl.action_space[:, 0]))
 
         assert(max_error < disc_error)
-        assert_allclose(rl.values, value_function.vertex_values[:, 0])
+        assert_allclose(rl.values, value_function.parameters[:, 0])
 
     @unittest.skipIf(cvxpy is None, 'Skipping cvxpy tests.')
     def test_optimization(self):
@@ -79,7 +79,7 @@ class PolicyIterationTest(unittest.TestCase):
         value_function = mock.create_autospec(DeterministicFunction)
         value_function.parameter_derivative.return_value = trans_probs
         value_function.nindex = 4
-        value_function.vertex_values = np.zeros((4, 1))
+        value_function.parameters = np.zeros((4, 1))
 
         states = np.arange(4)[:, None]
         actions = np.arange(2)[:, None]
