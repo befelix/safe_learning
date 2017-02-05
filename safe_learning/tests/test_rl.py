@@ -76,8 +76,8 @@ class PolicyIterationTest(unittest.TestCase):
                                 [0, 0, 0, 1]],
                                dtype=np.float)
 
-        value_function = mock.Mock()
-        value_function.evaluate_constraint.return_value = trans_probs
+        value_function = mock.create_autospec(DeterministicFunction)
+        value_function.parameter_derivative.return_value = trans_probs
         value_function.nindex = 4
         value_function.vertex_values = np.zeros((4, 1))
 

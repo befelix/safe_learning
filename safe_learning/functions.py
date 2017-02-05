@@ -135,6 +135,8 @@ class DeterministicFunction(Function):
         """Initialization, see `Function` for details."""
         super(DeterministicFunction, self).__init__()
 
+        self.parameters = None
+
     def evaluate(self, *points):
         """Return the function values.
 
@@ -159,12 +161,53 @@ class DeterministicFunction(Function):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
+
         Returns
         -------
         gradient : ndarray
             The function gradient at the points.
         """
         raise NotImplementedError()
+
+    def parameter_derivative(self, *points):
+        """Return the derivative with respect to the parameter vector.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+
+        Returns
+        -------
+        gradient : ndarray
+            The function gradient with respect to the parameters at the points.
+        """
+        if self.parameters is None:
+            return None
+
+        raise NotImplementedError('The derivatives towards the parameters is'
+                                  'not implemented.')
+
+    def gradient_parameter_derivative(self, *points):
+        """Return the derivative of the gradient with respect to parameters.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+
+        Returns
+        -------
+        gradient : ndarray
+            The function gradient with respect to the parameters at the points.
+        """
+        if self.parameters is None:
+            return None
+
+        raise NotImplementedError('The derivatives towards the parameters is'
+                                  'not implemented.')
 
 
 class FunctionStack(UncertainFunction):
@@ -554,22 +597,21 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         """Initialization, see `PiecewiseConstant`."""
         super(PiecewiseConstant, self).__init__(limits, num_points)
 
-        self._vertex_values = None
+        self._parameters = None
         self.vertex_values = vertex_values
 
     @property
     def vertex_values(self):
         """Return the vertex values."""
-        return self._vertex_values
+        return self._parameters
 
     @vertex_values.setter
     def vertex_values(self, values):
         """Set the vertex values."""
         if values is None:
-            self._vertex_values = values
+            self._parameters = values
         else:
-            values = np.asarray(values).reshape(self.nindex, -1)
-            self._vertex_values = values
+            self._parameters = np.asarray(values).reshape(self.nindex, -1)
 
     def evaluate(self, points):
         """Return the function values.
@@ -588,7 +630,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         nodes = self.state_to_index(points)
         return self.vertex_values[nodes]
 
-    def evaluate_constraint(self, points):
+    def parameter_derivative(self, points):
         """
         Obtain function values at points from triangulation.
 
@@ -889,7 +931,7 @@ class Triangulation(GridWorld, DeterministicFunction):
                            self.vertex_values[simplices])
         return result
 
-    def evaluate_constraint(self, points):
+    def parameter_derivative(self, points):
         """
         Obtain function values at points from triangulation.
 
@@ -982,7 +1024,7 @@ class Triangulation(GridWorld, DeterministicFunction):
             res = res.squeeze(axis=1)
         return res
 
-    def gradient_constraint(self, points=None, indices=None):
+    def gradient_parameter_derivative(self, points=None, indices=None):
         """
         Return the gradients at the respective points.
 

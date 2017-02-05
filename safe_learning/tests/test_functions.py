@@ -260,7 +260,7 @@ class PiecewiseConstantTest(TestCase):
         assert_allclose(test1, np.array([[-2]]))
 
         # Test constraint evaluation
-        test2 = pwc.evaluate_constraint(vertex_points)
+        test2 = pwc.parameter_derivative(vertex_points)
         test2 = test2.toarray().dot(vertex_values)
         assert_allclose(test2, vertex_values)
 
@@ -337,7 +337,7 @@ class DelaunayTest(TestCase):
                                                   [1, 0],
                                                   [0, 1]]))
 
-        H = delaunay.evaluate_constraint(test_points).toarray()
+        H = delaunay.parameter_derivative(test_points).toarray()
 
         true_H = np.zeros((len(test_points), delaunay.nindex),
                           dtype=np.float)
@@ -432,7 +432,7 @@ class DelaunayTest(TestCase):
         true_H[3, nodes[[1, 3]]] = [-1, 1]
 
         # Evaluate gradient with and without values
-        H = delaunay.gradient_constraint(test_points).toarray()
+        H = delaunay.gradient_parameter_derivative(test_points).toarray()
         delaunay.vertex_values = values
         grad = delaunay.gradient(test_points)
 
@@ -459,7 +459,7 @@ class DelaunayTest(TestCase):
         true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])[:, None]
         assert_allclose(values, true_values)
 
-        value_constraint = delaunay.evaluate_constraint(test_points)
+        value_constraint = delaunay.parameter_derivative(test_points)
         values = value_constraint.toarray().dot(vertex_values)
         assert_allclose(values, true_values)
 
@@ -467,8 +467,8 @@ class DelaunayTest(TestCase):
         true_gradient = np.array([1, 1, -1, -1, -1, -1])[:, None]
         assert_allclose(gradient, true_gradient)
 
-        gradient_constraint = delaunay.gradient_constraint(test_points)
-        gradient = gradient_constraint.toarray().dot(vertex_values)
+        gradient_deriv = delaunay.gradient_parameter_derivative(test_points)
+        gradient = gradient_deriv.toarray().dot(vertex_values)
         assert_allclose(gradient.reshape(-1, 1), true_gradient)
 
 

@@ -122,7 +122,7 @@ class PolicyIteration(object):
         values = cvxpy.Variable(self.value_function.nindex)
         objective = cvxpy.Maximize(cvxpy.sum_entries(values))
 
-        value_matrix = self.value_function.evaluate_constraint(next_states)
+        value_matrix = self.value_function.parameter_derivative(next_states)
         # Make cvxpy work with sparse matrices
         value_matrix = cvxpy.Constant(value_matrix)
 
