@@ -981,9 +981,11 @@ class Triangulation(GridWorld, DeterministicFunction):
             The indeces of the simplices associated with each points
         """
         if points is None:
-            simplex_ids = indices
-        else:
+            simplex_ids = np.atleast_1d(indices)
+        elif indices is None:
             simplex_ids = self.find_simplex(points)
+        else:
+            raise TypeError('Need to provide at least one input argument.')
         simplices = self.simplices(simplex_ids)
 
         # Get hyperplane equations
@@ -1048,7 +1050,6 @@ class Triangulation(GridWorld, DeterministicFunction):
             `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
             to the true gradients
         """
-        points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points=points,
                                                         indices=indices)
 
