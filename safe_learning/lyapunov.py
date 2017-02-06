@@ -381,7 +381,7 @@ class LyapunovDiscrete(Lyapunov):
     def threshold(self):
         """Return the safety threshold for the Lyapunov condition."""
         lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
-        return lv * (1. + lf) * self.epsilon
+        return -lv * (1. + lf) * self.epsilon
 
     def v_decrease_confidence(self, dynamics, error_bounds=None):
         """

@@ -191,7 +191,7 @@ class LyapunovDiscreteTest(unittest.TestCase):
 
         lyap = LyapunovDiscrete(discretization, lyap_fun, dynamics, lf, lv,
                                 eps)
-        assert_allclose(lyap.threshold, lv * (1 + lf) * eps)
+        assert_allclose(lyap.threshold, -lv * (1 + lf) * eps)
 
         dynamics = np.array([[1, 2, 3]]).T
         a1, a2 = lyap.v_decrease_confidence(dynamics)
