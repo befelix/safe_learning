@@ -85,6 +85,7 @@ def lqr(a, b, q, r):
     p : np.array
         Cost to go matrix
     """
+    a, b, q, r = map(np.atleast_2d, (a, b, q, r))
     p = scipy.linalg.solve_continuous_are(a, b, q, r)
 
     # LQR gain
@@ -112,6 +113,7 @@ def dlqr(a, b, q, r):
     p : np.array
         Cost to go matrix
     """
+    a, b, q, r = map(np.atleast_2d, (a, b, q, r))
     p = scipy.linalg.solve_discrete_are(a, b, q, r)
 
     # LQR gain
