@@ -194,13 +194,13 @@ class LyapunovDiscreteTest(unittest.TestCase):
         assert_allclose(lyap.threshold, -lv * (1 + lf) * eps)
 
         dynamics = np.array([[1, 2, 3]]).T
-        a1, a2 = lyap.v_decrease_confidence(dynamics)
+        a1, a2 = lyap.v_decrease_confidence(None, dynamics)
         assert(a2 == 0)
         true_mean = np.zeros(3)
         true_error = lv * (np.arange(3) + 1)
         assert_allclose(a1, true_mean)
 
-        a1, a2 = lyap.v_decrease_confidence(dynamics, dynamics)
+        a1, a2 = lyap.v_decrease_confidence(None, dynamics, dynamics)
         assert_allclose(a1, true_mean)
         assert_allclose(a2, true_error)
 

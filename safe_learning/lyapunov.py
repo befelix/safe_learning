@@ -209,11 +209,13 @@ class Lyapunov(object):
         prediction = self.dynamics(self.discretization, policy)
 
         if self.uncertain_dynamics:
-            v_dot, v_dot_error = self.v_decrease_confidence(*prediction)
+            v_dot, v_dot_error = self.v_decrease_confidence(
+                self.discretization, *prediction)
             # Upper bound on V_dot
             v_dot_bound = v_dot + v_dot_error
         else:
-            v_dot_bound, _ = self.v_decrease_confidence(prediction)
+            v_dot_bound, _ = self.v_decrease_confidence(self.discretization,
+                                                        prediction)
 
         # Update the safe set
         v_dot_negative = v_dot_bound < self.threshold
@@ -383,13 +385,15 @@ class LyapunovDiscrete(Lyapunov):
         lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
         return -lv * (1. + lf) * self.epsilon
 
-    def v_decrease_confidence(self, dynamics, error_bounds=None):
+    def v_decrease_confidence(self, states, next_states, error_bounds=None):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
         Parameters
         ----------
-        dynamics : np.array
+        states : np.array
+            The states at which to start (could be equal to discretization).
+        next_states : np.array
             The dynamics evaluated at each point on the discretization.
         error_bounds : np.array
             Point-wise error error_bounds for the dynamics. Have to be strictly
@@ -402,7 +406,8 @@ class LyapunovDiscrete(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
-        dynamics = self.lyapunov_function(dynamics)[:, 0] - self.V
+        next_states = (self.lyapunov_function(next_states)[:, 0]
+                       - self.lyapunov_function(states)[:, 0])
 
         if error_bounds is None:
             bound = 0
@@ -410,7 +415,7 @@ class LyapunovDiscrete(Lyapunov):
             # Compute the error bound
             bound = self.lipschitz_lyapunov * np.sum(error_bounds, axis=1)
 
-        return dynamics, bound
+        return next_states, bound
 
 
 def optimize_discrete_lyapunov(lyapunov):

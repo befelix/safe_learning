@@ -18,10 +18,13 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     threshold = lyapunov.threshold
     # Lyapunov function
+    states = lyapunov.discretization
     mean, bound = lyapunov.dynamics(lyapunov.discretization, lyapunov.policy)
-    v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(mean, bound)
+    v_dot_mean, v_dot_bound = lyapunov.v_decrease_confidence(states,
+                                                             mean,
+                                                             bound)
     safe_set = lyapunov.safe_set
-    extent = [np.min(lyapunov.discretization), np.max(lyapunov.discretization)]
+    extent = [np.min(states), np.max(states)]
 
     # Create figure axes
     fig, axes = plt.subplots(2, 1, figsize=(10, 12))
@@ -64,7 +67,8 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     evaluated_true_dynamics = true_dynamics(lyapunov.discretization,
                                             lyapunov.policy,
                                             noise=False)
-    delta_v, _ = lyapunov.v_decrease_confidence(evaluated_true_dynamics)
+    delta_v, _ = lyapunov.v_decrease_confidence(states,
+                                                evaluated_true_dynamics)
     v_dot_true_plot = axes[1].plot(lyapunov.discretization.squeeze(),
                                    delta_v,
                                    color='k',
