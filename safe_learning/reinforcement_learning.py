@@ -167,8 +167,8 @@ class PolicyIteration(object):
             values[:, i] = self.get_future_values(action_array)
 
             if constraint is not None:
-                safe = constraint(action_array) >= 0
-                unsafe = np.logical_not(safe, out=safe)
+                # TODO: optimize safety if unsafe
+                unsafe = constraint(action_array) < 0
                 values[unsafe, i] = -np.inf
 
         # Select best action for policy
