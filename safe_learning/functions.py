@@ -346,8 +346,8 @@ class GPyGaussianProcess(UncertainFunction):
         mean_dx, var_dx = self.gaussian_process.predictive_gradients(points)
         mean_dx = mean_dx.squeeze(-1)
 
-        var = np.min(var, 1e-10)
-        std_dx = 0.5 / np.sqrt(var) * var_dx
+        var[var <= 1e-10] = 1e-10
+        std_dx = (0.5 / np.sqrt(var)) * var_dx
         t = len(self.gaussian_process.X)
         return mean_dx, self.beta(t) * std_dx
 
