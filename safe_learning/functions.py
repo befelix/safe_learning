@@ -1021,7 +1021,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points)
         # Return function values if desired
-        res = np.einsum('ijk,ikl->ilj', weights, self.parameters[simplices])
+        res = np.einsum('ijk,ikl->ilj', weights, self.parameters[simplices, :])
         if res.shape[1] == 1:
             res = res.squeeze(axis=1)
         return res
