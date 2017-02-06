@@ -171,9 +171,9 @@ class PolicyIterationTest(unittest.TestCase):
 
         def constraint(action):
             if np.all(action.base == 0):
-                return np.array([1, 1, 0, 0], dtype=np.bool)
+                return np.array([0.1, 0.5, -0.1, -0.2], dtype=np.float)
             else:
-                return np.ones(4, dtype=np.bool)
+                return np.ones(4, dtype=np.float)
 
         rl.update_policy(constraint=constraint)
         assert_allclose(rl.policy, np.array([[0, 0, 1, 1]], dtype=np.float).T)

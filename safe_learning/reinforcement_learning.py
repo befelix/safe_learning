@@ -150,8 +150,9 @@ class PolicyIteration(object):
         Parameters
         ----------
         constraint : callable
-            A function that can be called with a policy and returns whether
-            the safety constraint is fulfilled for those particular states.
+            A function that can be called with a policy. Returns the slack of
+            the safety constraint for each state. A policy is safe if the slack
+            is >=0 for all constraints.
         """
         # Initialize
         values = np.empty((len(self.state_space), len(self.action_space)),
@@ -166,7 +167,7 @@ class PolicyIteration(object):
             values[:, i] = self.get_future_values(action_array)
 
             if constraint is not None:
-                safe = constraint(action_array)
+                safe = constraint(action_array) >= 0
                 unsafe = np.logical_not(safe, out=safe)
                 values[unsafe, i] = -np.inf
 
