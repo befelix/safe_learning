@@ -231,8 +231,11 @@ class FunctionStack(UncertainFunction):
     def evaluate(self, *points):
         """Evaluation, see `UncertainFunction.evaluate`."""
         mean = np.empty((len(points), self.num_fun), dtype=np.float)
-        error = np.empty_like(mean)
-        error[:, self.deterministic] = 0.
+        if np.all(self.deterministic):
+            error = np.broadcast_to(0, (len(points), self.num_fun))
+        else:
+            error = np.empty_like(mean)
+            error[:, self.deterministic] = 0.
 
         for i, (fun, deterministic) in enumerate(
                 zip(self.functions, self.deterministic)):
@@ -247,7 +250,8 @@ class FunctionStack(UncertainFunction):
 
     def gradient(self, *points):
         """Gradient, see `UncertainFunction.gradient`."""
-        super(FunctionStack, self).gradient(*points)
+        for fun in self.functions:
+            yield fun.gradient(*points)
 
 
 def concatenate_inputs(start=0):
