@@ -148,7 +148,7 @@ class Lyapunov(object):
     def v_decrease_bound(self, states, next_states):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
-
+`
         Parameters
         ----------
         states : np.array
@@ -217,7 +217,10 @@ class Lyapunov(object):
         if bound is None:
             return 0
         else:
-            return bound[0]
+            # line search will get us close to unstable points, but the
+            # discretization is only valid up to the mid-point.
+            # TODO: This could be increased with a second line search
+            return np.max(self.V[self.V <= bound[0]])
 
     def safety_constraint(self, policy, include_initial=True):
         """Return the safe set for a given policy.
