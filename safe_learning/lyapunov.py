@@ -419,17 +419,3 @@ class LyapunovDiscrete(Lyapunov):
 
         return next_states, bound
 
-
-def optimize_discrete_lyapunov(lyapunov):
-    """Optimize a piecewise-linear discrete-time Lyapunov function.
-
-    Parameters
-    ----------
-    lyapunov : instance of LyapunovDiscrete
-        Assumes a piecewise linear function approximator.
-    """
-    # min x_i
-    # x_i >= 0
-    # l_v = max gradient
-    # for all discrete points:
-    #     V(mu_x) - V(x) + l_v * v_dot_error + l_v (1 + l_f) eps <= xi_i
