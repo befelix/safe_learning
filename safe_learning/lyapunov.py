@@ -2,6 +2,8 @@
 
 from __future__ import absolute_import, division, print_function
 
+from collections import Sequence
+
 import numpy as np
 
 from .functions import UncertainFunction
@@ -121,27 +123,52 @@ class Lyapunov(object):
         """Whether the system is continuous-time."""
         return isinstance(self, LyapunovContinuous)
 
-    def v_decrease_confidence(self, dynamics, error_bounds=None):
+    def v_decrease_confidence(self, states, next_states):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
         Parameters
         ----------
-        dynamics : np.array
-            The dynamics evaluated at each point on the discretization.
-        error_bounds : np.array, optional
-            Point-wise error error_bounds for the dynamics. If None, the error
-            is assumed to be zero.
+        states : np.array
+            The states at which to start (could be equal to discretization).
+        next_states : np.array
+            The dynamics evaluated at each point on the discretization. If
+            the dynamics are uncertain then next_states is a tuple with mean
+            and error bounds.
 
         Returns
         -------
         mean : np.array
             The expected decrease in V at each grid point.
         error_bounds : np.array
-            The error bounds for the decrease at each grid point. This is None
-            if the error_bound is None.
+            The error bounds for the decrease at each grid point.
         """
         raise NotImplementedError
+
+    def v_decrease_bound(self, states, next_states):
+        """
+        Compute confidence intervals for the decrease along Lyapunov function.
+
+        Parameters
+        ----------
+        states : np.array
+            The states at which to start (could be equal to discretization).
+        next_states : np.array or tuple
+            The dynamics evaluated at each point on the discretization. If
+            the dynamics are uncertain then next_states is a tuple with mean
+            and error bounds.
+
+        Returns
+        -------
+        upper_bound : np.array
+            The upper bound on the change in V at each grid point.
+        """
+        v_dot, v_dot_error = self.v_decrease_confidence(states, next_states)
+
+        v_dot_bound = v_dot
+        v_dot_bound += v_dot_error
+
+        return v_dot_bound
 
     @property
     def threshold(self):
@@ -209,15 +236,7 @@ class Lyapunov(object):
             fulfilled.
         """
         prediction = self.dynamics(self.discretization, policy)
-
-        if self.uncertain_dynamics:
-            v_dot, v_dot_error = self.v_decrease_confidence(
-                self.discretization, *prediction)
-            # Upper bound on V_dot
-            v_dot_bound = v_dot + v_dot_error
-        else:
-            v_dot_bound, _ = self.v_decrease_confidence(self.discretization,
-                                                        prediction)
+        v_dot_bound = self.v_decrease_bound(self.discretization, prediction)
 
         # Update the safe set
         v_dot_negative = v_dot_bound < self.threshold
@@ -308,16 +327,18 @@ class LyapunovContinuous(Lyapunov):
         return (dynamics_bound * lipschitz_lyapunov_derivative
                 + lipschitz_lyapunov * lipschitz_dynamics)
 
-    def v_decrease_confidence(self, dynamics, error_bounds=None):
+    def v_decrease_confidence(self, states, next_states):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
         Parameters
         ----------
-        dynamics : np.array
-            The dynamics evaluated at each point on the discretization.
-        error_bounds : np.array
-            Point-wise error error_bounds for the dynamics.
+        states : np.array
+            The states at which to start (could be equal to discretization).
+        next_states : np.array
+            The dynamics evaluated at each point on the discretization. If
+            the dynamics are uncertain then next_states is a tuple with mean
+            and error bounds.
 
         Returns
         -------
@@ -326,14 +347,18 @@ class LyapunovContinuous(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
+        dV = self.lyapunov_function.gradient(states)
+
+        if isinstance(next_states, Sequence):
+            next_states, error_bounds = next_states
+            error = np.sum(np.abs(dV) * error_bounds, axis=1)
+        else:
+            error = 0
+
         # V_dot_mean = dV * mu
         # V_dot_var = sum_i(|dV_i| * var_i)
-        mean = np.sum(self.dV * dynamics, axis=1)
+        mean = np.sum(dV * next_states, axis=1)
 
-        if error_bounds is None:
-            error = 0
-        else:
-            error = np.sum(np.abs(self.dV) * error_bounds, axis=1)
         return mean, error
 
 
@@ -387,7 +412,7 @@ class LyapunovDiscrete(Lyapunov):
         lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
         return -lv * (1. + lf) * self.epsilon
 
-    def v_decrease_confidence(self, states, next_states, error_bounds=None):
+    def v_decrease_confidence(self, states, next_states):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
 
@@ -396,10 +421,9 @@ class LyapunovDiscrete(Lyapunov):
         states : np.array
             The states at which to start (could be equal to discretization).
         next_states : np.array
-            The dynamics evaluated at each point on the discretization.
-        error_bounds : np.array
-            Point-wise error error_bounds for the dynamics. Have to be strictly
-            positive.
+            The dynamics evaluated at each point on the discretization. If
+            the dynamics are uncertain then next_states is a tuple with mean
+            and error bounds.
 
         Returns
         -------
@@ -408,14 +432,13 @@ class LyapunovDiscrete(Lyapunov):
         error_bounds : np.array
             The error bounds for the decrease at each grid point
         """
-        next_states = (self.lyapunov_function(next_states)[:, 0]
-                       - self.lyapunov_function(states)[:, 0])
-
-        if error_bounds is None:
-            bound = 0
-        else:
-            # Compute the error bound
+        if isinstance(next_states, Sequence):
+            next_states, error_bounds = next_states
             bound = self.lipschitz_lyapunov * np.sum(error_bounds, axis=1)
+        else:
+            bound = 0
 
-        return next_states, bound
+        v_decrease = (self.lyapunov_function(next_states)[:, 0]
+                      - self.lyapunov_function(states)[:, 0])
 
+        return v_decrease, bound

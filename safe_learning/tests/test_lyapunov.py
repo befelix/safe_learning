@@ -104,7 +104,7 @@ class LyapunovTest(TestCase):
         """Test the update step."""
         acc = 0.1
         threshold.return_value = -0.15
-        decrease_confidence.return_value = np.array([-0.5, -0.2, 0, -1]), None
+        decrease_confidence.return_value = np.array([-0.5, -0.2, 0, -1]), 0
 
         self.lyap.update_safe_set(acc)
 
@@ -159,12 +159,13 @@ class LyapunovContinuousTest(unittest.TestCase):
         assert_allclose(lyap.threshold, -l * eps)
 
         dynamics = np.array([[1, 2, 3]]).T
-        a1, a2 = lyap.v_decrease_confidence(dynamics)
+        a1, a2 = lyap.v_decrease_confidence(lyap.discretization, dynamics)
         assert(a2 == 0)
         true_mean = true_error = 0.5 * dynamics.squeeze()
         assert_allclose(a1, true_mean)
 
-        a1, a2 = lyap.v_decrease_confidence(dynamics, dynamics)
+        a1, a2 = lyap.v_decrease_confidence(lyap.discretization,
+                                            (dynamics, dynamics))
         assert_allclose(a1, true_mean)
         assert_allclose(a2, true_error)
 
@@ -200,7 +201,7 @@ class LyapunovDiscreteTest(unittest.TestCase):
         true_error = lv * (np.arange(3) + 1)
         assert_allclose(a1, true_mean)
 
-        a1, a2 = lyap.v_decrease_confidence(None, dynamics, dynamics)
+        a1, a2 = lyap.v_decrease_confidence(None, (dynamics, dynamics))
         assert_allclose(a1, true_mean)
         assert_allclose(a2, true_error)
 
