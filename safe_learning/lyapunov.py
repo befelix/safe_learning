@@ -192,13 +192,15 @@ class Lyapunov(object):
         else:
             return bound[0]
 
-    def safety_constraint(self, policy):
+    def safety_constraint(self, policy, include_initial=True):
         """Return the safe set for a given policy.
 
         Parameters
         ----------
         policy : ndarray
             The policy used at each discretization point.
+        include_initial : bool, optional
+            Whether to include the initial safe set.
 
         Returns
         -------
@@ -221,7 +223,7 @@ class Lyapunov(object):
         v_dot_negative = v_dot_bound < self.threshold
 
         # Make sure initial safe set is included
-        if self.initial_safe_set is not None:
+        if include_initial and self.initial_safe_set is not None:
             v_dot_negative |= self.initial_safe_set
 
         return v_dot_negative
