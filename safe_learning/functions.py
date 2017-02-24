@@ -210,50 +210,6 @@ class DeterministicFunction(Function):
                                   'not implemented.')
 
 
-class FunctionStack(UncertainFunction):
-    """A combination of multiple 1d (uncertain) functions for each dim.
-
-    Parameters
-    ----------
-    functions : list
-        The functions. There should be one for each dimension of the output.
-    """
-
-    def __init__(self, *functions):
-        """Initialization, see `FunctionStack`."""
-        super(FunctionStack, self).__init__()
-        self.functions = functions
-        self.deterministic = [isinstance(fun, DeterministicFunction)
-                              for fun in functions]
-        self.deterministic = np.array(self.deterministic)
-        self.num_fun = len(self.functions)
-
-    def evaluate(self, *points):
-        """Evaluation, see `UncertainFunction.evaluate`."""
-        mean = np.empty((len(points), self.num_fun), dtype=np.float)
-        if np.all(self.deterministic):
-            error = np.broadcast_to(0, (len(points), self.num_fun))
-        else:
-            error = np.empty_like(mean)
-            error[:, self.deterministic] = 0.
-
-        for i, (fun, deterministic) in enumerate(
-                zip(self.functions, self.deterministic)):
-            prediction = fun.evaluate(*points)
-            if deterministic:
-                mean[:, i] = prediction.squeeze()
-            else:
-                mean[:, i] = prediction[0].squeeze()
-                error[:, i] = prediction[1].squeeze()
-
-        return mean, error
-
-    def gradient(self, *points):
-        """Gradient, see `UncertainFunction.gradient`."""
-        for fun in self.functions:
-            yield fun.gradient(*points)
-
-
 def concatenate_inputs(start=0):
     """Concatenate the numpy array inputs to the functions.
 
@@ -278,6 +234,51 @@ def concatenate_inputs(start=0):
         return wrapped_function
 
     return wrap
+
+
+class FunctionStack(UncertainFunction):
+    """A combination of multiple 1d (uncertain) functions for each dim.
+
+    Parameters
+    ----------
+    functions : list
+        The functions. There should be one for each dimension of the output.
+    """
+
+    def __init__(self, *functions):
+        """Initialization, see `FunctionStack`."""
+        super(FunctionStack, self).__init__()
+        self.functions = functions
+        self.deterministic = [isinstance(fun, DeterministicFunction)
+                              for fun in functions]
+        self.deterministic = np.array(self.deterministic)
+        self.num_fun = len(self.functions)
+
+    @concatenate_inputs(start=1)
+    def evaluate(self, points):
+        """Evaluation, see `UncertainFunction.evaluate`."""
+        mean = np.empty((len(points), self.num_fun), dtype=np.float)
+        if np.all(self.deterministic):
+            error = np.broadcast_to(0, (len(points), self.num_fun))
+        else:
+            error = np.empty_like(mean)
+            error[:, self.deterministic] = 0.
+
+        for i, (fun, deterministic) in enumerate(
+                zip(self.functions, self.deterministic)):
+            prediction = fun.evaluate(points)
+            if deterministic:
+                mean[:, i] = prediction.squeeze()
+            else:
+                mean[:, i] = prediction[0].squeeze()
+                error[:, i] = prediction[1].squeeze()
+
+        return mean, error
+
+    def gradient(self, *points):
+        """Gradient, see `UncertainFunction.gradient`."""
+        for fun in self.functions:
+            yield fun.gradient(*points)
 
 
 class GPyGaussianProcess(UncertainFunction):
