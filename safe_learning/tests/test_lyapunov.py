@@ -76,6 +76,7 @@ class LyapunovTest(TestCase):
         """Test the function to compute the maximum levelset."""
         accuracy = 0.1
         interval = [0, -0.3]
+        lsb.return_value = [0., 0.1]
         self.lyap.max_safe_levelset(0.1, interval)
         lsb.assert_called_with(self.lyap._levelset_is_safe,
                                interval, accuracy)
@@ -95,7 +96,7 @@ class LyapunovTest(TestCase):
 
         s = self.lyap.max_safe_levelset(0.01)
         assert(s < 1.)
-        assert(s >= 0.99)
+        assert(s >= np.max(self.lyap.V[self.lyap.v_dot_negative]))
 
     @mock.patch('safe_learning.lyapunov.Lyapunov.threshold',
                 new_callable=mock.PropertyMock)
@@ -109,7 +110,7 @@ class LyapunovTest(TestCase):
         self.lyap.update_safe_set(acc)
 
         assert(self.lyap.cmax < 2)
-        assert(self.lyap.cmax > 1.9)
+        assert(self.lyap.cmax >= np.max(self.lyap.V[:2]))
 
         assert_equal(self.lyap.safe_set, np.array([True, True, False, False]))
         assert_equal(self.lyap.v_dot_negative,

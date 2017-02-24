@@ -148,7 +148,7 @@ class Lyapunov(object):
     def v_decrease_bound(self, states, next_states):
         """
         Compute confidence intervals for the decrease along Lyapunov function.
-`
+
         Parameters
         ----------
         states : np.array
