@@ -21,8 +21,8 @@ from .utilities import linearly_spaced_combinations
 
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction','GaussianProcess', 'GPyGaussianProcess', 'GPR_cached',
-           'GPflowGaussianProcess','sample_gp_function']
+           'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
+           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
 
 
 _EPS = np.finfo(np.float).eps
@@ -319,7 +319,7 @@ def concatenate_inputs(start=0):
 
 
 class GaussianProcess(UncertainFunction):
-    """ An 'UncertainFunction' for GPy or GPflow gaussian process
+    """An 'UncertainFunction' for GPy or GPflow gaussian process.
 
     Parameters
     ----------
@@ -329,7 +329,9 @@ class GaussianProcess(UncertainFunction):
         The scaling factor for the standard deviation to create confidence
         intervals.
     """
+
     def __init__(self, gaussian_process, beta=2):
+        """Initialize GuassianProcess with either GPflow or GPy gp."""
         super(GaussianProcess).__init__()
         self.n_dim = gaussian_process.X.shape[-1]
         self.gaussian_process = gaussian_process
@@ -341,11 +343,14 @@ class GaussianProcess(UncertainFunction):
 
     @property
     def X(self):
+        """Input location of observed data. One observation per row."""
         return self.gaussian_process.X
 
     @property
     def Y(self):
+        """Observed output. One observation per row."""
         return self.gaussian_process.Y
+
 
 class GPyGaussianProcess(GaussianProcess):
     """A `GaussianProcess` for GPy Gaussian processes.
@@ -430,41 +435,46 @@ class GPyGaussianProcess(GaussianProcess):
         y_new = np.vstack((self.Y, y))
         self.gaussian_process.set_XY(x_new, y_new)
 
+
 if GPflow is not None:
     class GPR_cached(GPflow.gpr.GPR):
-        """GPflow.gpr.GPR class that stores cholesky decomposition
+        """GPflow.gpr.GPR class that stores cholesky decomposition.
 
         Parameters
         ----------
         x : ndarray
-            A 2d array with states to initialize the GP model. Each state is on a row.
+            A 2d array with states to initialize the GP model. Each state is on
+            a row.
         y : ndarray
-            A 2d array with measurements to initialize the GP model. Each mesurement is on a row.
+            A 2d array with measurements to initialize the GP model. Each
+            measurement is on a row.
 
         """
 
         def __init__(self, x, y, kern):
-            """Initialize GP and cholesky decomposition"""
+            """Initialize GP and cholesky decomposition."""
             # super(GPR_cached, self).__init__(self, x, y, kern)
             GPflow.gpr.GPR.__init__(self, x, y, kern)
             self.L, self.V = self.update_cholesky()
 
         def add_data_point(self, x, y):
-            """Adds a data point and updates the cholesky decomposition"""
+            """Add a data point and updates the cholesky decomposition."""
             self.X = np.vstack((self.X.value, np.atleast_2d(x)))
             self.Y = np.vstack((self.Y.value, np.atleast_2d(y)))
             self.L, self.V = self.update_cholesky()
 
         @AutoFlow()
         def update_cholesky(self):
-            """Returns the cholesky decomposition for the observed points of the GP"""
-            K = self.kern.K(self.X) + eye(tf.shape(self.X)[0]) * self.likelihood.variance
+            """Return the cholesky decomposition for the observed points."""
+            K = self.kern.K(self.X) + eye(tf.shape(self.X)[0]) * \
+                self.likelihood.variance
             L = tf.cholesky(K)
-            V = tf.matrix_triangular_solve(L, self.Y - self.mean_function(self.X))
+            V = tf.matrix_triangular_solve(L, self.Y - self.mean_function(
+                self.X))
             return L, V
 
         def build_predict(self, Xnew, full_cov=False):
-            """Predicts mean and variance of the GP at locations in Xnew
+            """Predict mean and variance of the GP at locations in Xnew.
 
             Parameters
             ----------
@@ -484,63 +494,73 @@ if GPflow is not None:
             """
             Kx = self.kern.K(self.X, Xnew)
             A = tf.matrix_triangular_solve(self.L, Kx, lower=True)
-            fmean = tf.matmul(tf.transpose(A), self.V) + self.mean_function(Xnew)
+            fmean = tf.matmul(tf.transpose(A), self.V) + self.mean_function(
+                Xnew)
             if full_cov:
                 fvar = self.kern.K(Xnew) - tf.matmul(tf.transpose(A), A)
                 shape = tf.stack([1, 1, tf.shape(self.Y)[1]])
                 fvar = tf.tile(tf.expand_dims(fvar, 2), shape)
             else:
                 fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
-                fvar = tf.tile(tf.reshape(fvar, (-1, 1)), [1, tf.shape(self.Y)[1]])
+                fvar = tf.tile(tf.reshape(fvar, (-1, 1)), [1, tf.shape(
+                    self.Y)[1]])
             return fmean, fvar
 
         @AutoFlow((tf.float64, [None, None]))
         def GP_flow_predictive_gradients(self, Xnew):
-            """Computes the gradient of mean and variance of the posterior at Xnew in tf
-            TO DO: Use graph from build predict and add gradients on top"""
+            """Compute the gradient of mean and variance of the posterior in tf.
+
+            TO DO: Use graph from build predict and add gradients on top
+            """
             Kx = self.kern.K(self.X, Xnew)
             A = tf.matrix_triangular_solve(self.L, Kx, lower=True)
-            fmean = tf.matmul(tf.transpose(A), self.V) + self.mean_function(Xnew)
+            fmean = tf.matmul(tf.transpose(A), self.V) + self.mean_function(
+                Xnew)
 
             fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
             fvar = tf.tile(tf.reshape(fvar, (-1, 1)), [1, tf.shape(self.Y)[1]])
             return tf.gradients(fmean, Xnew), tf.gradients(fvar, Xnew)
 
         def predictive_gradients(self, Xnew):
-            """Makes the output of GPflow_predicitve_gradients look like the output of GPy_predictive_gradients
-            TO DO: make this function a decorator for previous function"""
+            """Wrap for same output format as GPy_GaussianProcess.
+
+            TO DO: make this function a decorator for previous function
+            """
             m_x, v_x = self.GP_flow_predictive_gradients(Xnew)
             m_x = np.expand_dims(np.array(m_x).squeeze(), axis=-1)
             v_x = np.array(v_x).squeeze()
             return m_x, v_x
 
-
     class GPflowGaussianProcess(GaussianProcess):
         """A `GaussianProcess` for GPflow Gaussian processes.
 
-            Parameters
-            ----------
-            gaussian_process : instance of GPy.core.GP
-                The Gaussian process model.
-            beta : float
-                The scaling factor for the standard deviation to create confidence
-                intervals.
+        Parameters
+        ----------
+        gaussian_process : instance of GPy.core.GP
+            The Gaussian process model.
+        beta : float
+            The scaling factor for the standard deviation to create
+            confidence intervals.
 
-            Notes
-            -----
-            The evaluate and gradient functions can be called with multiple arguments,
-            in which case they are concatenated before being passed to the GP.
-            """
+        Notes
+        -----
+        The evaluate and gradient functions can be called with multiple
+        arguments, in which case they are concatenated before being
+        passed to the GP.
+        """
+
         def __init__(self, gaussian_process, beta=2.):
-            """Initialization"""
+            """Initialization."""
             super(GPflowGaussianProcess, self).__init__(gaussian_process, beta)
 
         @property
         def X(self):
+            """Input location of observed data. One observation per row."""
             return self.gaussian_process.X.value
 
         @property
         def Y(self):
+            """Observed output. One observation per row."""
             return self.gaussian_process.Y.value
 
         @concatenate_inputs(start=1)
@@ -571,21 +591,22 @@ if GPflow is not None:
         def gradient(self, points):
             """Return the distribution over the gradient.
 
-                    Parameters
-                    ----------
-                    points : ndarray
-                        The points at which to evaluate the function. One row for each
-                        data points.
+            Parameters
+            ----------
+            points : ndarray
+                The points at which to evaluate the function. One row
+                for each data point.
 
-                    Returns
-                    -------
-                    mean : ndarray
-                        The expected function gradient at the points.
-                    var : ndarray
-                        Error bounds for each dimension of the estimate.
-                    """
+            Returns
+            -------
+            mean : ndarray
+                The expected function gradient at the points.
+            var : ndarray
+                Error bounds for each dimension of the estimate.
+            """
             _, var = self.gaussian_process.predict_f(points)
-            mean_dx, var_dx = self.gaussian_process.predictive_gradients(points)
+            mean_dx, var_dx = self.gaussian_process.predictive_gradients(
+                points)
             mean_dx = np.array(mean_dx).squeeze(-1)
             var = np.array(var)
 
@@ -603,12 +624,13 @@ if GPflow is not None:
                 A 2d array with the new states to add to the GP model. Each new
                 state is on a new row.
             y : ndarray
-                A 2d array with the new measurements to add to the GP model. Each
-                measurements is on a new row.
+                A 2d array with the new measurements to add to the GP model.
+                Each measurements is on a new row.
             """
             self.gaussian_process.add_data_point(x, y)
 else:
     raise ImportError('This function requires tensorflow and GPflow modules')
+
 
 class ScipyDelaunay(spatial.Delaunay):
     """

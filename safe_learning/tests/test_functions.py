@@ -129,10 +129,10 @@ class GPyTest(unittest.TestCase):
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
 class GPR_cached_test(TestCase):
-    """Test the GPR_cached class"""
+    """Test the GPR_cached class."""
 
     def setUp(self):
-        """Create cached and uncached GPflow models and GPy model"""
+        """Create cached and uncached GPflow models and GPy model."""
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
@@ -149,20 +149,22 @@ class GPR_cached_test(TestCase):
         self.test_points = np.array([[0.9, 0.1], [3., 2]])
 
     def test_predict_f(self):
-        """Make sure predictions is same as in uncached case"""
+        """Make sure predictions is same as in uncached case."""
         a1, b1 = self.gp_cached.predict_f(self.test_points)
         a2, b2 = self.gp.predict_f(self.test_points)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
     def test_cholesky(self):
+        """Test cholesky decomposition."""
         pass
 
     def test_new_data(self):
+        """Test update of data."""
         pass
 
     def test_predictive_gradients(self):
-        """Test for derivative of mean and variance against GPy"""
+        """Test for derivative of mean and variance against GPy."""
         m_x, v_x = self.gp_cached.predictive_gradients(self.test_points)
         m_x_GPy, v_x_GPy = self.gp_GPy.predictive_gradients(self.test_points)
 
@@ -172,10 +174,10 @@ class GPR_cached_test(TestCase):
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
 class GPflowTest(TestCase):
-    """Test the GPflowGaussianProcess function class"""
+    """Test the GPflowGaussianProcess function class."""
 
     def setUp(self):
-        """Create GP model with GPflow and GPy"""
+        """Create GP model with GPflow and GPy."""
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
@@ -195,7 +197,7 @@ class GPflowTest(TestCase):
         self.test_points = np.array([[0.9, 0.1], [3., 2]])
 
     def test_evaluation(self):
-        """Make sure evaluation works"""
+        """Make sure evaluation works."""
         a1, b1 = self.ufun.evaluate(self.test_points)
         a2, b2 = self.gp.predict_f(self.test_points)
         b2 = self.beta * np.sqrt(b2)
@@ -209,14 +211,14 @@ class GPflowTest(TestCase):
         assert_allclose(b1, b2)
 
     def test_evaluation_against_GPy(self):
-        """Make sure evaluations is same as in GPy case"""
+        """Make sure evaluations is same as in GPy case."""
         a1, b1 = self.ufun.evaluate(self.test_points)
         a2, b2 = self.ufun_GPy.evaluate(self.test_points)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
     def test_gradient_against_GPy(self):
-        """Make sure gradient is same as in GPy case"""
+        """Make sure gradient is same as in GPy case."""
         a1, b1 = self.ufun.gradient(self.test_points)
         a2, b2 = self.ufun_GPy.gradient(self.test_points)
         assert_allclose(a1 - a2, 0, atol=1e-7)
