@@ -11,7 +11,6 @@ from scipy.optimize import check_grad
 from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, GPyGaussianProcess,
-                                     GPR_cached, GPflowGaussianProcess,
                                      QuadraticFunction, DimensionError)
 
 try:
@@ -24,9 +23,12 @@ try:
     import tensorflow as tf
     from GPflow.param import AutoFlow
     from GPflow.tf_wraps import eye
+    from safe_learning import (GPR_cached, GPflowGaussianProcess)
 except ImportError:
     GPflow = None
     tf = None
+    GPR_cached = None
+    GPflowGaussianProcess = None
 
 
 class DeterministicFuctionTest(unittest.TestCase):
