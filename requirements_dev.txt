@@ -1,0 +1,6 @@
+mock
+flake8
+coverage
+nose
+pydocstyle
+
