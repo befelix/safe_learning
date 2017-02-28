@@ -6,7 +6,12 @@ python:
 notifications:
   email: true 
 cache:
-  - pip
+  - pip-
+
+addons:
+  apt:
+    sources:
+      - libstdc++-4.9-dev
 
 # Setup anaconda
 before_install:
