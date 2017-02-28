@@ -5,6 +5,8 @@ python:
   - 3.5
 notifications:
   email: true 
+cache:
+  - pip
 
 # Setup anaconda
 before_install:
@@ -25,6 +27,7 @@ install:
   - conda install python=$TRAVIS_PYTHON_VERSION mock flake8 coverage numpy scipy scikit-learn matplotlib nose
   - pip install pydocstyle
   - pip install GPy
+  - pip install tensorflow
 
 # Run tests
 script:
