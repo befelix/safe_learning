@@ -4,6 +4,11 @@ from __future__ import absolute_import, print_function, division
 
 import numpy as np
 
+__all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
+           'GridWorld', 'UncertainFunction', 'FunctionStack',
+           'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
+           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
+
 try:
     import GPflow
     import tensorflow as tf
@@ -17,13 +22,6 @@ from scipy import spatial, sparse, interpolate, linalg
 from sklearn.utils.extmath import cartesian
 
 from .utilities import linearly_spaced_combinations
-
-
-__all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
-           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
-
 
 _EPS = np.finfo(np.float).eps
 
@@ -581,8 +579,6 @@ if GPflow is not None:
                 Error bounds for each dimension of the estimate.
             """
             mean, var = self.gaussian_process.predict_f(points)
-            mean = np.array(mean)
-            var = np.array(var)
 
             t = self.gaussian_process.X.shape[0]
             return mean, self.beta(t) * np.sqrt(var)
@@ -629,7 +625,21 @@ if GPflow is not None:
             """
             self.gaussian_process.add_data_point(x, y)
 else:
-    raise ImportError('This function requires tensorflow and GPflow modules')
+    class GPR_cached(object):
+        """Fake class when tf and GPflow are not available."""
+
+        def __init__(self, x, y, kern):
+            """Raise import error when initializing without GPflow."""
+            raise ImportError('This function requires tensorflow and GPflow '
+                              'modules')
+
+    class GPflowGaussianProcess(object):
+        """Fake class when tf and GPflow are not available."""
+
+        def __init__(self, gp):
+            """Raise import error when initializing without GPflow."""
+            raise ImportError('This function requires tensorflow and GPflow '
+                              'modules')
 
 
 class ScipyDelaunay(spatial.Delaunay):

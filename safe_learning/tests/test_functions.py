@@ -11,7 +11,8 @@ from scipy.optimize import check_grad
 from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, GPyGaussianProcess,
-                                     QuadraticFunction, DimensionError)
+                                     QuadraticFunction, DimensionError,
+                                     GPR_cached, GPflowGaussianProcess)
 
 try:
     import GPy
@@ -23,12 +24,10 @@ try:
     import tensorflow as tf
     from GPflow.param import AutoFlow
     from GPflow.tf_wraps import eye
-    from safe_learning import (GPR_cached, GPflowGaussianProcess)
 except ImportError:
     GPflow = None
     tf = None
-    GPR_cached = None
-    GPflowGaussianProcess = None
+
 
 
 class DeterministicFuctionTest(unittest.TestCase):
@@ -127,6 +126,19 @@ class GPyTest(unittest.TestCase):
                                         [0, 1],
                                         [1.2, 2.3]]))
         assert_allclose(gp.Y, np.array([[0], [1], [2.4]]))
+
+
+@unittest.skipIf(tf is not None, 'GPflow is installed')
+class NoTensorflowTest(TestCase):
+    """Test in case tf is not installed."""
+
+    def GPR_cached_test(self):
+        """Check import error."""
+        assert_raises(ImportError, GPR_cached, None)
+
+    def GPflow_test(self):
+        """Check import error."""
+        assert_raises(ImportError, GPflowGaussianProcess, None)
 
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
