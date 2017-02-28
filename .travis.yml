@@ -24,10 +24,9 @@ before_install:
 
 # Install packages
 install:
-  - conda install python=$TRAVIS_PYTHON_VERSION mock flake8 coverage numpy scipy scikit-learn matplotlib nose
-  - pip install pydocstyle
-  - pip install GPy
-  - pip install tensorflow
+  - conda install -q python=$TRAVIS_PYTHON_VERSION numpy scipy scikit-learn
+  - pip install -r requirements.txt --quiet
+  - pip install -r requirements_dev.txt --quiet
 
 # Run tests
 script:
