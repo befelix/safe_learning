@@ -134,11 +134,11 @@ class NoTensorflowTest(TestCase):
 
     def GPR_cached_test(self):
         """Check import error."""
-        assert_raises(ImportError, GPR_cached, None)
+        assert_raises(ImportError, GPR_cached, [], [], [])
 
     def GPflow_test(self):
         """Check import error."""
-        assert_raises(ImportError, GPflowGaussianProcess, None)
+        assert_raises(ImportError, GPflowGaussianProcess, [])
 
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
