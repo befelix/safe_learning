@@ -1,45 +1,28 @@
 language: python
-sudo: false
-python:
-  - 2.7
-  - 3.5
-notifications:
-  email: true 
-cache:
-  - pip-
+ssudo: required
 
-addons:
-  apt:
-    sources:
-      - libstdc++-4.9-dev
+services:
+  - docker
+
 
 # Setup anaconda
 before_install:
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
-    else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    fi
-  - bash miniconda.sh -b -p ~/miniconda
-  - export PATH=~/miniconda/bin:$PATH
-  - hash -r
-  - conda config --set always_yes yes
-  - conda update -q conda
-  - conda info -a
+  - docker build -f Dockerfile.python2 -t py2 .
+  - docker ps -a
 
 # Install packages
-install:
-  - conda install -q python=$TRAVIS_PYTHON_VERSION numpy scipy scikit-learn
-  - pip install -r requirements.txt --quiet
-  - pip install -r requirements_dev.txt --quiet
-  - git clone git@github.com:GPflow/GPflow.git
-  - cd GPflow
-  - python setup.py install
+#install:
+#  - conda install -q python=$TRAVIS_PYTHON_VERSION numpy scipy scikit-learn
+#  - pip install -r requirements.txt --quiet
+#  - pip install -r requirements_dev.txt --quiet
+#  - git clone git@github.com:GPflow/GPflow.git
+#  - cd GPflow
+#  - python setup.py install
 
 # Run tests
 script:
-  - flake8 safe_learning --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
-  - flake8 safe_learning --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
-  - nosetests --with-doctest --nocapture --with-coverage --cover-min-percentage=80 --cover-erase --cover-package=safe_learning safe_learning
-  - pydocstyle safe_learning --match='(?!__init__).*\.py'
+  - docker run py2 flake8 safe_learning --exclude "test*.py,__init__.py" --ignore=E402,W503 --show-source
+  - docker run py2 flake8 safe_learning --filename="__init__.py,test*.py" --ignore=F,E402,W503 --show-source
+  - docker run py2 nosetests --with-doctest --nocapture --with-coverage --cover-min-percentage=80 --cover-erase --cover-package=safe_learning safe_learning
+  - docker run py2 pydocstyle safe_learning --match='(?!__init__).*\.py'
 

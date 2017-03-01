@@ -1,0 +1,4 @@
+examples
+htmlcov
+.travis.yml
+.gitignore

@@ -1,0 +1,24 @@
+FROM continuumio/miniconda
+
+RUN apt-get update && apt-get install -y build-essential
+# Make sure anaconda is up to date
+RUN conda update conda --quiet --yes
+RUN conda install python=2.7 numpy scipy scikit-learn pandas
+RUN conda clean --yes --all
+
+# Get the requirements files (seperate from the main body)
+COPY requirements.txt requirements_dev.txt /code/
+
+RUN pip install -r code/requirements.txt
+RUN pip install -r code/requirements_dev.txt
+
+# Get GPflow
+#ADD git@github.com:GPflow/GPflow.git /GPflow
+
+RUN git clone --depth=1 https://github.com/GPflow/GPflow.git
+RUN cd GPflow && python setup.py install
+RUN rm -rf /GPflow /root/.cache
+
+COPY . /code
+WORKDIR /code
+#CMD ["/bin/bash"]

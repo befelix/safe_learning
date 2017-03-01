@@ -4,5 +4,4 @@ scikit-learn
 matplotlib
 cvxpy
 GPy
-tensorflow
-
+tensorflow==0.12.1
