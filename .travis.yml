@@ -6,7 +6,8 @@ services:
 
 
 # Setup anaconda
-before_install:
+install:
+  - docker pull befelix/lyapunov-learning-private:latest || true
   - docker build -f Dockerfile.python2 -t py2 .
   - docker ps -a
 
