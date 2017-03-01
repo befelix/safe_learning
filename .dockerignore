@@ -2,3 +2,4 @@ examples
 htmlcov
 .travis.yml
 .gitignore
+.git
