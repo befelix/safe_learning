@@ -7,8 +7,8 @@ RUN apt-get update \
   && rm -rf /var/cache/apt/archives
 
 # Update conda, install packages, and clean up
-RUN conda update conda \
-  && conda install python=2.7 numpy scipy scikit-learn pandas \
+RUN conda update conda --yes --quiet \
+  && conda install python=2.7 numpy scipy scikit-learn pandas --yes --quiet \
   && conda clean --yes --all
 
 # Get the requirements files (seperate from the main body)

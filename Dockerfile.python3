@@ -1,1 +1,34 @@
-FROM continuumio/miniconda
+FROM continuumio/miniconda3
+
+# Install build essentials and clean up
+RUN apt-get update \
+  && apt-get install -y build-essential \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /var/cache/apt/archives
+
+# Update conda, install packages, and clean up
+RUN conda update conda --yes --quiet \
+  && conda install python=3.5 numpy scipy scikit-learn pandas --yes --quiet \
+  && conda clean --yes --all
+
+# Get the requirements files (seperate from the main body)
+COPY requirements.txt requirements_dev.txt /code/
+
+# Install requirements and clean up
+RUN pip install -r code/requirements.txt \
+    && rm -rf /root/.cache
+
+# Install dev requirements and clean up
+RUN pip install -r code/requirements_dev.txt \
+  && rm -rf /root/.cache
+
+# Manually install GPflow and clean up
+RUN git clone --depth=1 https://github.com/GPflow/GPflow.git \
+  && cd GPflow \
+  && python setup.py install \
+  && rm -rf /GPflow
+
+# Copy the main code
+COPY . /code
+
+WORKDIR /code
