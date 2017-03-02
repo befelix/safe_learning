@@ -129,7 +129,7 @@ class GPyTest(unittest.TestCase):
 
 
 @unittest.skipIf(tf is not None, 'GPflow is installed')
-class NoTensorflowTest(TestCase):
+class NoTensorflowTest(unittest.TestCase):
     """Test in case tf is not installed."""
 
     def GPR_cached_test(self):
@@ -142,7 +142,7 @@ class NoTensorflowTest(TestCase):
 
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
-class GPR_cached_test(TestCase):
+class GPR_cached_test(unittest.TestCase):
     """Test the GPR_cached class."""
 
     def setUp(self):
@@ -187,7 +187,7 @@ class GPR_cached_test(TestCase):
 
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
-class GPflowTest(TestCase):
+class GPflowTest(unittest.TestCase):
     """Test the GPflowGaussianProcess function class."""
 
     def setUp(self):
