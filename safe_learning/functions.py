@@ -352,6 +352,7 @@ class GaussianProcess(UncertainFunction):
 
 class GPyGaussianProcess(GaussianProcess):
     """A `GaussianProcess` for GPy Gaussian processes.
+
     Parameters
     ----------
     gaussian_process : instance of GPy.core.GP
