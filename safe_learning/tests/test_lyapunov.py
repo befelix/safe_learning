@@ -2,7 +2,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-from numpy.testing import *
+from numpy.testing import assert_allclose, assert_raises, assert_equal
 import unittest
 import numpy as np
 import sys
@@ -17,7 +17,7 @@ else:
     from unittest import mock
 
 
-class LineSearchTest(TestCase):
+class LineSearchTest(unittest.TestCase):
     """Test the line search."""
 
     def setUp(self):
@@ -41,7 +41,7 @@ class LineSearchTest(TestCase):
         assert_equal(x[0], x[1])
 
 
-class LyapunovTest(TestCase):
+class LyapunovTest(unittest.TestCase):
     """Test the Lyapunov base class."""
 
     def setUp(self):

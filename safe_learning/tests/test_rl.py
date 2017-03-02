@@ -2,7 +2,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-from numpy.testing import *
+from numpy.testing import assert_allclose
 import unittest
 import sys
 import numpy as np

@@ -3,4 +3,5 @@
 .ipynb_checkpoints
 htmlcov
 .coverage
-
+.cache
+safe_learning.egg-info

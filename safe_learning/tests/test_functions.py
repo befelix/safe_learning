@@ -2,7 +2,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-from numpy.testing import *
+from numpy.testing import assert_raises, assert_equal, assert_allclose
 import unittest
 import numpy as np
 from scipy.optimize import check_grad
@@ -18,7 +18,7 @@ except ImportError:
     GPy = None
 
 
-class DeterministicFuctionTest(TestCase):
+class DeterministicFuctionTest(unittest.TestCase):
     """Test the base class."""
 
     def test_errors(self):
@@ -40,7 +40,7 @@ class DeterministicFuctionTest(TestCase):
         assert_equal(c.gradient(5), test(5))
 
 
-class UncertainFunctionTest(TestCase):
+class UncertainFunctionTest(unittest.TestCase):
     """Test the base class."""
 
     def test_errors(self):
@@ -60,7 +60,7 @@ class UncertainFunctionTest(TestCase):
 
 
 @unittest.skipIf(GPy is None, 'GPy module not installed.')
-class GPyTest(TestCase):
+class GPyTest(unittest.TestCase):
     """Test the GPY GP function class."""
 
     def setUp(self):
@@ -145,7 +145,7 @@ class QuadraticFunctionTest(unittest.TestCase):
         assert_allclose(fval, true_fval)
 
 
-class ScipyDelaunayTest(TestCase):
+class ScipyDelaunayTest(unittest.TestCase):
     """Test the fake replacement for Scipy."""
 
     def test_init(self):
@@ -160,7 +160,7 @@ class ScipyDelaunayTest(TestCase):
         sp_delaunay.find_simplex(np.array([[0, 0]]))
 
 
-class GridworldTest(TestCase):
+class GridworldTest(unittest.TestCase):
     """Test the general GridWorld definitions."""
 
     def test_dimensions_error(self):
@@ -232,7 +232,7 @@ class GridworldTest(TestCase):
         assert_allclose(grid.rectangle_to_state(res), res[:, None] * 0.5)
 
 
-class PiecewiseConstantTest(TestCase):
+class PiecewiseConstantTest(unittest.TestCase):
     """Test a piecewise constant function."""
 
     def test_init(self):
@@ -274,7 +274,7 @@ class PiecewiseConstantTest(TestCase):
         assert_allclose(gradient, 0)
 
 
-class DelaunayTest(TestCase):
+class DelaunayTest(unittest.TestCase):
     """Test the generalized Delaunay triangulation."""
 
     def test_find_simplex(self):
