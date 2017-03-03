@@ -2,7 +2,8 @@
 
 from __future__ import division, print_function, absolute_import
 
-from numpy.testing import assert_raises, assert_equal, assert_allclose
+from numpy.testing import assert_equal, assert_allclose
+import pytest
 import unittest
 import numpy as np
 from scipy.optimize import check_grad
@@ -24,8 +25,8 @@ class DeterministicFuctionTest(unittest.TestCase):
     def test_errors(self):
         """Check notImplemented error."""
         f = DeterministicFunction()
-        assert_raises(NotImplementedError, f.evaluate, None)
-        assert_raises(NotImplementedError, f.gradient, None)
+        pytest.raises(NotImplementedError, f.evaluate, None)
+        pytest.raises(NotImplementedError, f.gradient, None)
 
     def test_callable_constructor(self):
         """Test the from_callable constructor."""
@@ -34,7 +35,7 @@ class DeterministicFuctionTest(unittest.TestCase):
 
         c = DeterministicFunction.from_callable(test)
         assert_equal(c.evaluate(5), test(5))
-        assert_raises(NotImplementedError, c.gradient, 5)
+        pytest.raises(NotImplementedError, c.gradient, 5)
 
         c = DeterministicFunction.from_callable(test, gradient=test)
         assert_equal(c.gradient(5), test(5))
@@ -46,8 +47,8 @@ class UncertainFunctionTest(unittest.TestCase):
     def test_errors(self):
         """Check notImplemented error."""
         f = UncertainFunction()
-        assert_raises(NotImplementedError, f.evaluate, None)
-        assert_raises(NotImplementedError, f.gradient, None)
+        pytest.raises(NotImplementedError, f.evaluate, None)
+        pytest.raises(NotImplementedError, f.gradient, None)
 
     def test_mean_function(self):
         """Test the conversion to a deterministic function."""
@@ -169,10 +170,10 @@ class GridworldTest(unittest.TestCase):
         num_points = [7, 8]
         grid = GridWorld(limits, num_points)
 
-        assert_raises(DimensionError, grid._check_dimensions,
+        pytest.raises(DimensionError, grid._check_dimensions,
                       np.array([[1, 2, 3]]))
 
-        assert_raises(DimensionError, grid._check_dimensions,
+        pytest.raises(DimensionError, grid._check_dimensions,
                       np.array([[1]]))
 
     def test_index_state_conversion(self):

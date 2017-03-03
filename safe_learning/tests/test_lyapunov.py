@@ -2,7 +2,8 @@
 
 from __future__ import division, print_function, absolute_import
 
-from numpy.testing import assert_allclose, assert_raises, assert_equal
+from numpy.testing import assert_allclose, assert_equal
+import pytest
 import unittest
 import numpy as np
 import sys
@@ -57,9 +58,9 @@ class LyapunovTest(unittest.TestCase):
 
     def test_errors(self):
         """Test the NotImplementedErrors."""
-        assert_raises(NotImplementedError,
+        pytest.raises(NotImplementedError,
                       self.lyap.v_decrease_confidence, None, None)
-        assert_raises(NotImplementedError, lambda: self.lyap.threshold)
+        pytest.raises(NotImplementedError, lambda: self.lyap.threshold)
 
     def test_safe_set_init(self):
         """Test the safe set initialization."""

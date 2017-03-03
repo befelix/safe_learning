@@ -20,6 +20,5 @@ install:
 script:
   - docker run test-image flake8 safe_learning --exclude "test*.py,__init__.py" --ignore=E402,W503 --show-source
   - docker run test-image flake8 safe_learning --filename="__init__.py,test*.py" --ignore=F,E402,W503 --show-source
-  - docker run test-image nosetests --with-doctest --nocapture --with-coverage --cover-min-percentage=80 --cover-erase --cover-package=safe_learning safe_learning
   - docker run test-image pydocstyle safe_learning --match='(?!__init__).*\.py'
-
+  - docker run test-image pytest --doctest-modules --cov --cov-fail-under=80 safe_learning
