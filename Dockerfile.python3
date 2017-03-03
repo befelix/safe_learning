@@ -31,6 +31,6 @@ RUN git clone --depth=1 https://github.com/GPflow/GPflow.git \
 
 # Copy the main code
 COPY . /code
-RUN python code/setup.py develop
+RUN cd /code && python setup.py develop
 
 WORKDIR /code

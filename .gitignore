@@ -5,3 +5,4 @@ htmlcov
 .coverage
 .cache
 safe_learning.egg-info
+__pycache__
