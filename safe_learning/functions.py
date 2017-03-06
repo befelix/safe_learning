@@ -456,12 +456,6 @@ if GPflow is not None:
             GPflow.gpr.GPR.__init__(self, x, y, kern)
             self.L, self.V = self.update_cholesky()
 
-        def add_data_point(self, x, y):
-            """Add a data point and updates the cholesky decomposition."""
-            self.X = np.vstack((self.X.value, np.atleast_2d(x)))
-            self.Y = np.vstack((self.Y.value, np.atleast_2d(y)))
-            self.L, self.V = self.update_cholesky()
-
         @AutoFlow()
         def update_cholesky(self):
             """Return the cholesky decomposition for the observed points."""
@@ -613,7 +607,7 @@ if GPflow is not None:
             return mean_dx, self.beta(t) * std_dx
 
         def add_data_point(self, x, y):
-            """Add data points to the GP model.
+            """Add data points to the GP model and update cholesky.
 
             Parameters
             ----------
@@ -624,7 +618,10 @@ if GPflow is not None:
                 A 2d array with the new measurements to add to the GP model.
                 Each measurements is on a new row.
             """
-            self.gaussian_process.add_data_point(x, y)
+            self.gaussian_process.X = np.vstack((self.X, np.atleast_2d(x)))
+            self.gaussian_process.Y = np.vstack((self.Y, np.atleast_2d(y)))
+            self.gaussian_process.L, self.gaussian_process.V \
+                = self.gaussian_process.update_cholesky()
 else:
     class GPR_cached(object):
         """Fake class when tf and GPflow are not available."""

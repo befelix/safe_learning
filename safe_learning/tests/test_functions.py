@@ -29,7 +29,6 @@ except ImportError:
     tf = None
 
 
-
 class DeterministicFuctionTest(unittest.TestCase):
     """Test the base class."""
 
@@ -173,10 +172,6 @@ class GPR_cached_test(unittest.TestCase):
         """Test cholesky decomposition."""
         pass
 
-    def test_new_data(self):
-        """Test update of data."""
-        pass
-
     def test_predictive_gradients(self):
         """Test for derivative of mean and variance against GPy."""
         m_x, v_x = self.gp_cached.predictive_gradients(self.test_points)
@@ -250,15 +245,25 @@ class GPflowTest(unittest.TestCase):
         assert_allclose(error_std, 0, atol=1e-7)
 
     def test_new_data(self):
-        """Test addting data points to the GP."""
+        """Test adding data points to the GP."""
         x = np.array([[1.2, 2.3]])
         y = np.array([[2.4]])
+
         self.ufun.add_data_point(x, y)
 
         assert_allclose(self.ufun.X, np.array([[1, 0],
                                               [0, 1],
                                               [1.2, 2.3]]))
         assert_allclose(self.ufun.Y, np.array([[0], [1], [2.4]]))
+
+        # Check prediction is correct after adding data (cholesky update)
+        self.ufun_GPy.add_data_point(x, y)
+
+        a1, b1 = self.ufun.evaluate(self.test_points)
+        a2, b2 = self.ufun_GPy.evaluate(self.test_points)
+        assert_allclose(a1, a2)
+        assert_allclose(b1, b2)
+
 
 class QuadraticFunctionTest(unittest.TestCase):
     """Test the quadratic function."""
