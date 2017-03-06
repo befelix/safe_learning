@@ -342,12 +342,12 @@ class GaussianProcess(UncertainFunction):
     @property
     def X(self):
         """Input location of observed data. One observation per row."""
-        return self.gaussian_process.X
+        raise NotImplementedError
 
     @property
     def Y(self):
         """Observed output. One observation per row."""
-        return self.gaussian_process.Y
+        raise NotImplementedError
 
 
 class GPyGaussianProcess(GaussianProcess):
@@ -370,6 +370,16 @@ class GPyGaussianProcess(GaussianProcess):
     def __init__(self, gaussian_process, beta=2):
         """Initialization, see `FakeGP`."""
         super(GPyGaussianProcess, self).__init__(gaussian_process, beta)
+
+    @property
+    def X(self):
+        """Input location of observed data. One observation per row."""
+        return self.gaussian_process.X
+
+    @property
+    def Y(self):
+        """Observed output. One observation per row."""
+        return self.gaussian_process.Y
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
