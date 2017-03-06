@@ -330,7 +330,7 @@ class GaussianProcess(UncertainFunction):
 
     def __init__(self, gaussian_process, beta=2):
         """Initialize GuassianProcess with either GPflow or GPy gp."""
-        super(GaussianProcess).__init__()
+        super(GaussianProcess, self).__init__()
         self.n_dim = gaussian_process.X.shape[-1]
         self.gaussian_process = gaussian_process
 
