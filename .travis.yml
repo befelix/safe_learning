@@ -1,6 +1,6 @@
 language: python
-ssudo: required
 
+sudo: required
 services:
   - docker
 
