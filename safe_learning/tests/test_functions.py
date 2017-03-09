@@ -22,11 +22,10 @@ except ImportError:
 try:
     import GPflow
     import tensorflow as tf
-    from GPflow.param import AutoFlow
-    from GPflow.tf_wraps import eye
+    # from GPflow.param import AutoFlow
+    # from GPflow.tf_wraps import eye
 except ImportError:
-    GPflow = None
-    tf = None
+    GPflow = tf = None
 
 
 class DeterministicFuctionTest(unittest.TestCase):
@@ -133,38 +132,43 @@ class NoTensorflowTest(unittest.TestCase):
 
     def GPR_cached_test(self):
         """Check import error."""
-        assert_raises(ImportError, GPR_cached, [], [], [])
+        pytest.raises(ImportError, GPR_cached, [], [], [])
 
     def GPflow_test(self):
         """Check import error."""
-        assert_raises(ImportError, GPflowGaussianProcess, [])
+        pytest.raises(ImportError, GPflowGaussianProcess, [])
 
 
-@unittest.skipIf(tf is None, 'GPflow module not installed')
-class GPR_cached_test(unittest.TestCase):
+@pytest.mark.skipif(GPflow is None, reason='GPflow module not installed')
+class TestGPRCached(object):
     """Test the GPR_cached class."""
 
-    def setUp(self):
+    @pytest.fixture(scope="class")
+    def gps(self):
         """Create cached and uncached GPflow models and GPy model."""
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
-        self.gp = GPflow.gpr.GPR(x, y, kernel)
-        self.gp_cached = GPR_cached(x, y, kernel)
+        gp = GPflow.gpr.GPR(x, y, kernel)
+        gp_cached = GPR_cached(x, y, kernel)
 
         # Declare same gp in GPy to test predictive gradients
-        kern_GPy = GPy.kern.RBF(input_dim=2, lengthscale=self.gp_cached.kern.lengthscales.value,
-                                variance=self.gp_cached.kern.variance.value)
-        lik = GPy.likelihoods.Gaussian(variance=self.gp_cached.likelihood.variance.value)
-        self.gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
+        lengthscale = gp_cached.kern.lengthscales.value
+        noise_var = gp_cached.likelihood.variance.value
+        kern_GPy = GPy.kern.RBF(input_dim=2,
+                                lengthscale=lengthscale,
+                                variance=gp_cached.kern.variance.value)
+        lik = GPy.likelihoods.Gaussian(variance=noise_var)
+        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
 
-        # Define test points
-        self.test_points = np.array([[0.9, 0.1], [3., 2]])
+        return gp, gp_cached, gp_GPy
 
-    def test_predict_f(self):
+    def test_predict_f(self, gps):
         """Make sure predictions is same as in uncached case."""
-        a1, b1 = self.gp_cached.predict_f(self.test_points)
-        a2, b2 = self.gp.predict_f(self.test_points)
+        gp, gp_cached, gp_GPy = gps
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        a1, b1 = gp_cached.predict_f(test_points)
+        a2, b2 = gp.predict_f(test_points)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
@@ -172,95 +176,134 @@ class GPR_cached_test(unittest.TestCase):
         """Test cholesky decomposition."""
         pass
 
-    def test_predictive_gradients(self):
+    def test_predictive_gradients(self, gps):
         """Test for derivative of mean and variance against GPy."""
-        m_x, v_x = self.gp_cached.predictive_gradients(self.test_points)
-        m_x_GPy, v_x_GPy = self.gp_GPy.predictive_gradients(self.test_points)
+        gp, gp_cached, gp_GPy = gps
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        m_x, v_x = gp_cached.predictive_gradients(test_points)
+        m_x_GPy, v_x_GPy = gp_GPy.predictive_gradients(test_points)
 
         assert_allclose(m_x - m_x_GPy, 0, atol=1e-7)
         assert_allclose(v_x - v_x_GPy, 0, atol=1e-7)
 
 
 @unittest.skipIf(tf is None, 'GPflow module not installed')
-class GPflowTest(unittest.TestCase):
+class TestGPflow(object):
     """Test the GPflowGaussianProcess function class."""
 
-    def setUp(self):
+    @pytest.fixture(scope="class")
+    def gps(self):
         """Create GP model with GPflow and GPy."""
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
-        self.gp = GPR_cached(x, y, kernel)
-        self.beta = 2
-        self.ufun = GPflowGaussianProcess(self.gp, beta=self.beta)
-
+        gp = GPR_cached(x, y, kernel)
         # Create same model in GPy
-        kern_GPy = GPy.kern.RBF(input_dim=2, lengthscale=self.gp.kern.lengthscales.value,
-                                variance=self.gp.kern.variance.value)
-        lik = GPy.likelihoods.Gaussian(variance=self.gp.likelihood.variance.value)
-        self.gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
-        self.ufun_GPy = GPyGaussianProcess(self.gp_GPy, beta=self.beta)
+        kern_GPy = GPy.kern.RBF(input_dim=2,
+                                lengthscale=gp.kern.lengthscales.value,
+                                variance=gp.kern.variance.value)
+        lik = GPy.likelihoods.Gaussian(variance=gp.likelihood.variance.value)
+        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
+        beta = 2
+        return gp, gp_GPy, beta
 
-        self.beta_fun = lambda t: self.beta
-        self.ufun2 = GPflowGaussianProcess(self.gp, beta=self.beta_fun)
-        self.test_points = np.array([[0.9, 0.1], [3., 2]])
-
-    def test_evaluation(self):
+    def test_evaluation(self, gps):
         """Make sure evaluation works."""
-        a1, b1 = self.ufun.evaluate(self.test_points)
-        a2, b2 = self.gp.predict_f(self.test_points)
-        b2 = self.beta * np.sqrt(b2)
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+
+        gp, gp_GPy, beta = gps
+        ufun = GPflowGaussianProcess(gp, beta=beta)
+
+        a1, b1 = ufun.evaluate(test_points)
+        a2, b2 = gp.predict_f(test_points)
+
+        b2 = beta * np.sqrt(b2)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
         # Test multiple inputs
-        a1, b1 = self.ufun.evaluate(self.test_points[:, [0]],
-                                    self.test_points[:, [1]])
+        a1, b1 = ufun.evaluate(test_points[:, [0]],
+                               test_points[:, [1]])
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_evaluation_against_GPy(self):
+    def test_evaluation_against_GPy(self, gps):
         """Make sure evaluations is same as in GPy case."""
-        a1, b1 = self.ufun.evaluate(self.test_points)
-        a2, b2 = self.ufun_GPy.evaluate(self.test_points)
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        gp, gp_GPy, beta = gps
+
+        ufun = GPflowGaussianProcess(gp, beta=beta)
+        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
+
+        a1, b1 = ufun.evaluate(test_points)
+        a2, b2 = ufun_GPy.evaluate(test_points)
+
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_gradient_against_GPy(self):
+    def test_gradient_against_GPy(self, gps):
         """Make sure gradient is same as in GPy case."""
-        a1, b1 = self.ufun.gradient(self.test_points)
-        a2, b2 = self.ufun_GPy.gradient(self.test_points)
-        assert_allclose(a1 - a2, 0, atol=1e-7)
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        gp, gp_GPy, beta = gps
+
+        ufun = GPflowGaussianProcess(gp, beta=beta)
+        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
+
+        a1, b1 = ufun.gradient(test_points)
+        a2, b2 = ufun_GPy.gradient(test_points)
+
+        assert_allclose(a1 - a2, 0., atol=1e-7)
         assert_allclose(b1 - b2, 0, atol=1e-7)
 
-    def test_gradient(self):
+    def test_gradient(self, gps):
         """Make sure gradient works."""
-        error_mean = check_grad(lambda x: self.ufun.evaluate(x)[0],
-                                lambda x: self.ufun.gradient(x)[0],
-                                self.test_points[0])
-        error_std = check_grad(lambda x: self.ufun.evaluate(x)[1],
-                               lambda x: self.ufun.gradient(x)[1],
-                               self.test_points[1])
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        gp, gp_GPy, beta = gps
+
+        ufun = GPflowGaussianProcess(gp, beta=beta)
+
+        error_mean = check_grad(lambda x: ufun.evaluate(x)[0],
+                                lambda x: ufun.gradient(x)[0],
+                                test_points[0])
+        error_std = check_grad(lambda x: ufun.evaluate(x)[1],
+                               lambda x: ufun.gradient(x)[1],
+                               test_points[1])
         assert_allclose(error_mean, 0, atol=1e-8)
         assert_allclose(error_std, 0, atol=1e-7)
 
     def test_new_data(self):
         """Test adding data points to the GP."""
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+
+        x = np.array([[1, 0], [0, 1]], dtype=float)
+        y = np.array([[0], [1]], dtype=float)
+        kernel = GPflow.kernels.RBF(2)
+        gp = GPR_cached(x, y, kernel)
+        # Create same model in GPy
+        kern_GPy = GPy.kern.RBF(input_dim=2,
+                                lengthscale=gp.kern.lengthscales.value,
+                                variance=gp.kern.variance.value)
+        lik = GPy.likelihoods.Gaussian(variance=gp.likelihood.variance.value)
+        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
+        beta = 2
+
+        ufun = GPflowGaussianProcess(gp, beta=beta)
+        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
+
         x = np.array([[1.2, 2.3]])
         y = np.array([[2.4]])
 
-        self.ufun.add_data_point(x, y)
+        ufun.add_data_point(x, y)
+        ufun_GPy.add_data_point(x, y)
 
-        assert_allclose(self.ufun.X, np.array([[1, 0],
-                                              [0, 1],
-                                              [1.2, 2.3]]))
-        assert_allclose(self.ufun.Y, np.array([[0], [1], [2.4]]))
+        assert_allclose(ufun.X, np.array([[1, 0],
+                                          [0, 1],
+                                          [1.2, 2.3]]))
+        assert_allclose(ufun.Y, np.array([[0], [1], [2.4]]))
 
         # Check prediction is correct after adding data (cholesky update)
-        self.ufun_GPy.add_data_point(x, y)
-
-        a1, b1 = self.ufun.evaluate(self.test_points)
-        a2, b2 = self.ufun_GPy.evaluate(self.test_points)
+        a1, b1 = ufun.evaluate(test_points)
+        a2, b2 = ufun_GPy.evaluate(test_points)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
