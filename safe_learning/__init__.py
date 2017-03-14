@@ -10,6 +10,3 @@ try:
 except ImportError:
     def run_tests():
         raise ImportError('Testing requires the pytest package.')
-
-# Add everything to __all__
-__all__ = [s for s in dir() if not s.startswith('_')]
