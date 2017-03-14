@@ -11,7 +11,6 @@ __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
 
 try:
     import GPflow
-    import tensorflow as tf
     from GPflow.param import AutoFlow
     from GPflow.tf_wraps import eye
 except ImportError:
@@ -20,6 +19,7 @@ except ImportError:
 
 from scipy import spatial, sparse, interpolate, linalg
 from sklearn.utils.extmath import cartesian
+import tensorflow as tf
 
 from .utilities import linearly_spaced_combinations
 
@@ -1383,6 +1383,12 @@ class QuadraticFunction(DeterministicFunction):
         """See `DeterministicFunction.gradient`."""
         points = np.asarray(points)
         return 2 * points.dot(self.matrix)
+
+    def evaluate_tf(self, points):
+        """Like evaluate, but returns a tensorflow tensor instead."""
+        linear_form = tf.matmul(points, self.matrix)
+        quadratic = linear_form * points
+        return tf.reduce_sum(quadratic, axis=1)
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,
