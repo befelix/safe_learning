@@ -1388,7 +1388,7 @@ class QuadraticFunction(DeterministicFunction):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
-        return tf.reduce_sum(quadratic, axis=1)
+        return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,

@@ -4,9 +4,9 @@ from __future__ import division, print_function, absolute_import
 
 from numpy.testing import assert_equal, assert_allclose
 import pytest
-import unittest
 import numpy as np
 from scipy.optimize import check_grad
+import tensorflow as tf
 
 from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
@@ -21,14 +21,11 @@ except ImportError:
 
 try:
     import GPflow
-    import tensorflow as tf
-    # from GPflow.param import AutoFlow
-    # from GPflow.tf_wraps import eye
 except ImportError:
-    GPflow = tf = None
+    GPflow = None
 
 
-class DeterministicFuctionTest(unittest.TestCase):
+class TestDeterministicFuction(object):
     """Test the base class."""
 
     def test_errors(self):
@@ -50,7 +47,7 @@ class DeterministicFuctionTest(unittest.TestCase):
         assert_equal(c.gradient(5), test(5))
 
 
-class UncertainFunctionTest(unittest.TestCase):
+class TestUncertainFunction():
     """Test the base class."""
 
     def test_errors(self):
@@ -69,74 +66,69 @@ class UncertainFunctionTest(unittest.TestCase):
         assert(fd.gradient(None) == 3)
 
 
-@unittest.skipIf(GPy is None, 'GPy module not installed.')
-class GPyTest(unittest.TestCase):
+@pytest.mark.skipIf(GPy is None, 'GPy module not installed.')
+class TestGPy(object):
     """Test the GPY GP function class."""
 
-    def setUp(self):
+    @pytest.fixture(scope="class")
+    def gp_testing(self):
         """Create GP model."""
-        x = np.array([[1, 0], [0, 1]])
-        y = np.array([[0], [1]])
+        x = np.array([[1., 0.], [0., 1]])
+        y = np.array([[0.], [1.]])
         kernel = GPy.kern.RBF(2)
         lik = GPy.likelihoods.Gaussian(variance=0.1**2)
-        self.gp = GPy.core.GP(x, y, kernel, lik)
-        self.beta = 2.
-        self.ufun = GPyGaussianProcess(self.gp, beta=self.beta)
-        self.beta_fun = lambda t: self.beta
-        self.ufun2 = GPyGaussianProcess(self.gp, beta=self.beta_fun)
-        self.test_points = np.array([[0.9, 0.1], [3., 2]])
+        gp = GPy.core.GP(x, y, kernel, lik)
+        beta = 2.
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+        return gp, beta, test_points
 
-    def test_evaluation(self):
+    def test_evaluation(self, gp_testing):
         """Make sure evaluation works."""
-        a1, b1 = self.ufun.evaluate(self.test_points)
-        a2, b2 = self.gp.predict_noiseless(self.test_points)
-        b2 = self.beta * np.sqrt(b2)
+        gp, beta, test_points = gp_testing
+        ufun = GPyGaussianProcess(gp, beta=beta)
+
+        a1, b1 = ufun.evaluate(test_points)
+        a2, b2 = gp.predict_noiseless(test_points)
+        b2 = beta * np.sqrt(b2)
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
         # Test multiple inputs
-        a1, b1 = self.ufun.evaluate(self.test_points[:, [0]],
-                                    self.test_points[:, [1]])
+        a1, b1 = ufun.evaluate(test_points[:, [0]],
+                               test_points[:, [1]])
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_gradient(self):
+    def test_gradient(self, gp_testing):
         """Make sure gradient works."""
-        error_mean = check_grad(lambda x: self.ufun.evaluate(x)[0],
-                                lambda x: self.ufun.gradient(x)[0],
-                                self.test_points[0])
+        gp, beta, test_points = gp_testing
+        ufun = GPyGaussianProcess(gp, beta=beta)
 
-        error_std = check_grad(lambda x: self.ufun.evaluate(x)[1],
-                               lambda x: self.ufun.gradient(x)[1],
-                               self.test_points[0])
+        error_mean = check_grad(lambda x: ufun.evaluate(x)[0],
+                                lambda x: ufun.gradient(x)[0],
+                                test_points[0])
+
+        error_std = check_grad(lambda x: ufun.evaluate(x)[1],
+                               lambda x: ufun.gradient(x)[1],
+                               test_points[0])
 
         assert_allclose(error_mean, 0, atol=1e-8)
         assert_allclose(error_std, 0, atol=1e-7)
 
-    def test_new_data(self):
+    def test_new_data(self, gp_testing):
         """Test addting data points to the GP."""
+        gp, beta, test_points = gp_testing
+        ufun = GPyGaussianProcess(gp, beta=beta)
+
         x = np.array([[1.2, 2.3]])
         y = np.array([[2.4]])
-        self.ufun.add_data_point(x, y)
+        ufun.add_data_point(x, y)
 
-        gp = self.ufun.gaussian_process
+        gp = ufun.gaussian_process
         assert_allclose(gp.X, np.array([[1, 0],
                                         [0, 1],
                                         [1.2, 2.3]]))
         assert_allclose(gp.Y, np.array([[0], [1], [2.4]]))
-
-
-@unittest.skipIf(tf is not None, 'GPflow is installed')
-class NoTensorflowTest(unittest.TestCase):
-    """Test in case tf is not installed."""
-
-    def GPR_cached_test(self):
-        """Check import error."""
-        pytest.raises(ImportError, GPR_cached, [], [], [])
-
-    def GPflow_test(self):
-        """Check import error."""
-        pytest.raises(ImportError, GPflowGaussianProcess, [])
 
 
 @pytest.mark.skipif(GPflow is None, reason='GPflow module not installed')
@@ -187,7 +179,7 @@ class TestGPRCached(object):
         assert_allclose(v_x - v_x_GPy, 0, atol=1e-7)
 
 
-@unittest.skipIf(tf is None, 'GPflow module not installed')
+@pytest.mark.skipIf(tf is None, 'GPflow module not installed')
 class TestGPflow(object):
     """Test the GPflowGaussianProcess function class."""
 
@@ -308,28 +300,42 @@ class TestGPflow(object):
         assert_allclose(b1, b2)
 
 
-class QuadraticFunctionTest(unittest.TestCase):
+class TestQuadraticFunction(object):
     """Test the quadratic function."""
 
-    def setUp(self):
-        """Set up the test."""
-        self.points = np.array([[0, 0],
-                                [0, 1],
-                                [1, 0],
-                                [1, 1]])
+    @pytest.fixture(scope="class")
+    def test_setup(self):
+        """Setup testing environment for quadratic."""
+        points = np.array([[0, 0],
+                           [0, 1],
+                           [1, 0],
+                           [1, 1]], dtype=np.float)
         P = np.array([[1., 0.1],
                       [0.2, 2.]])
-        self.quad = QuadraticFunction(P)
-
-    def test_evaluate(self):
-        """Test the evaluation of the quadratic function."""
-        fval = self.quad.evaluate(self.points)
+        quad = QuadraticFunction(P)
         true_fval = np.array([[0., 2., 1., 3.3]]).T
+        return quad, points, true_fval
+
+    def test_evaluate(self, test_setup):
+        """Test the evaluation of the quadratic function."""
+        quad, points, true_fval = test_setup
+
+        fval = quad.evaluate(points)
         assert_allclose(fval, true_fval)
 
-    def test_gradient(self):
+    def test_evaluate_tf(self, test_setup):
+        """Test the tensorflow evaluation of the quadratic function."""
+        quad, points, true_fval = test_setup
+        with tf.Session():
+            tf_res = quad.evaluate_tf(points).eval()
+
+        assert_allclose(true_fval, tf_res)
+
+    def test_gradient(self, test_setup):
         """Test the gradient of the quadratic function."""
-        fval = self.quad.gradient(self.points)
+        quad, points, true_fval = test_setup
+
+        fval = quad.gradient(points)
         true_fval = np.array([[0., 0.],
                               [0.4, 4.],
                               [2., .2],
@@ -337,22 +343,19 @@ class QuadraticFunctionTest(unittest.TestCase):
         assert_allclose(fval, true_fval)
 
 
-class ScipyDelaunayTest(unittest.TestCase):
+def test_scipy_delaunay():
     """Test the fake replacement for Scipy."""
+    limits = [[-1, 1], [-1, 2]]
+    num_points = [2, 6]
+    sp_delaunay = ScipyDelaunay(limits, num_points)
+    delaunay = Triangulation(limits, num_points)
 
-    def test_init(self):
-        """Test the initialization."""
-        limits = [[-1, 1], [-1, 2]]
-        num_points = [2, 6]
-        sp_delaunay = ScipyDelaunay(limits, num_points)
-        delaunay = Triangulation(limits, num_points)
-
-        assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
-        assert_equal(delaunay.ndim, sp_delaunay.ndim)
-        sp_delaunay.find_simplex(np.array([[0, 0]]))
+    assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
+    assert_equal(delaunay.ndim, sp_delaunay.ndim)
+    sp_delaunay.find_simplex(np.array([[0, 0]]))
 
 
-class GridworldTest(unittest.TestCase):
+class TestGridworld(object):
     """Test the general GridWorld definitions."""
 
     def test_dimensions_error(self):
@@ -424,7 +427,7 @@ class GridworldTest(unittest.TestCase):
         assert_allclose(grid.rectangle_to_state(res), res[:, None] * 0.5)
 
 
-class PiecewiseConstantTest(unittest.TestCase):
+class TestPiecewiseConstant(object):
     """Test a piecewise constant function."""
 
     def test_init(self):
@@ -466,7 +469,7 @@ class PiecewiseConstantTest(unittest.TestCase):
         assert_allclose(gradient, 0)
 
 
-class DelaunayTest(unittest.TestCase):
+class TestDelaunay(object):
     """Test the generalized Delaunay triangulation."""
 
     def test_find_simplex(self):
@@ -665,4 +668,4 @@ class DelaunayTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    pytest.main()
