@@ -1,7 +1,7 @@
 numpy
 scipy
-scikit-learn
 matplotlib
 cvxpy
 GPy
 tensorflow>=1.0.0
+

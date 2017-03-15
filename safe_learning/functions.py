@@ -18,8 +18,8 @@ except ImportError:
     tf = None
 
 from scipy import spatial, sparse, interpolate, linalg
-from sklearn.utils.extmath import cartesian
 import tensorflow as tf
+from itertools import product as cartesian
 
 from .utilities import linearly_spaced_combinations
 
@@ -1038,7 +1038,9 @@ class Triangulation(GridWorld, DeterministicFunction):
             corners = np.array([[0], self.unit_maxes])
             self.triangulation = _Delaunay1D(corners)
         else:
-            hyperrectangle_corners = cartesian(np.diag(self.unit_maxes))
+            product = cartesian(*np.diag(self.unit_maxes))
+            hyperrectangle_corners = np.array(list(product),
+                                              dtype=np.float)
             self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
