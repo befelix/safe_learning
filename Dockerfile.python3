@@ -8,7 +8,7 @@ RUN apt-get update --quiet \
 
 # Update conda, install packages, and clean up
 RUN conda update conda --yes --quiet \
-  && conda install python=3.5 pip numpy scipy scikit-learn --yes --quiet \
+  && conda install python=3.5 pip numpy scipy pandas --yes --quiet \
   && conda clean --yes --all \
   && hash -r
 

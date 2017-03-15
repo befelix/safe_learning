@@ -4,4 +4,3 @@ matplotlib
 cvxpy
 GPy
 tensorflow>=1.0.0
-

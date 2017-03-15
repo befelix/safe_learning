@@ -32,7 +32,7 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'scikit-learn'
+        'tensorflow>=1.0.0',
     ],
     tests_require=['pytest'],
     cmdclass={'test': PyTest},
