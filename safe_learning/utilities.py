@@ -9,14 +9,46 @@ Author: Felix Berkenkamp, Learning & Adaptive Systems Group, ETH Zurich
         (GitHub: befelix)
 """
 
-from __future__ import division, print_function
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.interpolate
 import scipy.linalg
+import tensorflow as tf
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
-           'ellipse_bounds']
+           'ellipse_bounds', 'concatenate_inputs']
+
+
+def concatenate_inputs(start=0):
+    """Concatenate the numpy array inputs to the functions.
+
+    Parameters
+    ----------
+    start : int, optional
+        The attribute number at which to start concatenating.
+    """
+    def wrap(function):
+        def wrapped_function(*args, **kwargs):
+            """A function that concatenates inputs."""
+            if isinstance(args[start], tf.Tensor):
+                args = args[:start] + (tf.concat(args[start:], axis=1),)
+                return function(*args, **kwargs)
+            else:
+                to_concatenate = map(np.atleast_2d, args[start:])
+                nargs = len(args) - start
+
+                if nargs == 1:
+                    concatenated = tuple(to_concatenate)
+                else:
+                    concatenated = (np.hstack(to_concatenate),)
+
+                args = args[:start] + concatenated
+                return function(*args, **kwargs)
+
+        return wrapped_function
+
+    return wrap
 
 
 def combinations(arrays):

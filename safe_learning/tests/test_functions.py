@@ -13,6 +13,7 @@ from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      UncertainFunction, GPyGaussianProcess,
                                      QuadraticFunction, DimensionError,
                                      GPR_cached, GPflowGaussianProcess)
+from safe_learning.utilities import concatenate_inputs
 
 try:
     import GPy
@@ -425,6 +426,46 @@ class TestGridworld(object):
         res = np.array([0, 0, 1])
         assert_allclose(grid.state_to_rectangle(test), res)
         assert_allclose(grid.rectangle_to_state(res), res[:, None] * 0.5)
+
+
+class TestConcatenateDecorator(object):
+    """Test the concatenate_input decorator."""
+
+    @concatenate_inputs(start=1)
+    def fun(self, x):
+        """Dummy testing function."""
+        return x
+
+    def test_concatenate_numpy(self):
+        """Test concatenation of inputs for numpy."""
+        x = np.arange(4).reshape(2, 2)
+        y = x + 4
+        true_res = np.hstack((x, y))
+        res = self.fun(x, y)
+        assert_allclose(res, true_res)
+        assert_allclose(self.fun(x), x)
+
+    def test_concatenate_tensorflow(self):
+        """Test concatenation of inputs for tensorflow."""
+        x_data = np.arange(4).reshape(2, 2).astype(np.float32)
+        true_res = np.hstack((x_data, x_data + 4))
+        x = tf.placeholder(dtype=tf.float32, shape=[2, 2])
+        y = x + 4
+
+        with tf.Session() as sess:
+
+            fun_x = self.fun(x)
+            fun_xy = self.fun(x, y)
+
+            assert isinstance(fun_x, tf.Tensor)
+            assert isinstance(fun_xy, tf.Tensor)
+
+            res_x, res_both = sess.run([fun_x, fun_xy],
+                                       {x: x_data})
+
+        assert_allclose(res_both, true_res)
+        assert_allclose(res_x, x_data)
+
 
 
 class TestPiecewiseConstant(object):

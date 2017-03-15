@@ -7,7 +7,8 @@ import numpy as np
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
            'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
-           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
+           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function',
+           'concatenate_inputs']
 
 try:
     import GPflow
@@ -15,13 +16,12 @@ try:
     from GPflow.tf_wraps import eye
 except ImportError:
     GPflow = None
-    tf = None
 
 from scipy import spatial, sparse, interpolate, linalg
 import tensorflow as tf
 from itertools import product as cartesian
 
-from .utilities import linearly_spaced_combinations
+from .utilities import linearly_spaced_combinations, concatenate_inputs
 
 _EPS = np.finfo(np.float).eps
 
@@ -217,32 +217,6 @@ class DeterministicFunction(Function):
 
         raise NotImplementedError('The derivatives towards the parameters is'
                                   'not implemented.')
-
-
-def concatenate_inputs(start=0):
-    """Concatenate the numpy array inputs to the functions.
-
-    Parameters
-    ----------
-    start : int, optional
-        The attribute number at which to start concatenating.
-    """
-    def wrap(function):
-        def wrapped_function(*args, **kwargs):
-            """A function that concatenates inputs."""
-            to_concatenate = list(map(np.atleast_2d, args[start:]))
-
-            if len(to_concatenate) == 1:
-                concatenated = to_concatenate
-            else:
-                concatenated = [np.hstack(to_concatenate)]
-
-            args = list(args[:start]) + concatenated
-            return function(*args, **kwargs)
-
-        return wrapped_function
-
-    return wrap
 
 
 class FunctionStack(UncertainFunction):
