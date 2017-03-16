@@ -422,18 +422,23 @@ class GPR_cached(GPflow.gpr.GPR):
             raise ImportError('This function requires the GPflow module.')
         # super(GPR_cached, self).__init__(self, x, y, kern)
         GPflow.gpr.GPR.__init__(self, x, y, kern)
-        self.L, self.V = self.update_cholesky()
+        self.cholesky = self.alpha = None
+        self.update_cache()
 
     @AutoFlow()
-    def update_cholesky(self):
+    def _compute_cache(self):
         """Return the cholesky decomposition for the observed points."""
         kernel = (self.kern.K(self.X)
                   + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
-        cholesky = tf.cholesky(kernel)
+        cholesky = tf.cholesky(kernel, name='gp_cholesky')
 
         target = self.Y - self.mean_function(self.X)
-        alpha = tf.matrix_triangular_solve(cholesky, target)
+        alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
         return cholesky, alpha
+
+    def update_cache(self):
+        """Update the GP cache."""
+        self.cholesky, self.alpha = self._compute_cache()
 
     def build_predict(self, Xnew, full_cov=False):
         """Predict mean and variance of the GP at locations in Xnew.
@@ -455,8 +460,8 @@ class GPR_cached(GPflow.gpr.GPR):
 
         """
         Kx = self.kern.K(self.X, Xnew)
-        A = tf.matrix_triangular_solve(self.L, Kx, lower=True)
-        fmean = (tf.matmul(tf.transpose(A), self.V)
+        A = tf.matrix_triangular_solve(self.cholesky, Kx, lower=True)
+        fmean = (tf.matmul(tf.transpose(A), self.alpha)
                  + self.mean_function(Xnew))
         if full_cov:
             fvar = self.kern.K(Xnew) - tf.matmul(tf.transpose(A), A)
@@ -576,8 +581,8 @@ class GPflowGaussianProcess(GaussianProcess):
         gp.X = np.vstack((self.X, np.atleast_2d(x)))
         gp.Y = np.vstack((self.Y, np.atleast_2d(y)))
         self.update_feed_dict()
-        if hasattr(gp, 'update_cholesky'):
-            gp.L, gp.V = self.gaussian_process.update_cholesky()
+        if hasattr(gp, 'update_cache'):
+            gp.update_cache()
 
 
 class ScipyDelaunay(spatial.Delaunay):

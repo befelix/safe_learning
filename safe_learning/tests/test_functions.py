@@ -155,6 +155,26 @@ class TestGPRCached(object):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
+    def test_adding_data(self, gps):
+        """Test that adding data works."""
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+
+        gp, gp_cached = gps
+        gpfun = GPflowGaussianProcess(gp)
+
+        x = np.array([[1.2, 2.3]])
+        y = np.array([[2.4]])
+        gpfun.add_data_point(x, y)
+        m1, v1 = gpfun(test_points)
+
+        gpfun_cached = GPflowGaussianProcess(gp_cached)
+        gpfun_cached.add_data_point(x, y)
+
+        m2, v2 = gpfun_cached(test_points)
+
+        assert_allclose(m1, m2)
+        assert_allclose(v1, v2)
+
     def test_cholesky(self):
         """Test cholesky decomposition."""
         pass
