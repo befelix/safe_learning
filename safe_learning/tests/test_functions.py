@@ -144,21 +144,11 @@ class TestGPRCached(object):
         kernel = GPflow.kernels.RBF(2)
         gp = GPflow.gpr.GPR(x, y, kernel)
         gp_cached = GPR_cached(x, y, kernel)
-
-        # Declare same gp in GPy to test predictive gradients
-        lengthscale = gp_cached.kern.lengthscales.value
-        noise_var = gp_cached.likelihood.variance.value
-        kern_GPy = GPy.kern.RBF(input_dim=2,
-                                lengthscale=lengthscale,
-                                variance=gp_cached.kern.variance.value)
-        lik = GPy.likelihoods.Gaussian(variance=noise_var)
-        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
-
-        return gp, gp_cached, gp_GPy
+        return gp, gp_cached
 
     def test_predict_f(self, gps):
         """Make sure predictions is same as in uncached case."""
-        gp, gp_cached, gp_GPy = gps
+        gp, gp_cached = gps
         test_points = np.array([[0.9, 0.1], [3., 2]])
         a1, b1 = gp_cached.predict_f(test_points)
         a2, b2 = gp.predict_f(test_points)
@@ -169,18 +159,8 @@ class TestGPRCached(object):
         """Test cholesky decomposition."""
         pass
 
-    def test_predictive_gradients(self, gps):
-        """Test for derivative of mean and variance against GPy."""
-        gp, gp_cached, gp_GPy = gps
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-        m_x, v_x = gp_cached.predictive_gradients(test_points)
-        m_x_GPy, v_x_GPy = gp_GPy.predictive_gradients(test_points)
 
-        assert_allclose(m_x - m_x_GPy, 0, atol=1e-7)
-        assert_allclose(v_x - v_x_GPy, 0, atol=1e-7)
-
-
-@pytest.mark.skipIf(tf is None, 'GPflow module not installed')
+@pytest.mark.skipIf(GPflow is None, 'GPflow module not installed')
 class TestGPflow(object):
     """Test the GPflowGaussianProcess function class."""
 
@@ -190,27 +170,27 @@ class TestGPflow(object):
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
-        gp = GPR_cached(x, y, kernel)
+        gp = GPflow.gpr.GPR(x, y, kernel)
         # Create same model in GPy
         kern_GPy = GPy.kern.RBF(input_dim=2,
                                 lengthscale=gp.kern.lengthscales.value,
                                 variance=gp.kern.variance.value)
         lik = GPy.likelihoods.Gaussian(variance=gp.likelihood.variance.value)
         gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
-        beta = 2
-        return gp, gp_GPy, beta
+        return gp, gp_GPy
 
     def test_evaluation(self, gps):
         """Make sure evaluation works."""
         test_points = np.array([[0.9, 0.1], [3., 2]])
+        beta = 3.0
 
-        gp, gp_GPy, beta = gps
+        gp, _ = gps
         ufun = GPflowGaussianProcess(gp, beta=beta)
 
         a1, b1 = ufun.evaluate(test_points)
         a2, b2 = gp.predict_f(test_points)
-
         b2 = beta * np.sqrt(b2)
+
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
@@ -220,13 +200,13 @@ class TestGPflow(object):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_evaluation_against_GPy(self, gps):
+    def test_evaluation_against_gpy(self, gps):
         """Make sure evaluations is same as in GPy case."""
         test_points = np.array([[0.9, 0.1], [3., 2]])
-        gp, gp_GPy, beta = gps
+        gp, gp_GPy = gps
 
-        ufun = GPflowGaussianProcess(gp, beta=beta)
-        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
+        ufun = GPflowGaussianProcess(gp)
+        ufun_GPy = GPyGaussianProcess(gp_GPy)
 
         a1, b1 = ufun.evaluate(test_points)
         a2, b2 = ufun_GPy.evaluate(test_points)
@@ -234,54 +214,13 @@ class TestGPflow(object):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_gradient_against_GPy(self, gps):
-        """Make sure gradient is same as in GPy case."""
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-        gp, gp_GPy, beta = gps
-
-        ufun = GPflowGaussianProcess(gp, beta=beta)
-        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
-
-        a1, b1 = ufun.gradient(test_points)
-        a2, b2 = ufun_GPy.gradient(test_points)
-
-        assert_allclose(a1 - a2, 0., atol=1e-7)
-        assert_allclose(b1 - b2, 0, atol=1e-7)
-
-    def test_gradient(self, gps):
-        """Make sure gradient works."""
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-        gp, gp_GPy, beta = gps
-
-        ufun = GPflowGaussianProcess(gp, beta=beta)
-
-        error_mean = check_grad(lambda x: ufun.evaluate(x)[0],
-                                lambda x: ufun.gradient(x)[0],
-                                test_points[0])
-        error_std = check_grad(lambda x: ufun.evaluate(x)[1],
-                               lambda x: ufun.gradient(x)[1],
-                               test_points[1])
-        assert_allclose(error_mean, 0, atol=1e-8)
-        assert_allclose(error_std, 0, atol=1e-7)
-
-    def test_new_data(self):
+    def test_new_data(self, gps):
         """Test adding data points to the GP."""
         test_points = np.array([[0.9, 0.1], [3., 2]])
+        gp, gp_GPy = gps
 
-        x = np.array([[1, 0], [0, 1]], dtype=float)
-        y = np.array([[0], [1]], dtype=float)
-        kernel = GPflow.kernels.RBF(2)
-        gp = GPR_cached(x, y, kernel)
-        # Create same model in GPy
-        kern_GPy = GPy.kern.RBF(input_dim=2,
-                                lengthscale=gp.kern.lengthscales.value,
-                                variance=gp.kern.variance.value)
-        lik = GPy.likelihoods.Gaussian(variance=gp.likelihood.variance.value)
-        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
-        beta = 2
-
-        ufun = GPflowGaussianProcess(gp, beta=beta)
-        ufun_GPy = GPyGaussianProcess(gp_GPy, beta=beta)
+        ufun = GPflowGaussianProcess(gp)
+        ufun_GPy = GPyGaussianProcess(gp_GPy)
 
         x = np.array([[1.2, 2.3]])
         y = np.array([[2.4]])
@@ -452,20 +391,18 @@ class TestConcatenateDecorator(object):
         x = tf.placeholder(dtype=tf.float32, shape=[2, 2])
         y = x + 4
 
+        fun_x = self.fun(x)
+        fun_xy = self.fun(x, y)
+
+        assert isinstance(fun_x, tf.Tensor)
+        assert isinstance(fun_xy, tf.Tensor)
+
         with tf.Session() as sess:
-
-            fun_x = self.fun(x)
-            fun_xy = self.fun(x, y)
-
-            assert isinstance(fun_x, tf.Tensor)
-            assert isinstance(fun_xy, tf.Tensor)
-
             res_x, res_both = sess.run([fun_x, fun_xy],
                                        {x: x_data})
 
         assert_allclose(res_both, true_res)
         assert_allclose(res_x, x_data)
-
 
 
 class TestPiecewiseConstant(object):

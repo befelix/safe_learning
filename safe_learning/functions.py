@@ -7,8 +7,7 @@ import numpy as np
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
            'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
-           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function',
-           'concatenate_inputs']
+           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
 
 try:
     import GPflow
@@ -24,6 +23,8 @@ from itertools import product as cartesian
 from .utilities import linearly_spaced_combinations, concatenate_inputs
 
 _EPS = np.finfo(np.float).eps
+tf_dtype = tf.float64
+np_dtype = np.float64
 
 
 class Function(object):
@@ -264,32 +265,6 @@ class FunctionStack(UncertainFunction):
             yield fun.gradient(*points)
 
 
-def concatenate_inputs(start=0):
-    """Concatenate the numpy array inputs to the functions.
-
-    Parameters
-    ----------
-    start : int, optional
-        The attribute number at which to start concatenating.
-    """
-    def wrap(function):
-        def wrapped_function(*args, **kwargs):
-            """A function that concatenates inputs."""
-            to_concatenate = list(map(np.atleast_2d, args[start:]))
-
-            if len(to_concatenate) == 1:
-                concatenated = to_concatenate
-            else:
-                concatenated = [np.hstack(to_concatenate)]
-
-            args = list(args[:start]) + concatenated
-            return function(*args, **kwargs)
-
-        return wrapped_function
-
-    return wrap
-
-
 class GaussianProcess(UncertainFunction):
     """An 'UncertainFunction' for GPy or GPflow gaussian process.
 
@@ -302,16 +277,12 @@ class GaussianProcess(UncertainFunction):
         intervals.
     """
 
-    def __init__(self, gaussian_process, beta=2):
+    def __init__(self, gaussian_process, beta=2.):
         """Initialize GuassianProcess with either GPflow or GPy gp."""
         super(GaussianProcess, self).__init__()
         self.n_dim = gaussian_process.X.shape[-1]
         self.gaussian_process = gaussian_process
-
-        if callable(beta):
-            self.beta = beta
-        else:
-            self.beta = lambda t: beta
+        self.beta = beta
 
     @property
     def X(self):
@@ -387,8 +358,7 @@ class GPyGaussianProcess(GaussianProcess):
             Error bounds for each dimension of the estimate.
         """
         mean, var = self.gaussian_process.predict_noiseless(points)
-        t = len(self.gaussian_process.X)
-        return mean, self.beta(t) * np.sqrt(var)
+        return mean, self.beta * np.sqrt(var)
 
     @concatenate_inputs(start=1)
     def gradient(self, points):
@@ -413,8 +383,7 @@ class GPyGaussianProcess(GaussianProcess):
 
         var[var <= 1e-10] = 1e-10
         std_dx = (0.5 / np.sqrt(var)) * var_dx
-        t = len(self.gaussian_process.X)
-        return mean_dx, self.beta(t) * std_dx
+        return mean_dx, self.beta * std_dx
 
     def add_data_point(self, x, y):
         """Add data points to the GP model.
@@ -499,32 +468,6 @@ class GPR_cached(GPflow.gpr.GPR):
                            [1, tf.shape(self.Y)[1]])
         return fmean, fvar
 
-    @AutoFlow((tf.float64, [None, None]))
-    def GP_flow_predictive_gradients(self, Xnew):
-        """Compute the gradient of mean and variance of the posterior in tf.
-
-        TO DO: Use graph from build predict and add gradients on top
-        """
-        Kx = self.kern.K(self.X, Xnew)
-        A = tf.matrix_triangular_solve(self.L, Kx, lower=True)
-        fmean = (tf.matmul(tf.transpose(A), self.V)
-                 + self.mean_function(Xnew))
-
-        fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
-        fvar = tf.reshape(fvar, (-1, 1))
-        fvar = tf.tile(fvar, [1, tf.shape(self.Y)[1]])
-        return tf.gradients(fmean, Xnew), tf.gradients(fvar, Xnew)
-
-    def predictive_gradients(self, Xnew):
-        """Wrap for same output format as GPy_GaussianProcess.
-
-        TO DO: make this function a decorator for previous function
-        """
-        m_x, v_x = self.GP_flow_predictive_gradients(Xnew)
-        m_x = np.expand_dims(np.array(m_x).squeeze(), axis=-1)
-        v_x = np.array(v_x).squeeze()
-        return m_x, v_x
-
 
 class GPflowGaussianProcess(GaussianProcess):
     """A `GaussianProcess` for GPflow Gaussian processes.
@@ -549,6 +492,11 @@ class GPflowGaussianProcess(GaussianProcess):
         if GPflow is None:
             raise ImportError('This function requires the GPflow module.')
         super(GPflowGaussianProcess, self).__init__(gaussian_process, beta)
+        self.parameters = tf.placeholder(tf_dtype, [None])
+        self.gaussian_process.make_tf_array(self.parameters)
+        self.feed_dict = {}
+        self.update_feed_dict()
+        self.storage = None
 
     @property
     def X(self):
@@ -577,38 +525,40 @@ class GPflowGaussianProcess(GaussianProcess):
         error_bounds : ndarray
             Error bounds for each dimension of the estimate.
         """
-        mean, var = self.gaussian_process.predict_f(points)
+        if self.storage is None:
+            graph = tf.get_default_graph()
+            session = tf.Session(graph=graph)
+            data = tf.placeholder(tf_dtype, [None, None])
+            result = self.evaluate_tf(data)
+            self.storage = {'session': session,
+                            'data': data,
+                            'result': result}
+        else:
+            session = self.storage['session']
+            data = self.storage['data']
+            result = self.storage['result']
 
-        t = self.gaussian_process.X.shape[0]
-        return mean, self.beta(t) * np.sqrt(var)
+        self.feed_dict.update({data: points})
+        return session.run(result, self.feed_dict)
 
     @concatenate_inputs(start=1)
-    def gradient(self, points):
-        """Return the distribution over the gradient.
+    def evaluate_tf(self, points):
+        """Evaluate the model, but return tensorflow tensors."""
+        # Build normal prediction
+        with self.gaussian_process.tf_mode():
+            mean, var = self.gaussian_process.build_predict(points)
+        # Construct confidence intervals
+        std = self.beta * tf.sqrt(var, name='standard_deviation')
+        return mean, std
 
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row
-            for each data point.
+    def update_feed_dict(self):
+        """Update the feed dictionary for tensorflow."""
+        gp = self.gaussian_process
 
-        Returns
-        -------
-        mean : ndarray
-            The expected function gradient at the points.
-        var : ndarray
-            Error bounds for each dimension of the estimate.
-        """
-        _, var = self.gaussian_process.predict_f(points)
-        mean_dx, var_dx = self.gaussian_process.predictive_gradients(
-            points)
-        mean_dx = np.array(mean_dx).squeeze(-1)
-        var = np.array(var)
-
-        var[var <= 1e-10] = 1e-10
-        std_dx = (0.5 / np.sqrt(var)) * var_dx
-        t = self.gaussian_process.X.shape[0]
-        return mean_dx, self.beta(t) * std_dx
+        feed_dict = {}
+        gp.update_feed_dict(gp.get_feed_dict_keys(), feed_dict)
+        feed_dict[self.parameters] = gp.get_free_state()
+        self.feed_dict = feed_dict
 
     def add_data_point(self, x, y):
         """Add data points to the GP model and update cholesky.
@@ -622,10 +572,12 @@ class GPflowGaussianProcess(GaussianProcess):
             A 2d array with the new measurements to add to the GP model.
             Each measurements is on a new row.
         """
-        self.gaussian_process.X = np.vstack((self.X, np.atleast_2d(x)))
-        self.gaussian_process.Y = np.vstack((self.Y, np.atleast_2d(y)))
-        (self.gaussian_process.L,
-         self.gaussian_process.V) = self.gaussian_process.update_cholesky()
+        gp = self.gaussian_process
+        gp.X = np.vstack((self.X, np.atleast_2d(x)))
+        gp.Y = np.vstack((self.Y, np.atleast_2d(y)))
+        self.update_feed_dict()
+        if hasattr(gp, 'update_cholesky'):
+            gp.L, gp.V = self.gaussian_process.update_cholesky()
 
 
 class ScipyDelaunay(spatial.Delaunay):
@@ -645,7 +597,7 @@ class ScipyDelaunay(spatial.Delaunay):
 
     def __init__(self, limits, num_points):
         self.numpoints = num_points
-        self.limits = np.asarray(limits, dtype=np.float)
+        self.limits = np.asarray(limits, dtype=np_dtype)
         params = [np.linspace(limit[0], limit[1], n) for limit, n in
                   zip(limits, num_points)]
         output = np.meshgrid(*params)
@@ -733,7 +685,7 @@ class GridWorld(object):
         -------
         offset_states : ndarray
         """
-        states = np.atleast_2d(states).astype(np.float) - self.offset[None, :]
+        states = np.atleast_2d(states).astype(np_dtype) - self.offset[None, :]
         if clip:
             np.clip(states,
                     self.offset_limits[:, 0] + 2 * _EPS,
@@ -1014,7 +966,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         else:
             product = cartesian(*np.diag(self.unit_maxes))
             hyperrectangle_corners = np.array(list(product),
-                                              dtype=np.float)
+                                              dtype=np_dtype)
             self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
@@ -1069,7 +1021,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         """Compute the simplex hyperplane parameters on the triangulation."""
         self.hyperplanes = np.empty((self.triangulation.nsimplex,
                                      self.ndim, self.ndim),
-                                    dtype=np.float)
+                                    dtype=np_dtype)
 
         # Use that the bottom-left rectangle has the index zero, so that the
         # index numbers of scipy correspond to ours.
@@ -1161,7 +1113,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         nsimp = self.ndim + 1
         npoints = len(points)
 
-        weights = np.empty((npoints, nsimp), dtype=np.float)
+        weights = np.empty((npoints, nsimp), dtype=np_dtype)
 
         # Pre-multiply each hyperplane by (point - origin)
         np.einsum('ij,ijk->ik', points - origins, hyperplanes,
@@ -1259,7 +1211,7 @@ class Triangulation(GridWorld, DeterministicFunction):
         npoints = len(simplex_ids)
 
         # weights
-        weights = np.empty((npoints, self.ndim, nsimp), dtype=np.float)
+        weights = np.empty((npoints, self.ndim, nsimp), dtype=np_dtype)
 
         weights[:, :, 1:] = self.hyperplanes[simplex_ids]
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)

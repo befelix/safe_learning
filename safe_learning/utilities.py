@@ -31,12 +31,18 @@ def concatenate_inputs(start=0):
     def wrap(function):
         def wrapped_function(*args, **kwargs):
             """A function that concatenates inputs."""
+            nargs = len(args) - start
+            # Check for tensorflow object
             if isinstance(args[start], tf.Tensor):
+                # reduce number of function calls in graph
+                if nargs == 1:
+                    return function(*args, **kwargs)
+                # concatenate extra arguments
                 args = args[:start] + (tf.concat(args[start:], axis=1),)
                 return function(*args, **kwargs)
             else:
+                # Map to 2D objects
                 to_concatenate = map(np.atleast_2d, args[start:])
-                nargs = len(args) - start
 
                 if nargs == 1:
                     concatenated = tuple(to_concatenate)
