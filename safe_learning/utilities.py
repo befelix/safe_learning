@@ -15,6 +15,7 @@ import numpy as np
 import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
+from functools import wraps
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs']
@@ -29,6 +30,7 @@ def concatenate_inputs(start=0):
         The attribute number at which to start concatenating.
     """
     def wrap(function):
+        @wraps(function)
         def wrapped_function(*args, **kwargs):
             """A function that concatenates inputs."""
             nargs = len(args) - start
