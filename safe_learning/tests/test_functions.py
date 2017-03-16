@@ -169,7 +169,6 @@ class TestGPRCached(object):
 
         gpfun_cached = GPflowGaussianProcess(gp_cached)
         gpfun_cached.add_data_point(x, y)
-
         m2, v2 = gpfun_cached(test_points)
 
         assert_allclose(m1, m2)

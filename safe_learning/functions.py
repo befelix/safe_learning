@@ -11,8 +11,8 @@ __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
 
 try:
     import GPflow
-    from GPflow.param import AutoFlow
-    from GPflow.tf_wraps import eye
+    # from GPflow.param import AutoFlow
+    # from GPflow.tf_wraps import eye
 except ImportError:
     GPflow = None
 
@@ -282,7 +282,7 @@ class GaussianProcess(UncertainFunction):
         super(GaussianProcess, self).__init__()
         self.n_dim = gaussian_process.X.shape[-1]
         self.gaussian_process = gaussian_process
-        self.beta = beta
+        self.beta = float(beta)
 
     @property
     def X(self):
@@ -420,24 +420,42 @@ class GPRCached(GPflow.gpr.GPR):
         """Initialize GP and cholesky decomposition."""
         if GPflow is None:
             raise ImportError('This function requires the GPflow module.')
-        # super(GPR_cached, self).__init__(self, x, y, kern)
         GPflow.gpr.GPR.__init__(self, x, y, kern)
-        self.cholesky = self.alpha = None
-        self.update_cache()
 
-    @AutoFlow()
+        cholesky, alpha = self._compute_cache()
+        self.cholesky = GPflow.param.DataHolder(cholesky,
+                                                on_shape_change='pass')
+        self.alpha = GPflow.param.DataHolder(alpha,
+                                             on_shape_change='pass')
+
     def _compute_cache(self):
         """Return the cholesky decomposition for the observed points."""
-        kernel = (self.kern.K(self.X)
-                  + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
-        cholesky = tf.cholesky(kernel, name='gp_cholesky')
+        X = self.X.value
+        Y = self.Y.value
+        variance = self.likelihood.variance.value
+        with tf.Session():
+            mean = self.mean_function(X).eval()
 
-        target = self.Y - self.mean_function(self.X)
-        alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
+        kernel = self.kern.compute_K(X, X) + np.eye(len(X)) * variance
+        cholesky = linalg.cholesky(kernel, lower=True)
+        target = Y - mean
+        alpha = linalg.solve_triangular(cholesky, target, lower=True)
         return cholesky, alpha
 
+    # TODO: Autoflow seems to mess things up by building a separate graph.
+    # @AutoFlow()
+    # def _compute_cache(self):
+    #     kernel = (self.kern.K(self.X)
+    #               + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
+    #
+    #     cholesky = tf.cholesky(kernel, name='gp_cholesky')
+    #
+    #     target = self.Y - self.mean_function(self.X)
+    #     alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
+    #     return cholesky, alpha
+
     def update_cache(self):
-        """Update the GP cache."""
+        """Update the cache after adding data points."""
         self.cholesky, self.alpha = self._compute_cache()
 
     def build_predict(self, Xnew, full_cov=False):
@@ -499,8 +517,10 @@ class GPflowGaussianProcess(GaussianProcess):
         super(GPflowGaussianProcess, self).__init__(gaussian_process, beta)
         self.parameters = tf.placeholder(tf_dtype, [None])
         self.gaussian_process.make_tf_array(self.parameters)
+
         self.feed_dict = {}
         self.update_feed_dict()
+
         self.storage = None
 
     @property
@@ -543,7 +563,7 @@ class GPflowGaussianProcess(GaussianProcess):
             data = self.storage['data']
             result = self.storage['result']
 
-        self.feed_dict.update({data: points})
+        self.feed_dict[data] = points
         return session.run(result, self.feed_dict)
 
     @concatenate_inputs(start=1)
@@ -559,11 +579,10 @@ class GPflowGaussianProcess(GaussianProcess):
     def update_feed_dict(self):
         """Update the feed dictionary for tensorflow."""
         gp = self.gaussian_process
+        feed_dict = self.feed_dict
 
-        feed_dict = {}
         gp.update_feed_dict(gp.get_feed_dict_keys(), feed_dict)
         feed_dict[self.parameters] = gp.get_free_state()
-        self.feed_dict = feed_dict
 
     def add_data_point(self, x, y):
         """Add data points to the GP model and update cholesky.
@@ -580,9 +599,10 @@ class GPflowGaussianProcess(GaussianProcess):
         gp = self.gaussian_process
         gp.X = np.vstack((self.X, np.atleast_2d(x)))
         gp.Y = np.vstack((self.Y, np.atleast_2d(y)))
-        self.update_feed_dict()
+
         if hasattr(gp, 'update_cache'):
             gp.update_cache()
+        self.update_feed_dict()
 
 
 class ScipyDelaunay(spatial.Delaunay):
@@ -1303,7 +1323,7 @@ class QuadraticFunction(DeterministicFunction):
     def __init__(self, matrix):
         """Initialization, see `QuadraticLyapunovFunction`."""
         super(QuadraticFunction, self).__init__()
-        self.matrix = matrix
+        self.matrix = matrix.astype(np_dtype)
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
