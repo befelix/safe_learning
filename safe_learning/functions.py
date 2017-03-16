@@ -11,8 +11,8 @@ __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
 
 try:
     import GPflow
-    # from GPflow.param import AutoFlow
-    # from GPflow.tf_wraps import eye
+    from GPflow.param import AutoFlow, DataHolder
+    from GPflow.tf_wraps import eye
 except ImportError:
     GPflow = None
 
@@ -422,37 +422,24 @@ class GPRCached(GPflow.gpr.GPR):
             raise ImportError('This function requires the GPflow module.')
         GPflow.gpr.GPR.__init__(self, x, y, kern)
 
-        cholesky, alpha = self._compute_cache()
-        self.cholesky = GPflow.param.DataHolder(cholesky,
-                                                on_shape_change='pass')
-        self.alpha = GPflow.param.DataHolder(alpha,
-                                             on_shape_change='pass')
+        # Create new dataholders for the cached data
+        self.cholesky = DataHolder(np.empty((0, 0), dtype=np_dtype),
+                                   on_shape_change='pass')
+        self.alpha = DataHolder(np.empty((0, 0), dtype=np_dtype),
+                                on_shape_change='pass')
+        self.update_cache()
 
+    @AutoFlow()
     def _compute_cache(self):
-        """Return the cholesky decomposition for the observed points."""
-        X = self.X.value
-        Y = self.Y.value
-        variance = self.likelihood.variance.value
-        with tf.Session():
-            mean = self.mean_function(X).eval()
+        """Compute cache."""
+        kernel = (self.kern.K(self.X)
+                  + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
 
-        kernel = self.kern.compute_K(X, X) + np.eye(len(X)) * variance
-        cholesky = linalg.cholesky(kernel, lower=True)
-        target = Y - mean
-        alpha = linalg.solve_triangular(cholesky, target, lower=True)
+        cholesky = tf.cholesky(kernel, name='gp_cholesky')
+
+        target = self.Y - self.mean_function(self.X)
+        alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
         return cholesky, alpha
-
-    # TODO: Autoflow seems to mess things up by building a separate graph.
-    # @AutoFlow()
-    # def _compute_cache(self):
-    #     kernel = (self.kern.K(self.X)
-    #               + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
-    #
-    #     cholesky = tf.cholesky(kernel, name='gp_cholesky')
-    #
-    #     target = self.Y - self.mean_function(self.X)
-    #     alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
-    #     return cholesky, alpha
 
     def update_cache(self):
         """Update the cache after adding data points."""
@@ -467,7 +454,7 @@ class GPRCached(GPflow.gpr.GPR):
             The points at which to evaluate the function. One row for each
             data points.
         full_cov : bool
-            if False retutns only the diagonal of the covariance matrix
+            if False returns only the diagonal of the covariance matrix
 
         Returns
         -------
