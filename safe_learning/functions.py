@@ -7,7 +7,7 @@ import numpy as np
 __all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
            'GridWorld', 'UncertainFunction', 'FunctionStack',
            'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
-           'GPR_cached', 'GPflowGaussianProcess', 'sample_gp_function']
+           'GPRCached', 'GPflowGaussianProcess', 'sample_gp_function']
 
 try:
     import GPflow
@@ -402,8 +402,8 @@ class GPyGaussianProcess(GaussianProcess):
         self.gaussian_process.set_XY(x_new, y_new)
 
 
-class GPR_cached(GPflow.gpr.GPR):
-    """GPflow.gpr.GPR class that stores cholesky decomposition.
+class GPRCached(GPflow.gpr.GPR):
+    """GPflow.gpr.GPR class that stores cholesky decomposition for efficiency.
 
     Parameters
     ----------

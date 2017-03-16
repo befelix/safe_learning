@@ -12,7 +12,7 @@ from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, GPyGaussianProcess,
                                      QuadraticFunction, DimensionError,
-                                     GPR_cached, GPflowGaussianProcess)
+                                     GPRCached, GPflowGaussianProcess)
 from safe_learning.utilities import concatenate_inputs
 
 try:
@@ -143,7 +143,7 @@ class TestGPRCached(object):
         y = np.array([[0], [1]], dtype=float)
         kernel = GPflow.kernels.RBF(2)
         gp = GPflow.gpr.GPR(x, y, kernel)
-        gp_cached = GPR_cached(x, y, kernel)
+        gp_cached = GPRCached(x, y, kernel)
         return gp, gp_cached
 
     def test_predict_f(self, gps):
