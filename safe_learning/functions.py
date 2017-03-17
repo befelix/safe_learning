@@ -1135,6 +1135,22 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         return weights, simplices
 
+    def evaluate_tf(self, points):
+        """Evaluate the function with tensorflow."""
+        # Compute weights and implices using numpy
+        weights, simplices = tf.py_func(self._get_weights,
+                                        inp=[points],
+                                        Tout=[tf.float64, tf.int64],
+                                        stateful=False)
+
+        # tf.gather does integer indexing
+        parameter_vector = tf.gather(self.parameters,
+                                     indices=simplices,
+                                     validate_indices=False)
+
+        # Broadcast weights among the output dimension
+        return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
+
     def evaluate(self, points):
         """Return the function values.
 
@@ -1152,11 +1168,11 @@ class Triangulation(GridWorld, DeterministicFunction):
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
 
-        # Return function values if desired
-        result = np.einsum('ij,ijk->ik',
-                           weights,
-                           self.parameters[simplices])
-        return result
+        # Return function values
+        parameter_vector = self.parameters[simplices]
+
+        # Broadcast the weights along output dimensions
+        return np.sum(weights[:, :, None] * parameter_vector, axis=1)
 
     def parameter_derivative(self, points):
         """
