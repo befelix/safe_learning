@@ -20,7 +20,8 @@ from scipy import spatial, sparse, interpolate, linalg
 import tensorflow as tf
 from itertools import product as cartesian
 
-from .utilities import linearly_spaced_combinations, concatenate_inputs
+from .utilities import (linearly_spaced_combinations, concatenate_inputs,
+                        make_tf_fun)
 
 _EPS = np.finfo(np.float).eps
 tf_dtype = tf.float64
@@ -1128,28 +1129,13 @@ class Triangulation(GridWorld, DeterministicFunction):
         weights = np.empty((npoints, nsimp), dtype=np_dtype)
 
         # Pre-multiply each hyperplane by (point - origin)
-        np.einsum('ij,ijk->ik', points - origins, hyperplanes,
-                  out=weights[:, 1:])
+        offset = points - origins
+        np.sum(offset[:, :, None] * hyperplanes, axis=1, out=weights[:, 1:])
+
         # The weights have to add up to one
         weights[:, 0] = 1 - np.sum(weights[:, 1:], axis=1)
 
         return weights, simplices
-
-    def evaluate_tf(self, points):
-        """Evaluate the function with tensorflow."""
-        # Compute weights and implices using numpy
-        weights, simplices = tf.py_func(self._get_weights,
-                                        inp=[points],
-                                        Tout=[tf.float64, tf.int64],
-                                        stateful=False)
-
-        # tf.gather does integer indexing
-        parameter_vector = tf.gather(self.parameters,
-                                     indices=simplices,
-                                     validate_indices=False)
-
-        # Broadcast weights among the output dimension
-        return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
 
     def evaluate(self, points):
         """Return the function values.
@@ -1173,6 +1159,61 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         # Broadcast the weights along output dimensions
         return np.sum(weights[:, :, None] * parameter_vector, axis=1)
+
+    @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
+    def _get_hyperplanes(self, points):
+        """Return the linear weights associated with points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        weights : ndarray
+            An array that contains the linear weights for each point.
+        hyperplanes : ndarray
+            The corresponding hyperplane objects.
+        simplices : ndarray
+            The indeces of the simplices associated with each points
+        """
+        simplex_ids = self.find_simplex(points)
+
+        simplices = self.simplices(simplex_ids)
+        origins = self.index_to_state(simplices[:, 0])
+
+        # Get hyperplane equations
+        simplex_ids %= self.triangulation.nsimplex
+        hyperplanes = self.hyperplanes[simplex_ids]
+
+        # Pre-multiply each hyperplane by (point - origin)
+        return origins, hyperplanes, simplices
+
+    def evaluate_tf(self, points):
+        """Evaluate using tensorflow."""
+        # Project points onto the grid of triangles.
+        if self.project:
+            points = tf.clip_by_value(points,
+                                      self.limits[:, 0],
+                                      self.limits[:, 1])
+
+        # Get the appropriate hyperplane
+        origins, hyperplanes, simplices = self._get_hyperplanes(points)
+
+        # Compute weights (barycentric coordinates)
+        offset = points - origins
+        w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
+        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
+        weights = tf.concat((w0, w1), axis=1)
+
+        # Collect the value on the vertices
+        parameter_vector = tf.gather(self.parameters,
+                                     indices=simplices,
+                                     validate_indices=False)
+
+        # Compute the values
+        return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
 
     def parameter_derivative(self, points):
         """
