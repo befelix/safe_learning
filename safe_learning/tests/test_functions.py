@@ -716,7 +716,7 @@ class TestTriangulation(object):
         points = tf.placeholder(tf.float64, [None, None])
         feed_dict = {points: test_points}
 
-        # Enable project
+        # Dsiable project
         trinp.project = False
         tri.project = False
 
@@ -745,6 +745,29 @@ class TestTriangulation(object):
         grad = tf.gradients(y, points)
         res = sess.run(grad, feed_dict=feed_dict)[0]
         assert_allclose(res[inside], trinp.gradient(test_points))
+
+    def test_gradient_param(self, setup):
+        """Test the gradients with respect to the parameters."""
+        sess, tri, trinp, test_points = setup
+
+        # Disable project
+        trinp.project = True
+        tri.project = True
+
+        x = tf.placeholder(tf.float64, [1, 2])
+
+        true_gradient = trinp.parameter_derivative(test_points)
+        true_gradient = np.array(true_gradient.todense())
+
+        y = tri(x)
+        grad_tf = tf.gradients(y, tri.parameters)[0]
+        dense_gradient = np.zeros(true_gradient[0].shape, dtype=np.float)
+
+        for i, test in enumerate(test_points):
+            gradient = sess.run(grad_tf, feed_dict={x: test[None, :]})
+            dense_gradient[:] = 0.
+            dense_gradient[gradient.indices] = gradient.values
+            assert_allclose(dense_gradient, true_gradient[i])
 
 
 if __name__ == '__main__':
