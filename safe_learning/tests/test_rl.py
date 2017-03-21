@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from safe_learning.utilities import dlqr
 
-from safe_learning import PolicyIteration, Triangulation, DeterministicFunction
+from safe_learning import PolicyIteration, _Triangulation, DeterministicFunction
 
 if sys.version_info.major <= 2:
     import mock
@@ -35,7 +35,7 @@ class PolicyIterationTest(unittest.TestCase):
             return x.dot(a.T) + u.dot(b.T)
 
         k, p = dlqr(a, b, q, r)
-        value_function = Triangulation([[-1, 1]], 19, project=True)
+        value_function = _Triangulation([[-1, 1]], 19, project=True)
         u_max = np.sum(np.abs(k)) * 1.1
 
         def reward_function(x, a, _):

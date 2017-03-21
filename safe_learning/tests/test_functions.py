@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import check_grad
 import tensorflow as tf
 
-from safe_learning.functions import (Triangulation, ScipyDelaunay, GridWorld,
+from safe_learning.functions import (_Triangulation, ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, GPyGaussianProcess,
                                      QuadraticFunction, DimensionError,
@@ -307,7 +307,7 @@ def test_scipy_delaunay():
     limits = [[-1, 1], [-1, 2]]
     num_points = [2, 6]
     sp_delaunay = ScipyDelaunay(limits, num_points)
-    delaunay = Triangulation(limits, num_points)
+    delaunay = _Triangulation(limits, num_points)
 
     assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
     assert_equal(delaunay.ndim, sp_delaunay.ndim)
@@ -473,7 +473,7 @@ class TestDelaunay(object):
         """Test the simplices on the grid."""
         limits = [[-1, 1], [-1, 2]]
         num_points = [3, 7]
-        delaunay = Triangulation(limits, num_points)
+        delaunay = _Triangulation(limits, num_points)
 
         # Test the basic properties
         assert_equal(delaunay.nrectangles, 2 * 6)
@@ -517,7 +517,7 @@ class TestDelaunay(object):
         """Test the evaluation function."""
         eps = 1e-10
 
-        delaunay = Triangulation([[0, 1], [0, 1]], [2, 2])
+        delaunay = _Triangulation([[0, 1], [0, 1]], [2, 2])
 
         test_points = np.array([[0, 0],
                                 [1 - eps, 0],
@@ -562,7 +562,7 @@ class TestDelaunay(object):
     def test_multiple_dimensions(self):
         """Test delaunay in three dimensions."""
         limits = [[0, 1]] * 3
-        delaunay = Triangulation(limits, [2] * 3)
+        delaunay = _Triangulation(limits, [2] * 3)
         assert_equal(delaunay.ndim, 3)
         assert_equal(delaunay.nrectangles, 1)
         assert_equal(delaunay.nsimplex, np.math.factorial(3))
@@ -593,7 +593,7 @@ class TestDelaunay(object):
 
     def test_gradient(self):
         """Test the gradient_at function."""
-        delaunay = Triangulation([[0, 1], [0, 1]], [2, 2])
+        delaunay = _Triangulation([[0, 1], [0, 1]], [2, 2])
 
         points = np.array([[0, 0],
                            [1, 0],
@@ -635,7 +635,7 @@ class TestDelaunay(object):
 
     def test_1d(self):
         """Test the triangulation for 1D inputs."""
-        delaunay = Triangulation([[0, 1]], 3, vertex_values=[0, 0.5, 0])
+        delaunay = _Triangulation([[0, 1]], 3, vertex_values=[0, 0.5, 0])
         vertex_values = delaunay.parameters
 
         test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T

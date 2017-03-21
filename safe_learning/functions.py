@@ -4,10 +4,11 @@ from __future__ import absolute_import, print_function, division
 
 import numpy as np
 
-__all__ = ['DeterministicFunction', 'Triangulation', 'PiecewiseConstant',
-           'GridWorld', 'UncertainFunction', 'FunctionStack',
-           'QuadraticFunction', 'GaussianProcess', 'GPyGaussianProcess',
-           'GPRCached', 'GPflowGaussianProcess', 'sample_gp_function']
+__all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
+           'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
+           'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
+           'GPyGaussianProcess', 'GPRCached', 'GPflowGaussianProcess',
+           'sample_gp_function']
 
 try:
     import GPflow
@@ -943,7 +944,7 @@ class _Delaunay1D(object):
         return np.where(out_of_bounds, -1, 0)
 
 
-class Triangulation(GridWorld, DeterministicFunction):
+class _Triangulation(GridWorld, DeterministicFunction):
     """
     Efficient Delaunay triangulation on regular grids.
 
@@ -967,7 +968,7 @@ class Triangulation(GridWorld, DeterministicFunction):
 
     def __init__(self, limits, num_points, vertex_values=None, project=False):
         """Initialization."""
-        super(Triangulation, self).__init__(limits, num_points)
+        super(_Triangulation, self).__init__(limits, num_points)
 
         self._parameters = None
         self.parameters = vertex_values
@@ -1160,61 +1161,6 @@ class Triangulation(GridWorld, DeterministicFunction):
         # Broadcast the weights along output dimensions
         return np.sum(weights[:, :, None] * parameter_vector, axis=1)
 
-    @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
-    def _get_hyperplanes(self, points):
-        """Return the linear weights associated with points.
-
-        Parameters
-        ----------
-        points : 2d array
-            Each row represents one point
-
-        Returns
-        -------
-        weights : ndarray
-            An array that contains the linear weights for each point.
-        hyperplanes : ndarray
-            The corresponding hyperplane objects.
-        simplices : ndarray
-            The indeces of the simplices associated with each points
-        """
-        simplex_ids = self.find_simplex(points)
-
-        simplices = self.simplices(simplex_ids)
-        origins = self.index_to_state(simplices[:, 0])
-
-        # Get hyperplane equations
-        simplex_ids %= self.triangulation.nsimplex
-        hyperplanes = self.hyperplanes[simplex_ids]
-
-        # Pre-multiply each hyperplane by (point - origin)
-        return origins, hyperplanes, simplices
-
-    def evaluate_tf(self, points):
-        """Evaluate using tensorflow."""
-        # Project points onto the grid of triangles.
-        if self.project:
-            points = tf.clip_by_value(points,
-                                      self.limits[:, 0],
-                                      self.limits[:, 1])
-
-        # Get the appropriate hyperplane
-        origins, hyperplanes, simplices = self._get_hyperplanes(points)
-
-        # Compute weights (barycentric coordinates)
-        offset = points - origins
-        w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
-        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
-        weights = tf.concat((w0, w1), axis=1)
-
-        # Collect the value on the vertices
-        parameter_vector = tf.gather(self.parameters,
-                                     indices=simplices,
-                                     validate_indices=False)
-
-        # Compute the values
-        return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
-
     def parameter_derivative(self, points):
         """
         Obtain function values at points from triangulation.
@@ -1350,6 +1296,107 @@ class Triangulation(GridWorld, DeterministicFunction):
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
                                  shape=(self.ndim * npoints, self.nindex))
+
+
+class Triangulation(DeterministicFunction):
+    """Efficient Delaunay triangulation on regular grid.
+
+    This is a tensorflow wrapper around a numpy implementation.
+
+    This class is a wrapper around scipy.spatial.Delaunay for regular grids. It
+    splits the space into regular hyperrectangles and then computes a Delaunay
+    triangulation for only one of them. This single triangulation is then
+    generalized to other hyperrectangles, without ever maintaining the full
+    triangulation for all individual hyperrectangles.
+
+    Parameters
+    ----------
+    limits: arraylike
+        A list of limits. For example, [(x_min, x_max), (y_min, y_max)].
+    num_points: arraylike
+        1D array with the number of points with which to grid each dimension.
+    vertex_values: arraylike, optional
+        A 2D array with the values at the vertices of the grid on each row.
+        Is converted into a tensorflow variable.
+    project: bool, optional
+        Whether to project points onto the limits.
+    """
+
+    def __init__(self, limits, num_points, vertex_values=None, project=False):
+        """Initialization."""
+        super(Triangulation, self).__init__()
+
+        self.tri = _Triangulation(limits,
+                                  num_points,
+                                  project=project)
+
+        # Make sure the variable has the correct size
+        if not isinstance(vertex_values, tf.Variable):
+            self.tri.parameters = vertex_values
+            vertex_values = self.tri.parameters.astype(np_dtype)
+            vertex_values = tf.Variable(vertex_values)
+
+        self.parameters = vertex_values
+
+    @property
+    def project(self):
+        """Setter for the project parameter."""
+        return self.tri.project
+
+    @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
+    def _get_hyperplanes(self, points):
+        """Return the linear weights associated with points.
+
+        Parameters
+        ----------
+        points : 2d array
+            Each row represents one point
+
+        Returns
+        -------
+        weights : ndarray
+            An array that contains the linear weights for each point.
+        hyperplanes : ndarray
+            The corresponding hyperplane objects.
+        simplices : ndarray
+            The indeces of the simplices associated with each points
+        """
+        simplex_ids = self.tri.find_simplex(points)
+
+        simplices = self.tri.simplices(simplex_ids)
+        origins = self.tri.index_to_state(simplices[:, 0])
+
+        # Get hyperplane equations
+        simplex_ids %= self.tri.triangulation.nsimplex
+        hyperplanes = self.tri.hyperplanes[simplex_ids]
+
+        # Pre-multiply each hyperplane by (point - origin)
+        return origins, hyperplanes, simplices
+
+    def evaluate(self, points):
+        """Evaluate using tensorflow."""
+        # Project points onto the grid of triangles.
+        if self.project:
+            points = tf.clip_by_value(points,
+                                      self.tri.limits[:, 0],
+                                      self.tri.limits[:, 1])
+
+        # Get the appropriate hyperplane
+        origins, hyperplanes, simplices = self._get_hyperplanes(points)
+
+        # Compute weights (barycentric coordinates)
+        offset = points - origins
+        w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
+        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
+        weights = tf.concat((w0, w1), axis=1)
+
+        # Collect the value on the vertices
+        parameter_vector = tf.gather(self.parameters,
+                                     indices=simplices,
+                                     validate_indices=False)
+
+        # Compute the values
+        return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
 
 
 class QuadraticFunction(DeterministicFunction):
