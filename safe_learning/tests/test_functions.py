@@ -11,15 +11,10 @@ import tensorflow as tf
 from safe_learning.functions import (_Triangulation, Triangulation,
                                      ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
-                                     UncertainFunction, GPyGaussianProcess,
-                                     QuadraticFunction, DimensionError,
-                                     GPRCached, GPflowGaussianProcess)
+                                     UncertainFunction, QuadraticFunction,
+                                     DimensionError, GPRCached,
+                                     GaussianProcess)
 from safe_learning.utilities import concatenate_inputs
-
-try:
-    import GPy
-except ImportError:
-    GPy = None
 
 try:
     import GPflow
@@ -68,71 +63,6 @@ class TestUncertainFunction():
         assert(fd.gradient(None) == 3)
 
 
-@pytest.mark.skipIf(GPy is None, 'GPy module not installed.')
-class TestGPy(object):
-    """Test the GPY GP function class."""
-
-    @pytest.fixture(scope="class")
-    def gp_testing(self):
-        """Create GP model."""
-        x = np.array([[1., 0.], [0., 1]])
-        y = np.array([[0.], [1.]])
-        kernel = GPy.kern.RBF(2)
-        lik = GPy.likelihoods.Gaussian(variance=0.1**2)
-        gp = GPy.core.GP(x, y, kernel, lik)
-        beta = 2.
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-        return gp, beta, test_points
-
-    def test_evaluation(self, gp_testing):
-        """Make sure evaluation works."""
-        gp, beta, test_points = gp_testing
-        ufun = GPyGaussianProcess(gp, beta=beta)
-
-        a1, b1 = ufun.evaluate(test_points)
-        a2, b2 = gp.predict_noiseless(test_points)
-        b2 = beta * np.sqrt(b2)
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
-
-        # Test multiple inputs
-        a1, b1 = ufun.evaluate(test_points[:, [0]],
-                               test_points[:, [1]])
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
-
-    def test_gradient(self, gp_testing):
-        """Make sure gradient works."""
-        gp, beta, test_points = gp_testing
-        ufun = GPyGaussianProcess(gp, beta=beta)
-
-        error_mean = check_grad(lambda x: ufun.evaluate(x)[0],
-                                lambda x: ufun.gradient(x)[0],
-                                test_points[0])
-
-        error_std = check_grad(lambda x: ufun.evaluate(x)[1],
-                               lambda x: ufun.gradient(x)[1],
-                               test_points[0])
-
-        assert_allclose(error_mean, 0, atol=1e-8)
-        assert_allclose(error_std, 0, atol=1e-7)
-
-    def test_new_data(self, gp_testing):
-        """Test addting data points to the GP."""
-        gp, beta, test_points = gp_testing
-        ufun = GPyGaussianProcess(gp, beta=beta)
-
-        x = np.array([[1.2, 2.3]])
-        y = np.array([[2.4]])
-        ufun.add_data_point(x, y)
-
-        gp = ufun.gaussian_process
-        assert_allclose(gp.X, np.array([[1, 0],
-                                        [0, 1],
-                                        [1.2, 2.3]]))
-        assert_allclose(gp.Y, np.array([[0], [1], [2.4]]))
-
-
 @pytest.mark.skipif(GPflow is None, reason='GPflow module not installed')
 class TestGPRCached(object):
     """Test the GPR_cached class."""
@@ -147,8 +77,36 @@ class TestGPRCached(object):
         gp_cached = GPRCached(x, y, kernel)
         return gp, gp_cached
 
+    def test_adding_data(self, gps):
+        """Test that adding data works."""
+        test_points = np.array([[0.9, 0.1], [3., 2]])
+
+        gp, gp_cached = gps
+        gpfun = GaussianProcess(gp)
+        gpfun_cached = GaussianProcess(gp_cached)
+
+        x = np.array([[1.2, 2.3]])
+        y = np.array([[2.4]])
+
+        gpfun.add_data_point(x, y)
+        m1, v1 = gpfun(test_points)
+
+        gpfun_cached.add_data_point(x, y)
+        m2, v2 = gpfun_cached(test_points)
+
+        feed_dict = gpfun.feed_dict.copy()
+        feed_dict.update(gpfun_cached.feed_dict)
+
+        with tf.Session() as sess:
+            m1, v1, m2, v2 = sess.run([m1, v1, m2, v2], feed_dict=feed_dict)
+
+        assert_allclose(m1, m2)
+        assert_allclose(v1, v2)
+
     def test_predict_f(self, gps):
         """Make sure predictions is same as in uncached case."""
+        # Note that this messes things up terribly due to caching. So this
+        # must be the last test that we run.
         gp, gp_cached = gps
         test_points = np.array([[0.9, 0.1], [3., 2]])
         a1, b1 = gp_cached.predict_f(test_points)
@@ -156,97 +114,53 @@ class TestGPRCached(object):
         assert_allclose(a1, a2)
         assert_allclose(b1, b2)
 
-    def test_adding_data(self, gps):
-        """Test that adding data works."""
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-
-        gp, gp_cached = gps
-        gpfun = GPflowGaussianProcess(gp)
-
-        x = np.array([[1.2, 2.3]])
-        y = np.array([[2.4]])
-        gpfun.add_data_point(x, y)
-        m1, v1 = gpfun(test_points)
-
-        gpfun_cached = GPflowGaussianProcess(gp_cached)
-        gpfun_cached.add_data_point(x, y)
-        m2, v2 = gpfun_cached(test_points)
-
-        assert_allclose(m1, m2)
-        assert_allclose(v1, v2)
-
-    def test_cholesky(self):
-        """Test cholesky decomposition."""
-        pass
-
 
 @pytest.mark.skipIf(GPflow is None, 'GPflow module not installed')
 class TestGPflow(object):
-    """Test the GPflowGaussianProcess function class."""
+    """Test the GaussianProcess function class."""
 
     @pytest.fixture(scope="class")
-    def gps(self):
+    def setup(self):
         """Create GP model with GPflow and GPy."""
-        x = np.array([[1, 0], [0, 1]], dtype=float)
-        y = np.array([[0], [1]], dtype=float)
-        kernel = GPflow.kernels.RBF(2)
-        gp = GPflow.gpr.GPR(x, y, kernel)
-        # Create same model in GPy
-        kern_GPy = GPy.kern.RBF(input_dim=2,
-                                lengthscale=gp.kern.lengthscales.value,
-                                variance=gp.kern.variance.value)
-        lik = GPy.likelihoods.Gaussian(variance=gp.likelihood.variance.value)
-        gp_GPy = GPy.core.GP(x, y, kernel=kern_GPy, likelihood=lik)
-        return gp, gp_GPy
+        with tf.Session() as sess:
+            x = np.array([[1, 0], [0, 1]], dtype=float)
+            y = np.array([[0], [1]], dtype=float)
+            kernel = GPflow.kernels.RBF(2)
+            gp = GPflow.gpr.GPR(x, y, kernel)
+            yield sess, gp
 
-    def test_evaluation(self, gps):
+    def test_evaluation(self, setup):
         """Make sure evaluation works."""
         test_points = np.array([[0.9, 0.1], [3., 2]])
         beta = 3.0
+        sess, gp = setup
 
-        gp, _ = gps
-        ufun = GPflowGaussianProcess(gp, beta=beta)
+        ufun = GaussianProcess(gp, beta=beta)
 
-        a1, b1 = ufun.evaluate(test_points)
-        a2, b2 = gp.predict_f(test_points)
-        b2 = beta * np.sqrt(b2)
-
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
+        # Evaluate GP
+        mean_1, error_1 = ufun.evaluate(test_points)
+        mean_1, error_1 = sess.run([mean_1, error_1],
+                                   feed_dict=ufun.feed_dict)
 
         # Test multiple inputs
-        a1, b1 = ufun.evaluate(test_points[:, [0]],
+        mean_2, error_2 = ufun.evaluate(test_points[:, [0]],
                                test_points[:, [1]])
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
+        mean_2, error_2 = sess.run([mean_2, error_2], feed_dict=ufun.feed_dict)
 
-    def test_evaluation_against_gpy(self, gps):
-        """Make sure evaluations is same as in GPy case."""
-        test_points = np.array([[0.9, 0.1], [3., 2]])
-        gp, gp_GPy = gps
+        assert_allclose(mean_1, mean_2)
+        assert_allclose(error_1, error_2)
 
-        ufun = GPflowGaussianProcess(gp)
-        ufun_GPy = GPyGaussianProcess(gp_GPy)
-
-        a1, b1 = ufun.evaluate(test_points)
-        a2, b2 = ufun_GPy.evaluate(test_points)
-
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
-
-    def test_new_data(self, gps):
+    def test_new_data(self, setup):
         """Test adding data points to the GP."""
         test_points = np.array([[0.9, 0.1], [3., 2]])
-        gp, gp_GPy = gps
+        sess, gp = setup
 
-        ufun = GPflowGaussianProcess(gp)
-        ufun_GPy = GPyGaussianProcess(gp_GPy)
+        ufun = GaussianProcess(gp)
 
         x = np.array([[1.2, 2.3]])
         y = np.array([[2.4]])
 
         ufun.add_data_point(x, y)
-        ufun_GPy.add_data_point(x, y)
 
         assert_allclose(ufun.X, np.array([[1, 0],
                                           [0, 1],
@@ -255,9 +169,12 @@ class TestGPflow(object):
 
         # Check prediction is correct after adding data (cholesky update)
         a1, b1 = ufun.evaluate(test_points)
-        a2, b2 = ufun_GPy.evaluate(test_points)
-        assert_allclose(a1, a2)
-        assert_allclose(b1, b2)
+        a1, b1 = sess.run([a1, b1], feed_dict=ufun.feed_dict)
+
+        a1_true = np.array([[0.16371139], [0.22048311]])
+        b1_true = np.array([[1.37678679], [1.98183191]])
+        assert_allclose(a1, a1_true)
+        assert_allclose(b1, b1_true)
 
 
 class TestQuadraticFunction(object):
