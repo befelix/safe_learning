@@ -49,28 +49,6 @@ class Function(object):
         """
         return self.evaluate(*points)
 
-    @classmethod
-    def from_callable(cls, function, gradient=None):
-        """Create a deterministic function from a callable.
-
-        Parameters
-        ----------
-        function : callable
-            A function that we want to evaluate.
-
-        gradient : callable, optional
-            A callable that returns the gradient
-
-        Returns
-        -------
-        instance of DeterministicFunction
-        """
-        instance = cls()
-        instance.evaluate = function
-        if gradient is not None:
-            instance.gradient = gradient
-        return instance
-
 
 class UncertainFunction(Function):
     """Base class for function approximators."""
@@ -98,9 +76,8 @@ class UncertainFunction(Function):
             return new_function
 
         new_evaluate = _only_first_output(self.evaluate)
-        new_gradient = _only_first_output(self.gradient)
 
-        return DeterministicFunction.from_callable(new_evaluate, new_gradient)
+        return new_evaluate
 
     def evaluate(self, *points):
         """Return the distribution over function values.
@@ -116,24 +93,6 @@ class UncertainFunction(Function):
         mean : ndarray
             A 2D array with the expected function values at the points.
         error_bounds : ndarray
-            Error bounds for each dimension of the estimate.
-        """
-        raise NotImplementedError()
-
-    def gradient(self, *points):
-        """Return the distribution over the gradient.
-
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
-
-        Returns
-        -------
-        mean : ndarray
-            The expected function gradient at the points.
-        var : ndarray
             Error bounds for each dimension of the estimate.
         """
         raise NotImplementedError()
@@ -163,62 +122,6 @@ class DeterministicFunction(Function):
             A 2D array with the function values at the points.
         """
         raise NotImplementedError()
-
-    def gradient(self, *points):
-        """Return the gradient.
-
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
-
-        Returns
-        -------
-        gradient : ndarray
-            The function gradient at the points.
-        """
-        raise NotImplementedError()
-
-    def parameter_derivative(self, *points):
-        """Return the derivative with respect to the parameter vector.
-
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
-
-        Returns
-        -------
-        gradient : ndarray
-            The function gradient with respect to the parameters at the points.
-        """
-        if self.parameters is None:
-            return None
-
-        raise NotImplementedError('The derivatives towards the parameters is'
-                                  'not implemented.')
-
-    def gradient_parameter_derivative(self, *points):
-        """Return the derivative of the gradient with respect to parameters.
-
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
-
-        Returns
-        -------
-        gradient : ndarray
-            The function gradient with respect to the parameters at the points.
-        """
-        if self.parameters is None:
-            return None
-
-        raise NotImplementedError('The derivatives towards the parameters is'
-                                  'not implemented.')
 
 
 class FunctionStack(UncertainFunction):
@@ -1254,17 +1157,6 @@ class QuadraticFunction(DeterministicFunction):
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
-        """See `DeterministicFunction.evaluate`."""
-        points = np.asarray(points)
-        return np.sum(points.dot(self.matrix) * points, axis=1, keepdims=True)
-
-    @concatenate_inputs(start=1)
-    def gradient(self, points):
-        """See `DeterministicFunction.gradient`."""
-        points = np.asarray(points)
-        return 2 * points.dot(self.matrix)
-
-    def evaluate_tf(self, points):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points

@@ -29,38 +29,22 @@ class TestDeterministicFuction(object):
         """Check notImplemented error."""
         f = DeterministicFunction()
         pytest.raises(NotImplementedError, f.evaluate, None)
-        pytest.raises(NotImplementedError, f.gradient, None)
-
-    def test_callable_constructor(self):
-        """Test the from_callable constructor."""
-        def test(a):
-            return a
-
-        c = DeterministicFunction.from_callable(test)
-        assert_equal(c.evaluate(5), test(5))
-        pytest.raises(NotImplementedError, c.gradient, 5)
-
-        c = DeterministicFunction.from_callable(test, gradient=test)
-        assert_equal(c.gradient(5), test(5))
 
 
-class TestUncertainFunction():
+class TestUncertainFunction(object):
     """Test the base class."""
 
     def test_errors(self):
         """Check notImplemented error."""
         f = UncertainFunction()
         pytest.raises(NotImplementedError, f.evaluate, None)
-        pytest.raises(NotImplementedError, f.gradient, None)
 
     def test_mean_function(self):
         """Test the conversion to a deterministic function."""
         f = UncertainFunction()
         f.evaluate = lambda x: (1, 2)
-        f.gradient = lambda x: (3, 4)
         fd = f.to_mean_function()
-        assert(fd.evaluate(None) == 1)
-        assert(fd.gradient(None) == 3)
+        assert(fd(None) == 1)
 
 
 @pytest.mark.skipif(GPflow is None, reason='GPflow module not installed')
@@ -180,8 +164,7 @@ class TestGPflow(object):
 class TestQuadraticFunction(object):
     """Test the quadratic function."""
 
-    @pytest.fixture(scope="class")
-    def test_setup(self):
+    def test_evaluate(self):
         """Setup testing environment for quadratic."""
         points = np.array([[0, 0],
                            [0, 1],
@@ -191,33 +174,11 @@ class TestQuadraticFunction(object):
                       [0.2, 2.]])
         quad = QuadraticFunction(P)
         true_fval = np.array([[0., 2., 1., 3.3]]).T
-        return quad, points, true_fval
 
-    def test_evaluate(self, test_setup):
-        """Test the evaluation of the quadratic function."""
-        quad, points, true_fval = test_setup
-
-        fval = quad.evaluate(points)
-        assert_allclose(fval, true_fval)
-
-    def test_evaluate_tf(self, test_setup):
-        """Test the tensorflow evaluation of the quadratic function."""
-        quad, points, true_fval = test_setup
         with tf.Session():
-            tf_res = quad.evaluate_tf(points).eval()
+            tf_res = quad.evaluate(points).eval()
 
         assert_allclose(true_fval, tf_res)
-
-    def test_gradient(self, test_setup):
-        """Test the gradient of the quadratic function."""
-        quad, points, true_fval = test_setup
-
-        fval = quad.gradient(points)
-        true_fval = np.array([[0., 0.],
-                              [0.4, 4.],
-                              [2., .2],
-                              [2.4, 4.2]])
-        assert_allclose(fval, true_fval)
 
 
 def test_scipy_delaunay():
