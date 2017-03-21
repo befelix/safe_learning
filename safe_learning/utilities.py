@@ -15,10 +15,67 @@ import numpy as np
 import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
-from functools import wraps
+from functools import wraps, partial
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
-           'ellipse_bounds', 'concatenate_inputs']
+           'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun']
+
+
+def make_tf_fun(return_type, gradient=None, stateful=True):
+    """Convert a python function to a tensorflow function.
+
+    Parameters
+    ----------
+    return_type : list
+        A list of tensorflow return types. Needs to match with the gradient.
+    gradient : callable, optional
+        A function that provides the gradient. It takes `op` and one gradient
+        per output of the function as inputs and returns one gradient for each
+        input of the function. If stateful is `False` then tensorflow does not
+        seem to compute gradients at all.
+
+    Returns
+    -------
+    A tensorflow function with gradients registered.
+    """
+    def wrap(function):
+        """Create a new function."""
+        # Function name with stipped underscore (not allowed by tensorflow)
+        name = function.__name__.lstrip('_')
+
+        # Without gradients we can take the short route here
+        if gradient is None:
+            @wraps(function)
+            def wrapped_function(self, *args):
+                method = partial(function, self)
+                return tf.py_func(method, args, return_type,
+                                  stateful=stateful, name=name)
+
+            return wrapped_function
+
+        # Name for the gradient operation
+        grad_name = name + '_gradient'
+
+        @wraps(function)
+        def wrapped_function(self, *args):
+            # Overwrite the gradient
+            graph = tf.get_default_graph()
+
+            # Make sure the name we specify is unique
+            unique_grad_name = graph.unique_name(grad_name)
+
+            # Register the new gradient method with tensorflow
+            tf.RegisterGradient(unique_grad_name)(gradient)
+
+            # Remove self: Tensorflow does not allow for non-tensor inputs
+            method = partial(function, self)
+
+            with graph.gradient_override_map({"PyFunc": unique_grad_name}):
+                return tf.py_func(method, args, return_type,
+                                  stateful=stateful, name=name)
+
+        return wrapped_function
+    return wrap
 
 
 def concatenate_inputs(start=0):
