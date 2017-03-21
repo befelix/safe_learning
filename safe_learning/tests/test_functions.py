@@ -8,7 +8,8 @@ import numpy as np
 from scipy.optimize import check_grad
 import tensorflow as tf
 
-from safe_learning.functions import (_Triangulation, ScipyDelaunay, GridWorld,
+from safe_learning.functions import (_Triangulation, Triangulation,
+                                     ScipyDelaunay, GridWorld,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, GPyGaussianProcess,
                                      QuadraticFunction, DimensionError,
@@ -466,8 +467,8 @@ class TestPiecewiseConstant(object):
         assert_allclose(gradient, 0)
 
 
-class TestDelaunay(object):
-    """Test the generalized Delaunay triangulation."""
+class TestTriangulationNumpy(object):
+    """Test the generalized Delaunay triangulation in numpy."""
 
     def test_find_simplex(self):
         """Test the simplices on the grid."""
@@ -662,6 +663,88 @@ class TestDelaunay(object):
         gradient_deriv = delaunay.gradient_parameter_derivative(test_points)
         gradient = gradient_deriv.toarray().dot(vertex_values)
         assert_allclose(gradient.reshape(-1, 1), true_gradient)
+
+
+class TestTriangulation(object):
+    """Test the tensorflow wrapper around the numpy triangulation."""
+
+    @pytest.fixture(scope="class")
+    def setup(self):
+        """Creating testing environment."""
+        limits = [[0, 1], [0, 1]]
+        npoints = 3
+
+        trinp = _Triangulation([[0, 1], [0, 1]], npoints)
+        trinp.parameters = np.sum(trinp.all_points ** 2, axis=1, keepdims=True)
+
+        tri = Triangulation(limits, npoints, vertex_values=trinp.parameters)
+
+        test_points = np.array([[-10, -10],
+                                [0.2, 0.7],
+                                [0, 0],
+                                [0, 1],
+                                [1, 1],
+                                [-0.2, 0.5],
+                                [0.43, 0.21]])
+
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            yield sess, tri, trinp, test_points
+
+    def test_evaluate(self, setup):
+        """Test the evaluations."""
+        sess, tri, trinp, test_points = setup
+        # with tf.Session() as sess:
+        res = sess.run(tri(test_points))
+        assert_allclose(res, trinp(test_points))
+
+    def test_projected_evaluate(self, setup):
+        """Test evaluations with enabled projection."""
+        sess, tri, trinp, test_points = setup
+
+        # Enable project
+        trinp.project = True
+        tri.project = True
+
+        res = sess.run(tri(test_points))
+        assert_allclose(res, trinp(test_points))
+
+    def test_gradient_x(self, setup):
+        """Test the gradients with respect to the inputs."""
+        sess, tri, trinp, test_points = setup
+
+        points = tf.placeholder(tf.float64, [None, None])
+        feed_dict = {points: test_points}
+
+        # Enable project
+        trinp.project = False
+        tri.project = False
+
+        # Just another run test
+        y = tri(points)
+        res = sess.run(y, feed_dict=feed_dict)
+        assert_allclose(res, trinp(test_points))
+
+        # Test gradients
+        grad = tf.gradients(y, points)
+        res = sess.run(grad, feed_dict=feed_dict)[0]
+        assert_allclose(res, trinp.gradient(test_points))
+
+        # Enable project
+        trinp.project = True
+        tri.project = True
+
+        # Results are different outside of the projection.
+        inside = (np.all(test_points < trinp.limits[:, [1]].T, axis=1)
+                  & np.all(test_points > trinp.limits[:, [0]].T, axis=1))
+
+        test_points = test_points[inside]
+
+        # Test gradients projected
+        y = tri(points)
+        grad = tf.gradients(y, points)
+        res = sess.run(grad, feed_dict=feed_dict)[0]
+        assert_allclose(res[inside], trinp.gradient(test_points))
 
 
 if __name__ == '__main__':

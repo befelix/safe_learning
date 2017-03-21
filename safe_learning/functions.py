@@ -1113,9 +1113,6 @@ class _Triangulation(GridWorld, DeterministicFunction):
         """
         simplex_ids = self.find_simplex(points)
 
-        if self.project:
-            points = np.clip(points, self.limits[:, 0], self.limits[:, 1])
-
         simplices = self.simplices(simplex_ids)
         origins = self.index_to_state(simplices[:, 0])
 
@@ -1126,6 +1123,9 @@ class _Triangulation(GridWorld, DeterministicFunction):
         # Some numbers for convenience
         nsimp = self.ndim + 1
         npoints = len(points)
+
+        if self.project:
+            points = np.clip(points, self.limits[:, 0], self.limits[:, 1])
 
         weights = np.empty((npoints, nsimp), dtype=np_dtype)
 
@@ -1340,8 +1340,13 @@ class Triangulation(DeterministicFunction):
 
     @property
     def project(self):
-        """Setter for the project parameter."""
+        """Getter for the project parameter."""
         return self.tri.project
+
+    @project.setter
+    def project(self, value):
+        """Setter for the project parameter."""
+        self.tri.project = value
 
     @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
     def _get_hyperplanes(self, points):
@@ -1363,7 +1368,7 @@ class Triangulation(DeterministicFunction):
         """
         simplex_ids = self.tri.find_simplex(points)
 
-        simplices = self.tri.simplices(simplex_ids)
+        simplices = self.tri.simplices(simplex_ids).astype(np.int64)
         origins = self.tri.index_to_state(simplices[:, 0])
 
         # Get hyperplane equations
@@ -1375,14 +1380,14 @@ class Triangulation(DeterministicFunction):
 
     def evaluate(self, points):
         """Evaluate using tensorflow."""
+        # Get the appropriate hyperplane
+        origins, hyperplanes, simplices = self._get_hyperplanes(points)
+
         # Project points onto the grid of triangles.
         if self.project:
             points = tf.clip_by_value(points,
                                       self.tri.limits[:, 0],
                                       self.tri.limits[:, 1])
-
-        # Get the appropriate hyperplane
-        origins, hyperplanes, simplices = self._get_hyperplanes(points)
 
         # Compute weights (barycentric coordinates)
         offset = points - origins
