@@ -107,6 +107,7 @@ class DeterministicFunction(Function):
         super(DeterministicFunction, self).__init__()
 
         self.parameters = None
+        self.feed_dict = {}
 
     def evaluate(self, *points):
         """Return the function values.
@@ -1066,7 +1067,8 @@ class Triangulation(DeterministicFunction):
                                   project=project)
 
         # Make sure the variable has the correct size
-        if not isinstance(vertex_values, tf.Variable):
+        if vertex_values is not None and not isinstance(vertex_values,
+                                                        tf.Variable):
             self.tri.parameters = vertex_values
             vertex_values = self.tri.parameters.astype(np_dtype)
             vertex_values = tf.Variable(vertex_values)
@@ -1140,10 +1142,9 @@ class Triangulation(DeterministicFunction):
 
 
 class QuadraticFunction(DeterministicFunction):
-    """A quadratic Lyapunov function.
+    """A quadratic function.
 
     V(x) = x.T P x
-    dV(x)/dx = 2 x.T P
 
     Parameters
     ----------
@@ -1162,6 +1163,28 @@ class QuadraticFunction(DeterministicFunction):
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
         return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
+
+
+class LinearSystem(DeterministicFunction):
+    """A linear system.
+
+    y = A_1 * x + A_2 * x_2 ...
+
+    Parameters
+    ----------
+    *matrices : list
+        Can specify an arbitrary amount of matrices for the linear system. Each
+        is multiplied by the corresponding state that is passed to evaluate.
+    """
+
+    def __init__(self, *matrices):
+        """Initialize."""
+        super(LinearSystem, self).__init__()
+        self.parameters = matrices
+
+    def evaluate(self, *points):
+        return sum(tf.matmul(point, matrix.T)
+                   for point, matrix in zip(points, self.parameters))
 
 
 def sample_gp_function(kernel, bounds, num_samples, noise_var,
