@@ -91,8 +91,9 @@ def concatenate_inputs(start=0):
         def wrapped_function(*args, **kwargs):
             """A function that concatenates inputs."""
             nargs = len(args) - start
-            # Check for tensorflow object
-            if isinstance(args[start], tf.Tensor):
+            # Check for tensorflow objects
+            tf_objects = (tf.Tensor, tf.Variable)
+            if any(isinstance(arg, tf_objects) for arg in args[start:]):
                 # reduce number of function calls in graph
                 if nargs == 1:
                     return function(*args, **kwargs)

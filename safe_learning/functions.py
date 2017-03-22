@@ -13,6 +13,7 @@ try:
     import GPflow
     from GPflow.param import AutoFlow, DataHolder
     from GPflow.tf_wraps import eye
+    from GPflow.mean_functions import Zero
 except ImportError:
     GPflow = None
 
@@ -183,11 +184,11 @@ class GPRCached(GPflow.gpr.GPR):
 
     """
 
-    def __init__(self, x, y, kern):
+    def __init__(self, x, y, kern, mean_function=Zero(), name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
         if GPflow is None:
             raise ImportError('This function requires the GPflow module.')
-        GPflow.gpr.GPR.__init__(self, x, y, kern)
+        GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
         self.cholesky = DataHolder(np.empty((0, 0), dtype=np_dtype),
