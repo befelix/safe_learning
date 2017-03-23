@@ -7,15 +7,17 @@ import numpy as np
 __all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
            'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
            'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
-           'GPRCached', 'sample_gp_function']
+           'GPRCached', 'sample_gp_function', 'LinearSystem']
+
+from types import ModuleType
 
 try:
     import GPflow
     from GPflow.param import AutoFlow, DataHolder
     from GPflow.tf_wraps import eye
     from GPflow.mean_functions import Zero
-except ImportError:
-    GPflow = None
+except ImportError as exception:
+    GPflow = exception
 
 from scipy import spatial, sparse, interpolate, linalg
 import tensorflow as tf
@@ -187,8 +189,10 @@ class GPRCached(GPflow.gpr.GPR):
 
     def __init__(self, x, y, kern, mean_function=Zero(), name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
-        if GPflow is None:
-            raise ImportError('This function requires the GPflow module.')
+        # Make sure GPflow is imported
+        if not isinstance(GPflow, ModuleType):
+            raise GPflow
+
         GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
@@ -1058,7 +1062,7 @@ class Triangulation(DeterministicFunction):
         Whether to project points onto the limits.
     """
 
-    def __init__(self, limits, num_points, vertex_values=None, project=False):
+    def __init__(self, limits, num_points, vertex_values, project=False):
         """Initialization."""
         super(Triangulation, self).__init__()
 
@@ -1067,8 +1071,7 @@ class Triangulation(DeterministicFunction):
                                   project=project)
 
         # Make sure the variable has the correct size
-        if vertex_values is not None and not isinstance(vertex_values,
-                                                        tf.Variable):
+        if not isinstance(vertex_values, tf.Variable):
             self.tri.parameters = vertex_values
             vertex_values = self.tri.parameters.astype(np_dtype)
             vertex_values = tf.Variable(vertex_values)
