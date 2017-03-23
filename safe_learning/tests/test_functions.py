@@ -185,8 +185,9 @@ def test_scipy_delaunay():
     """Test the fake replacement for Scipy."""
     limits = [[-1, 1], [-1, 2]]
     num_points = [2, 6]
+    discretization = GridWorld(limits, num_points)
     sp_delaunay = ScipyDelaunay(limits, num_points)
-    delaunay = _Triangulation(limits, num_points)
+    delaunay = _Triangulation(discretization)
 
     assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
     assert_equal(delaunay.ndim, sp_delaunay.ndim)
@@ -310,16 +311,19 @@ class TestPiecewiseConstant(object):
         """Test initialisation."""
         limits = [[-1, 1], [-1, 1]]
         npoints = 4
-        pwc = PiecewiseConstant(limits, npoints, np.arange(16))
+        discretization = GridWorld(limits, npoints)
+        pwc = PiecewiseConstant(discretization, np.arange(16))
         assert_allclose(pwc.parameters, np.arange(16)[:, None])
 
     def test_evaluation(self):
         """Evaluation tests for piecewise constant function."""
         limits = [[-1, 1], [-1, 1]]
         npoints = 3
-        pwc = PiecewiseConstant(limits, npoints)
+        discretization = GridWorld(limits, npoints)
+        pwc = PiecewiseConstant(discretization)
 
-        vertex_points = pwc.index_to_state(np.arange(pwc.nindex))
+        vertex_points = pwc.discretization.index_to_state(
+            np.arange(pwc.nindex))
         vertex_values = np.sum(vertex_points, axis=1, keepdims=True)
         pwc.parameters = vertex_values
 
@@ -339,8 +343,9 @@ class TestPiecewiseConstant(object):
         """Test the gradient."""
         limits = [[-1, 1], [-1, 1]]
         npoints = 3
-        pwc = PiecewiseConstant(limits, npoints)
-        test_points = pwc.index_to_state(np.arange(pwc.nindex))
+        discretization = GridWorld(limits, npoints)
+        pwc = PiecewiseConstant(discretization)
+        test_points = pwc.discretization.index_to_state(np.arange(pwc.nindex))
         gradient = pwc.gradient(test_points)
         assert_allclose(gradient, 0)
 
@@ -352,16 +357,16 @@ class TestTriangulationNumpy(object):
         """Test the simplices on the grid."""
         limits = [[-1, 1], [-1, 2]]
         num_points = [3, 7]
-        delaunay = _Triangulation(limits, num_points)
+        discretization = GridWorld(limits, num_points)
+        delaunay = _Triangulation(discretization)
 
         # Test the basic properties
-        assert_equal(delaunay.nrectangles, 2 * 6)
+        assert_equal(delaunay.discretization.nrectangles, 2 * 6)
         assert_equal(delaunay.ndim, 2)
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
-        assert_equal(delaunay.offset, np.array([-1, -1]))
-        assert_equal(delaunay.unit_maxes,
+        assert_equal(delaunay.discretization.offset, np.array([-1, -1]))
+        assert_equal(delaunay.discretization.unit_maxes,
                      np.array([2, 3]) / (np.array(num_points) - 1))
-        assert_equal(delaunay.nrectangles, 2 * 6)
 
         # test the simplex indices
         lower = delaunay.triangulation.find_simplex(np.array([0, 0])).squeeze()
@@ -396,7 +401,8 @@ class TestTriangulationNumpy(object):
         """Test the evaluation function."""
         eps = 1e-10
 
-        delaunay = _Triangulation([[0, 1], [0, 1]], [2, 2])
+        discretization = GridWorld([[0, 1], [0, 1]], [2, 2])
+        delaunay = _Triangulation(discretization)
 
         test_points = np.array([[0, 0],
                                 [1 - eps, 0],
@@ -404,9 +410,9 @@ class TestTriangulationNumpy(object):
                                 [0.5 - eps, 0.5 - eps],
                                 [0, 0.5],
                                 [0.5, 0]])
-        nodes = delaunay.state_to_index(np.array([[0, 0],
-                                                  [1, 0],
-                                                  [0, 1]]))
+        nodes = delaunay.discretization.state_to_index(np.array([[0, 0],
+                                                       [1, 0],
+                                                       [0, 1]]))
 
         H = delaunay.parameter_derivative(test_points).toarray()
 
@@ -441,9 +447,10 @@ class TestTriangulationNumpy(object):
     def test_multiple_dimensions(self):
         """Test delaunay in three dimensions."""
         limits = [[0, 1]] * 3
-        delaunay = _Triangulation(limits, [2] * 3)
+        discretization = GridWorld(limits, [2] * 3)
+        delaunay = _Triangulation(discretization)
         assert_equal(delaunay.ndim, 3)
-        assert_equal(delaunay.nrectangles, 1)
+        assert_equal(delaunay.discretization.nrectangles, 1)
         assert_equal(delaunay.nsimplex, np.math.factorial(3))
 
         corner_points = np.array([[0, 0, 0],
@@ -455,7 +462,8 @@ class TestTriangulationNumpy(object):
                                   [1, 0, 1],
                                   [1, 1, 1]], dtype=np.float)
 
-        values = np.sum(delaunay.index_to_state(np.arange(8)), axis=1) / 3
+        values = np.sum(delaunay.discretization.index_to_state(np.arange(8)),
+                        axis=1) / 3
 
         test_points = np.vstack((corner_points,
                                  np.array([[0, 0, 0.5],
@@ -472,13 +480,14 @@ class TestTriangulationNumpy(object):
 
     def test_gradient(self):
         """Test the gradient_at function."""
-        delaunay = _Triangulation([[0, 1], [0, 1]], [2, 2])
+        discretization = GridWorld([[0, 1], [0, 1]], [2, 2])
+        delaunay = _Triangulation(discretization)
 
         points = np.array([[0, 0],
                            [1, 0],
                            [0, 1],
                            [1, 1]], dtype=np.int)
-        nodes = delaunay.state_to_index(points)
+        nodes = delaunay.discretization.state_to_index(points)
 
         # Simplex with node values:
         # 3 - 1
@@ -514,7 +523,8 @@ class TestTriangulationNumpy(object):
 
     def test_1d(self):
         """Test the triangulation for 1D inputs."""
-        delaunay = _Triangulation([[0, 1]], 3, vertex_values=[0, 0.5, 0])
+        discretization = GridWorld([[0, 1]], 3)
+        delaunay = _Triangulation(discretization, vertex_values=[0, 0.5, 0])
         vertex_values = delaunay.parameters
 
         test_points = np.array([[0, 0.2, 0.5, 0.6, 0.9, 1.]]).T
@@ -552,10 +562,12 @@ class TestTriangulation(object):
         limits = [[0, 1], [0, 1]]
         npoints = 3
 
-        trinp = _Triangulation([[0, 1], [0, 1]], npoints)
-        trinp.parameters = np.sum(trinp.all_points ** 2, axis=1, keepdims=True)
+        discretization = GridWorld([[0, 1], [0, 1]], npoints)
+        parameters = np.sum(discretization.all_points ** 2,
+                            axis=1, keepdims=True)
+        trinp = _Triangulation(discretization, vertex_values=parameters)
 
-        tri = Triangulation(limits, npoints, vertex_values=trinp.parameters)
+        tri = Triangulation(discretization, vertex_values=parameters)
 
         test_points = np.array([[-10, -10],
                                 [0.2, 0.7],

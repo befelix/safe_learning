@@ -122,7 +122,7 @@ class DeterministicFunction(Function):
 
         Returns
         -------
-        values : ndarray
+        values : tf.Tensor
             A 2D array with the function values at the points.
         """
         raise NotImplementedError()
@@ -547,23 +547,23 @@ class GridWorld(object):
                                     self.num_points)
 
 
-class PiecewiseConstant(GridWorld, DeterministicFunction):
+class PiecewiseConstant(DeterministicFunction):
     """A piecewise constant function approximator.
 
     Parameters
     ----------
-    limits: 2d array-like
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
-    num_points: 1d arraylike
-        The number of points with which to grid each dimension.
+    discretization : instance of discretization
+        For example, an instance of `GridWorld`.
     vertex_values: arraylike, optional
         A 2D array with the values at the vertices of the grid on each row.
     """
 
-    def __init__(self, limits, num_points, vertex_values=None):
+    def __init__(self, discretization, vertex_values=None):
         """Initialization, see `PiecewiseConstant`."""
-        super(PiecewiseConstant, self).__init__(limits, num_points)
+        super(PiecewiseConstant, self).__init__()
 
+        self.discretization = discretization
+        self.ndim = discretization.ndim
         self._parameters = None
         self.parameters = vertex_values
 
@@ -580,6 +580,16 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         else:
             self._parameters = np.asarray(values).reshape(self.nindex, -1)
 
+    @property
+    def limits(self):
+        """Return the discretization limits."""
+        return self.discretization.limits
+
+    @property
+    def nindex(self):
+        """Return the number of discretization indices."""
+        return self.discretization.nindex
+
     def evaluate(self, points):
         """Return the function values.
 
@@ -594,7 +604,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         values : ndarray
             The function values at the points.
         """
-        nodes = self.state_to_index(points)
+        nodes = self.discretization.state_to_index(points)
         return self.parameters[nodes]
 
     def parameter_derivative(self, points):
@@ -618,7 +628,7 @@ class PiecewiseConstant(GridWorld, DeterministicFunction):
         npoints = len(points)
         weights = np.ones(npoints, dtype=np.int)
         rows = np.arange(npoints)
-        cols = self.state_to_index(points)
+        cols = self.discretization.state_to_index(points)
         return sparse.coo_matrix((weights, (rows, cols)),
                                  shape=(npoints, self.nindex))
 
@@ -684,7 +694,7 @@ class _Delaunay1D(object):
         return np.where(out_of_bounds, -1, 0)
 
 
-class _Triangulation(GridWorld, DeterministicFunction):
+class _Triangulation(DeterministicFunction):
     """
     Efficient Delaunay triangulation on regular grids.
 
@@ -696,36 +706,39 @@ class _Triangulation(GridWorld, DeterministicFunction):
 
     Parameters
     ----------
-    limits: arraylike
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)].
-    num_points: arraylike
-        1D array with the number of points with which to grid each dimension.
+    discretization : instance of discretization
+        For example, an instance of `GridWorld`.
     vertex_values: arraylike, optional
         A 2D array with the values at the vertices of the grid on each row.
     project: bool, optional
         Whether to project points onto the limits.
     """
 
-    def __init__(self, limits, num_points, vertex_values=None, project=False):
+    def __init__(self, discretization, vertex_values=None, project=False):
         """Initialization."""
-        super(_Triangulation, self).__init__(limits, num_points)
+        super(_Triangulation, self).__init__()
+
+        self.discretization = discretization
+        self.ndim = discretization.ndim
 
         self._parameters = None
         self.parameters = vertex_values
 
+        disc = self.discretization
+
         # Get triangulation
-        if len(self.limits) == 1:
-            corners = np.array([[0], self.unit_maxes])
+        if len(disc.limits) == 1:
+            corners = np.array([[0], disc.unit_maxes])
             self.triangulation = _Delaunay1D(corners)
         else:
-            product = cartesian(*np.diag(self.unit_maxes))
+            product = cartesian(*np.diag(disc.unit_maxes))
             hyperrectangle_corners = np.array(list(product),
                                               dtype=np_dtype)
             self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
         # Some statistics about the triangulation
-        self.nsimplex = self.triangulation.nsimplex * self.nrectangles
+        self.nsimplex = self.triangulation.nsimplex * disc.nrectangles
 
         # Parameters for the hyperplanes of the triangulation
         self.hyperplanes = None
@@ -747,6 +760,16 @@ class _Triangulation(GridWorld, DeterministicFunction):
             values = np.asarray(values).reshape(self.nindex, -1)
             self._parameters = values
 
+    @property
+    def limits(self):
+        """Return the discretization limits."""
+        return self.discretization.limits
+
+    @property
+    def nindex(self):
+        """Return the number of discretization indices."""
+        return self.discretization.nindex
+
     def _triangulation_simplex_indices(self):
         """Return the simplex indices in our coordinates.
 
@@ -759,12 +782,13 @@ class _Triangulation(GridWorld, DeterministicFunction):
         -----
         This is only used once in the initialization.
         """
+        disc = self.discretization
         simplices = self.triangulation.simplices
         new_simplices = np.empty_like(simplices)
 
         # Convert the points to out indices
-        index_mapping = self.state_to_index(self.triangulation.points +
-                                            self.offset)
+        index_mapping = disc.state_to_index(self.triangulation.points +
+                                            disc.offset)
 
         # Replace each index with out new_index in index_mapping
         for i, new_index in enumerate(index_mapping):
@@ -780,7 +804,7 @@ class _Triangulation(GridWorld, DeterministicFunction):
         # Use that the bottom-left rectangle has the index zero, so that the
         # index numbers of scipy correspond to ours.
         for i, simplex in enumerate(self.unit_simplices):
-            simplex_points = self.index_to_state(simplex)
+            simplex_points = self.discretization.index_to_state(simplex)
             self.hyperplanes[i] = np.linalg.inv(simplex_points[1:] -
                                                 simplex_points[:1])
 
@@ -796,15 +820,16 @@ class _Triangulation(GridWorld, DeterministicFunction):
         simplices : np.array (int)
             The indices of the simplices
         """
-        points = self._center_states(points, clip=True)
+        disc = self.discretization
+        points = disc._center_states(points, clip=True)
 
         # Convert to basic hyperrectangle coordinates and find simplex
-        unit_coordinates = points % self.unit_maxes
+        unit_coordinates = points % disc.unit_maxes
         simplex_ids = self.triangulation.find_simplex(unit_coordinates)
         simplex_ids = np.atleast_1d(simplex_ids)
 
         # Adjust for the hyperrectangle index
-        rectangles = self.state_to_rectangle(points, offset=False)
+        rectangles = disc.state_to_rectangle(points, offset=False)
         simplex_ids += rectangles * self.triangulation.nsimplex
 
         return simplex_ids
@@ -828,7 +853,7 @@ class _Triangulation(GridWorld, DeterministicFunction):
 
         # Shift indices to corresponding rectangle
         rectangles = np.floor_divide(indices, self.triangulation.nsimplex)
-        corner_index = self.rectangle_corner_index(rectangles)
+        corner_index = self.discretization.rectangle_corner_index(rectangles)
 
         if simplices.ndim > 1:
             corner_index = corner_index[:, None]
@@ -851,10 +876,11 @@ class _Triangulation(GridWorld, DeterministicFunction):
         simplices : ndarray
             The indeces of the simplices associated with each points
         """
+        disc = self.discretization
         simplex_ids = self.find_simplex(points)
 
         simplices = self.simplices(simplex_ids)
-        origins = self.index_to_state(simplices[:, 0])
+        origins = disc.index_to_state(simplices[:, 0])
 
         # Get hyperplane equations
         simplex_ids %= self.triangulation.nsimplex
@@ -865,7 +891,7 @@ class _Triangulation(GridWorld, DeterministicFunction):
         npoints = len(points)
 
         if self.project:
-            points = np.clip(points, self.limits[:, 0], self.limits[:, 1])
+            points = np.clip(points, disc.limits[:, 0], disc.limits[:, 1])
 
         weights = np.empty((npoints, nsimp), dtype=np_dtype)
 
@@ -931,7 +957,7 @@ class _Triangulation(GridWorld, DeterministicFunction):
         cols = simplices.ravel()
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
-                                 shape=(npoints, self.nindex))
+                                 shape=(npoints, self.discretization.nindex))
 
     def _get_weights_gradient(self, points=None, indices=None):
         """Return the linear gradient weights associated with points.
@@ -1035,7 +1061,8 @@ class _Triangulation(GridWorld, DeterministicFunction):
         cols = np.tile(simplices, (1, self.ndim)).ravel()
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
-                                 shape=(self.ndim * npoints, self.nindex))
+                                 shape=(self.ndim * npoints,
+                                        self.discretization.nindex))
 
 
 class Triangulation(DeterministicFunction):
@@ -1051,10 +1078,8 @@ class Triangulation(DeterministicFunction):
 
     Parameters
     ----------
-    limits: arraylike
-        A list of limits. For example, [(x_min, x_max), (y_min, y_max)].
-    num_points: arraylike
-        1D array with the number of points with which to grid each dimension.
+    discretization : instance of discretization
+        For example, an instance of `GridWorld`.
     vertex_values: arraylike, optional
         A 2D array with the values at the vertices of the grid on each row.
         Is converted into a tensorflow variable.
@@ -1062,12 +1087,11 @@ class Triangulation(DeterministicFunction):
         Whether to project points onto the limits.
     """
 
-    def __init__(self, limits, num_points, vertex_values, project=False):
+    def __init__(self, discretization, vertex_values, project=False):
         """Initialization."""
         super(Triangulation, self).__init__()
 
-        self.tri = _Triangulation(limits,
-                                  num_points,
+        self.tri = _Triangulation(discretization,
                                   project=project)
 
         # Make sure the variable has the correct size
@@ -1109,7 +1133,7 @@ class Triangulation(DeterministicFunction):
         simplex_ids = self.tri.find_simplex(points)
 
         simplices = self.tri.simplices(simplex_ids).astype(np.int64)
-        origins = self.tri.index_to_state(simplices[:, 0])
+        origins = self.tri.discretization.index_to_state(simplices[:, 0])
 
         # Get hyperplane equations
         simplex_ids %= self.tri.triangulation.nsimplex
@@ -1186,6 +1210,19 @@ class LinearSystem(DeterministicFunction):
         self.parameters = matrices
 
     def evaluate(self, *points):
+        """Return the function values.
+
+        Parameters
+        ----------
+        points : ndarray
+            The points at which to evaluate the function. One row for each
+            data points.
+
+        Returns
+        -------
+        values : tf.Tensor
+            A 2D array with the function values at the points.
+        """
         return sum(tf.matmul(point, matrix.T)
                    for point, matrix in zip(points, self.parameters))
 
