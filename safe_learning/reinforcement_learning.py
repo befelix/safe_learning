@@ -2,11 +2,16 @@
 
 from __future__ import absolute_import, division, print_function
 
+from types import ModuleType
+
+import tensorflow as tf
 import numpy as np
 try:
     import cvxpy
-except ImportError:
-    cvxpy = None
+except ImportError as exception:
+    cvxpy = exception
+
+from .utilities import make_tf_fun
 
 __all__ = ['PolicyIteration']
 
@@ -22,8 +27,8 @@ class PolicyIteration(object):
     ----------
     state_space : ndarray
         An 2d array of physical states with one state vector on each row.
-    action_space : ndarray
-        An 2d array of available actions with one action vector on each row.
+    policy : callable
+        The policy that maps states to actions.
     dynamics : callable
         A function that can be called with states and actions as inputs and
         returns future states.
@@ -35,13 +40,10 @@ class PolicyIteration(object):
         evaluate the value function at states.
     gamma : float
         The discount factor for reinforcement learning.
-    terminal_states : ndarray (bool)
-        A boolean vector which indicates terminal states. Defaults to False for
-        all states. Terminal states get a terminal reward and are not updated.
     """
 
-    def __init__(self, state_space, action_space, dynamics, reward_function,
-                 function_approximator, gamma=0.98, terminal_states=None):
+    def __init__(self, state_space, policy, dynamics, reward_function,
+                 function_approximator, gamma=0.98):
         """Initialization.
 
         See `PolicyIteration` for details.
@@ -49,32 +51,16 @@ class PolicyIteration(object):
         super(PolicyIteration, self).__init__()
 
         self.state_space = np.asarray(state_space)
-        self.action_space = np.asarray(action_space)
         self.dynamics = dynamics
         self.reward_function = reward_function
         self.value_function = function_approximator
         self.gamma = gamma
-        self.terminal_states = terminal_states
 
-        # Random initial policy
-        action_index = np.random.randint(low=0,
-                                         high=len(action_space),
-                                         size=len(state_space))
-        self.policy = self.action_space[action_index]
-        self.values = np.zeros(len(state_space), dtype=np.float)
+        self.policy = policy
+        self.values = tf.Variable(
+            np.zeros((len(state_space), 1), dtype=np.float))
 
-    @property
-    def values(self):
-        """Return the vertex values."""
-        return self.value_function.parameters[:, 0]
-
-    @values.setter
-    def values(self, values):
-        """Set the vertex values."""
-        values = np.asarray(values)
-        self.value_function.parameters = values.reshape(-1, 1)
-
-    def get_future_values(self, actions):
+    def future_values(self, states, policy=None):
         """Return the value at the current states.
 
         Parameters
@@ -86,90 +72,99 @@ class PolicyIteration(object):
         -------
         The expected long term reward corresponding to the states and actions.
         """
-        states = self.state_space
-        next_states = self.dynamics(states, actions)
-        rewards = self.reward_function(states, actions, next_states)
-        rewards = rewards.squeeze()
+        if policy is None:
+            policy = self.policy
 
-        expected_values = self.value_function(next_states).squeeze()
+        actions = policy(states)
+
+        next_states = self.dynamics(states, actions)
+        rewards = self.reward_function(states, actions)
+
+        # Only use the mean dynamics
+        if isinstance(next_states, tuple):
+            next_states, _ = next_states
+
+        expected_values = self.value_function(next_states)
 
         # Perform value update
         updated_values = rewards + self.gamma * expected_values
-
-        # Adapt values of terminal states
-        if self.terminal_states is not None:
-            terminal = self.terminal_states
-            updated_values[terminal] = rewards[terminal]
-
         return updated_values
 
-    def update_value_function(self):
-        """Perform one round of value updates."""
-        self.value_function.parameters = self.get_future_values(self.policy)
+    def bellmann_error(self, states):
+        """Compute the squared bellmann erlrror.
 
-    def optimize_value_function(self):
-        """Solve a linear program to optimize the value function."""
-        if cvxpy is None:
-            raise ImportError('This function requires the cvxpy module.')
+        Parameters
+        ----------
+        states : array
 
-        next_states = self.dynamics(self.state_space, self.policy)
-        rewards = self.reward_function(self.state_space,
-                                       self.policy,
-                                       next_states)
+        Returns
+        -------
+        error : float
+        """
+        # Make sure we do not compute the gradient with respect to the
+        # training target.
+        target = tf.stop_gradient(self.future_values(states))
+        # Squared bellmann error
+        return tf.reduce_sum(tf.square(target - self.value_function(states)),
+                             name='bellmann_error')
 
+    def value_iteration(self):
+        """Perform one step of value iteration."""
+        future_values = self.future_values(self.state_space)
+        return tf.assign(self.value_function.parameters, future_values,
+                         name='value_iteration_update')
+
+    @make_tf_fun(tf.float64)
+    def _run_cvx_optimization(self, next_states, rewards):
+        """A tensorflow wrapper around a cvxpy optimization for the value function.
+
+        Parameters
+        ----------
+        next_states : ndarray
+        rewards : ndarray
+
+        Returns
+        -------
+        values : ndarray
+            The optimal values at the states.
+        """
         # Define random variables
         values = cvxpy.Variable(self.value_function.nindex)
-        objective = cvxpy.Maximize(cvxpy.sum_entries(values))
 
-        value_matrix = self.value_function.parameter_derivative(next_states)
+        value_matrix = self.value_function.tri.parameter_derivative(
+            next_states)
         # Make cvxpy work with sparse matrices
         value_matrix = cvxpy.Constant(value_matrix)
 
-        future_values = rewards + self.gamma * value_matrix * values
-
-        if self.terminal_states is None:
-            constraints = [values <= future_values]
-        else:
-            terminal = self.terminal_states
-            not_terminal = ~self.terminal_states
-            constraints = [values[not_terminal] <= future_values[not_terminal],
-                           values[terminal] == rewards[terminal]]
-
+        objective = cvxpy.Maximize(cvxpy.sum_entries(values))
+        constraints = [values <= rewards + self.gamma * value_matrix * values]
         prob = cvxpy.Problem(objective, constraints)
+
+        # Solve optimization problem
         prob.solve()
 
+        # Some error checking
         if not prob.status == cvxpy.OPTIMAL:
             raise OptimizationError('Optimization problem is {}'
                                     .format(prob.status))
 
-        self.value_function.parameters[:] = values.value
+        return np.array(values.value)
 
-    def update_policy(self, constraint=None):
-        """Optimize the policy for a given value function.
+    def optimize_value_function(self):
+        """Optimize the value function using cvx."""
+        if not isinstance(cvxpy, ModuleType):
+            raise cvxpy
 
-        Parameters
-        ----------
-        constraint : callable
-            A function that can be called with a policy. Returns the slack of
-            the safety constraint for each state. A policy is safe if the slack
-            is >=0 for all constraints.
-        """
-        # Initialize
-        values = np.empty((len(self.state_space), len(self.action_space)),
-                          dtype=np.float)
+        actions = self.policy(self.state_space)
+        next_states = self.dynamics(self.state_space, actions)
 
-        action_size = (len(self.state_space), self.action_space.shape[1])
-        action_array = np.broadcast_to(np.zeros(action_size[1]), action_size)
+        # Only use the mean dynamics
+        if isinstance(next_states, tuple):
+            next_states, var = next_states
 
-        # Compute values for each action
-        for i, action in enumerate(self.action_space):
-            action_array.base[:] = action
-            values[:, i] = self.get_future_values(action_array)
+        rewards = self.reward_function(self.state_space,
+                                       actions)
 
-            if constraint is not None:
-                # TODO: optimize safety if unsafe
-                unsafe = constraint(action_array) < 0
-                values[unsafe, i] = -np.inf
+        values = self._run_cvx_optimization(next_states, rewards)
 
-        # Select best action for policy
-        self.policy = self.action_space[np.argmax(values, axis=1)]
+        return tf.assign(self.value_function.parameters, values)

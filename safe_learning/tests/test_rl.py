@@ -3,12 +3,15 @@
 from __future__ import division, print_function, absolute_import
 
 from numpy.testing import assert_allclose
-import unittest
 import sys
+import pytest
+import tensorflow as tf
 import numpy as np
+import scipy.linalg
 from safe_learning.utilities import dlqr
 
-from safe_learning import PolicyIteration, _Triangulation, DeterministicFunction
+from safe_learning import (PolicyIteration, Triangulation, GridWorld,
+                           QuadraticFunction, LinearSystem)
 
 if sys.version_info.major <= 2:
     import mock
@@ -21,50 +24,67 @@ except ImportError:
     cvxpy = None
 
 
-class PolicyIterationTest(unittest.TestCase):
+class TestPolicyIteration(object):
     """Test the policy iteration."""
 
-    def integration_test(self):
+    def test_integration(self):
         """Test the values."""
         a = np.array([[1.2]])
         b = np.array([[0.9]])
         q = np.array([[1]])
         r = np.array([[0.1]])
 
-        def dynamics(x, u):
-            return x.dot(a.T) + u.dot(b.T)
-
         k, p = dlqr(a, b, q, r)
-        value_function = _Triangulation([[-1, 1]], 19, project=True)
-        u_max = np.sum(np.abs(k)) * 1.1
+        true_value = QuadraticFunction(-p)
 
-        def reward_function(x, a, _):
-            return -np.sum(x ** 2 * np.diag(q), axis=1) - np.sum(
-                a ** 2 * np.diag(r), axis=1)
+        discretization = GridWorld([[-1, 1]], 19)
+        value_function = Triangulation(discretization,
+                                       0. * discretization.all_points,
+                                       project=True)
 
-        rl = PolicyIteration(value_function.all_points,
-                             np.linspace(-u_max, u_max, 10)[:, None],
+        dynamics = LinearSystem(a, b)
+
+        policy_discretization = GridWorld([-1, 1], 5)
+        policy = Triangulation(policy_discretization,
+                               -k / 2 * policy_discretization.all_points)
+        reward_function = QuadraticFunction(-scipy.linalg.block_diag(q, r))
+
+        rl = PolicyIteration(discretization.all_points,
+                             policy,
                              dynamics,
                              reward_function,
                              value_function)
 
-        for i in range(5):
-            rl.update_value_function()
-            rl.update_policy()
+        value_iter = rl.value_iteration()
 
-        optimal_policy = -rl.state_space.dot(k.T)
+        adapt_policy = tf.train.GradientDescentOptimizer(0.01).minimize(
+            -tf.reduce_sum(rl.future_values(rl.state_space)),
+            var_list=[rl.policy.parameters])
 
-        max_error = np.max(np.abs(rl.policy - optimal_policy))
-        disc_error = np.max(np.diff(rl.action_space[:, 0]))
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
 
-        assert(max_error < disc_error)
-        assert_allclose(rl.values, value_function.parameters[:, 0])
+            for _ in range(10):
+                sess.run(value_iter)
+                for _ in range(5):
+                    sess.run(adapt_policy)
 
-    @unittest.skipIf(cvxpy is None, 'Skipping cvxpy tests.')
+            values = rl.value_function.parameters.eval()
+            true_values = true_value(rl.state_space).eval()
+            policy_values = rl.policy.parameters.eval()
+
+        assert_allclose(values, true_values, atol=0.1)
+        assert_allclose(policy_values, -k * policy_discretization.all_points,
+                        atol=0.1)
+        #
+        # assert(max_error < disc_error)
+        # assert_allclose(rl.values, value_function.parameters[:, 0])
+
+    @pytest.mark.skipif(cvxpy is None, reason='Cvxpy is not installed.')
     def test_optimization(self):
         """Test the value function optimization."""
         dynamics = mock.Mock()
-        dynamics.return_value = 'states'
+        dynamics.return_value = np.arange(4, dtype=np.float)[:, None]
 
         rewards = mock.Mock()
         rewards.return_value = np.arange(4, dtype=np.float)
@@ -77,107 +97,86 @@ class PolicyIterationTest(unittest.TestCase):
                                dtype=np.float)
 
         value_function = mock.Mock()
-        value_function.parameter_derivative.return_value = trans_probs
+        value_function.tri.parameter_derivative.return_value = trans_probs
         value_function.nindex = 4
-        value_function.parameters = np.zeros((4, 1))
+        value_function.parameters = tf.Variable(np.zeros((4, 1),
+                                                         dtype=np.float))
 
-        states = np.arange(4)[:, None]
-        actions = np.arange(2)[:, None]
+        policy = mock.Mock()
+        policy.return_value = 'actions'
+
+        states = np.arange(4, dtype=np.float)[:, None]
         rl = PolicyIteration(states,
-                             actions,
+                             policy,
                              dynamics,
                              rewards,
                              value_function)
 
         true_values = np.linalg.solve(np.eye(4) - rl.gamma * trans_probs,
-                                      rewards.return_value)
+                                      rewards.return_value)[:, None]
 
-        rl.optimize_value_function()
+        with tf.Session() as sess:
+            sess.run(rl.optimize_value_function())
 
-        dynamics.assert_called_with(rl.state_space, rl.policy)
-        rewards.assert_called_with(rl.state_space, rl.policy, 'states')
+            # Confirm result
+            assert_allclose(rl.value_function.parameters.eval(), true_values)
 
-        assert_allclose(rl.values, true_values)
 
-        rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
-        rl.optimize_value_function()
+        dynamics.assert_called_with(rl.state_space, 'actions')
+        rewards.assert_called_with(rl.state_space, 'actions')
 
-        trans_probs2 = np.array([[0, .5, .5, 0, 0],
-                                 [.2, .1, .3, .5, 0],
-                                 [.3, .2, .4, .1, 0],
-                                 [0, 0, 0, 0, 1],
-                                 [0, 0, 0, 0, 1]],
-                                dtype=np.float)
-        rewards2 = np.zeros(5)
-        rewards2[:4] = rewards()
-        true_values = np.linalg.solve(np.eye(5) - rl.gamma * trans_probs2,
-                                      rewards2)
-
-        assert_allclose(rl.values, true_values[:4])
+        # rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
+        # rl.optimize_value_function()
+        #
+        # trans_probs2 = np.array([[0, .5, .5, 0, 0],
+        #                          [.2, .1, .3, .5, 0],
+        #                          [.3, .2, .4, .1, 0],
+        #                          [0, 0, 0, 0, 1],
+        #                          [0, 0, 0, 0, 1]],
+        #                         dtype=np.float)
+        # rewards2 = np.zeros(5)
+        # rewards2[:4] = rewards()
+        # true_values = np.linalg.solve(np.eye(5) - rl.gamma * trans_probs2,
+        #                               rewards2)
+        #
+        # assert_allclose(rl.values, true_values[:4])
 
     def test_future_values(self):
         """Test future values."""
         dynamics = mock.Mock()
-        dynamics.return_value = 'states'
+        dynamics.return_value = 'next_states'
 
         rewards = mock.Mock()
-        rewards.return_value = np.arange(4, dtype=np.float)
+        rewards.return_value = np.arange(4, dtype=np.float)[:, None]
 
         value_function = mock.Mock()
-        value_function.return_value = np.arange(4, dtype=np.float)
+        value_function.return_value = np.arange(4, dtype=np.float)[:, None]
+
+        policy = mock.Mock()
+        policy.return_value = 'actions'
 
         states = np.arange(4)[:, None]
-        actions = np.arange(2)[:, None]
+
         rl = PolicyIteration(states,
-                             actions,
+                             policy,
                              dynamics,
                              rewards,
                              value_function)
 
-        future_values = rl.get_future_values(rl.policy)
-        true_values = np.arange(4, dtype=np.float) * (1 + rl.gamma)
+        true_values = np.arange(4, dtype=np.float)[:, None] * (1 + rl.gamma)
 
-        dynamics.assert_called_with(rl.state_space, rl.policy)
-        rewards.assert_called_with(rl.state_space, rl.policy, 'states')
+        future_values = rl.future_values('states')
 
-        assert_allclose(true_values, future_values)
-
-        rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
-        future_values = rl.get_future_values(rl.policy)
-        true_values[rl.terminal_states] = rewards()[rl.terminal_states]
-
+        dynamics.assert_called_with('states', 'actions')
+        rewards.assert_called_with('states', 'actions')
         assert_allclose(future_values, true_values)
 
-    @mock.patch('safe_learning.reinforcement_learning.'
-                'PolicyIteration.get_future_values')
-    def test_policy_update(self, future_value_mock):
-        """Test the policy update."""
-        dynamics = mock.Mock()
-        rewards = mock.Mock()
-        value_function = mock.Mock()
-
-        states = np.arange(4)[:, None]
-        actions = np.arange(2)[:, None]
-        rl = PolicyIteration(states,
-                             actions,
-                             dynamics,
-                             rewards,
-                             value_function)
-
-        future_value_mock.return_value = np.arange(4, dtype=np.float)
-        rl.update_policy()
-
-        assert_allclose(rl.policy, 0)
-
-        def constraint(action):
-            if np.all(action.base == 0):
-                return np.array([0.1, 0.5, -0.1, -0.2], dtype=np.float)
-            else:
-                return np.ones(4, dtype=np.float)
-
-        rl.update_policy(constraint=constraint)
-        assert_allclose(rl.policy, np.array([[0, 0, 1, 1]], dtype=np.float).T)
+        # rl.terminal_states = np.array([0, 0, 0, 1], dtype=np.bool)
+        # future_values = rl.get_future_values(rl.policy)
+        # true_values[rl.terminal_states] = rewards()[rl.terminal_states]
+        #
+        # assert_allclose(future_values, true_values)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    pytest.main()

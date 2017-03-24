@@ -1112,6 +1112,11 @@ class Triangulation(DeterministicFunction):
         """Setter for the project parameter."""
         self.tri.project = value
 
+    @property
+    def nindex(self):
+        """Return the number of parameters."""
+        return self.tri.nindex
+
     @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
     def _get_hyperplanes(self, points):
         """Return the linear weights associated with points.
