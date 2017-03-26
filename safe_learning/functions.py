@@ -24,7 +24,7 @@ import tensorflow as tf
 from itertools import product as cartesian
 
 from .utilities import (linearly_spaced_combinations, concatenate_inputs,
-                        make_tf_fun)
+                        make_tf_fun, with_scope, use_parent_scope)
 
 _EPS = np.finfo(np.float).eps
 tf_dtype = tf.float64
@@ -1080,27 +1080,32 @@ class Triangulation(DeterministicFunction):
     ----------
     discretization : instance of discretization
         For example, an instance of `GridWorld`.
-    vertex_values: arraylike, optional
+    vertex_values : arraylike, optional
         A 2D array with the values at the vertices of the grid on each row.
         Is converted into a tensorflow variable.
-    project: bool, optional
+    project : bool, optional
         Whether to project points onto the limits.
+    name : string
+        The tensorflow scope for all methods.
     """
 
-    def __init__(self, discretization, vertex_values, project=False):
+    def __init__(self, discretization, vertex_values, project=False,
+                 name='triangulation'):
         """Initialization."""
         super(Triangulation, self).__init__()
 
-        self.tri = _Triangulation(discretization,
-                                  project=project)
+        with tf.variable_scope(name) as scope:
+            self.scope_name = scope.original_name_scope
+            self.tri = _Triangulation(discretization,
+                                      project=project)
 
-        # Make sure the variable has the correct size
-        if not isinstance(vertex_values, tf.Variable):
-            self.tri.parameters = vertex_values
-            vertex_values = self.tri.parameters.astype(np_dtype)
-            vertex_values = tf.Variable(vertex_values)
-
-        self.parameters = vertex_values
+            # Make sure the variable has the correct size
+            if not isinstance(vertex_values, tf.Variable):
+                self.tri.parameters = vertex_values
+                vertex_values = self.tri.parameters.astype(np_dtype)
+                vertex_values = tf.Variable(vertex_values,
+                                            name='vertex_values')
+            self.parameters = vertex_values
 
     @property
     def project(self):
@@ -1111,6 +1116,11 @@ class Triangulation(DeterministicFunction):
     def project(self, value):
         """Setter for the project parameter."""
         self.tri.project = value
+
+    @property
+    def discretization(self):
+        """Getter for the discretization."""
+        return self.tri.discretization
 
     @property
     def nindex(self):
@@ -1147,6 +1157,8 @@ class Triangulation(DeterministicFunction):
         # Pre-multiply each hyperplane by (point - origin)
         return origins, hyperplanes, simplices
 
+    @use_parent_scope
+    @with_scope('evaluate')
     def evaluate(self, points):
         """Evaluate using tensorflow."""
         # Get the appropriate hyperplane
@@ -1189,6 +1201,7 @@ class QuadraticFunction(DeterministicFunction):
         super(QuadraticFunction, self).__init__()
         self.matrix = matrix.astype(np_dtype)
 
+    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Like evaluate, but returns a tensorflow tensor instead."""
@@ -1214,6 +1227,7 @@ class LinearSystem(DeterministicFunction):
         super(LinearSystem, self).__init__()
         self.parameters = matrices
 
+    @with_scope('evaluate')
     def evaluate(self, *points):
         """Return the function values.
 

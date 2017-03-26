@@ -18,7 +18,8 @@ import tensorflow as tf
 from functools import wraps, partial
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
-           'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun']
+           'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
+           'with_scope', 'use_parent_scope']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -76,6 +77,35 @@ def make_tf_fun(return_type, gradient=None, stateful=True):
 
         return wrapped_function
     return wrap
+
+
+def with_scope(name):
+    """Set the tensorflow scope for the function.
+
+    Parameters
+    ----------
+    name : string, optional
+
+    Returns
+    -------
+    The tensorflow function with scope name.
+    """
+    def wrap(function):
+        @wraps(function)
+        def wrapped_function(*args, **kwargs):
+            with tf.variable_scope(name):
+                return function(*args, **kwargs)
+        return wrapped_function
+    return wrap
+
+
+def use_parent_scope(function):
+    """Use the parent scope for tensorflow."""
+    @wraps(function)
+    def wrapped_function(self, *args, **kwargs):
+        with tf.variable_scope(self.scope_name):
+            return function(self, *args, **kwargs)
+    return wrapped_function
 
 
 def concatenate_inputs(start=0):

@@ -49,8 +49,7 @@ class TestPolicyIteration(object):
                                -k / 2 * policy_discretization.all_points)
         reward_function = QuadraticFunction(-scipy.linalg.block_diag(q, r))
 
-        rl = PolicyIteration(discretization.all_points,
-                             policy,
+        rl = PolicyIteration(policy,
                              dynamics,
                              reward_function,
                              value_function)
@@ -102,12 +101,13 @@ class TestPolicyIteration(object):
         value_function.parameters = tf.Variable(np.zeros((4, 1),
                                                          dtype=np.float))
 
+        states = np.arange(4, dtype=np.float)[:, None]
+        value_function.discretizaiton.all_points = states
+
         policy = mock.Mock()
         policy.return_value = 'actions'
 
-        states = np.arange(4, dtype=np.float)[:, None]
-        rl = PolicyIteration(states,
-                             policy,
+        rl = PolicyIteration(policy,
                              dynamics,
                              rewards,
                              value_function)
@@ -120,7 +120,6 @@ class TestPolicyIteration(object):
 
             # Confirm result
             assert_allclose(rl.value_function.parameters.eval(), true_values)
-
 
         dynamics.assert_called_with(rl.state_space, 'actions')
         rewards.assert_called_with(rl.state_space, 'actions')
@@ -151,14 +150,13 @@ class TestPolicyIteration(object):
 
         value_function = mock.Mock()
         value_function.return_value = np.arange(4, dtype=np.float)[:, None]
+        value_function.discretizaiton.all_points = \
+            np.arange(4, dtype=np.float)[:, None]
 
         policy = mock.Mock()
         policy.return_value = 'actions'
 
-        states = np.arange(4)[:, None]
-
-        rl = PolicyIteration(states,
-                             policy,
+        rl = PolicyIteration(policy,
                              dynamics,
                              rewards,
                              value_function)

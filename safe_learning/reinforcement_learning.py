@@ -11,7 +11,7 @@ try:
 except ImportError as exception:
     cvxpy = exception
 
-from .utilities import make_tf_fun
+from .utilities import make_tf_fun, with_scope
 
 __all__ = ['PolicyIteration']
 
@@ -25,8 +25,6 @@ class PolicyIteration(object):
 
     Parameters
     ----------
-    state_space : ndarray
-        An 2d array of physical states with one state vector on each row.
     policy : callable
         The policy that maps states to actions.
     dynamics : callable
@@ -42,24 +40,22 @@ class PolicyIteration(object):
         The discount factor for reinforcement learning.
     """
 
-    def __init__(self, state_space, policy, dynamics, reward_function,
+    def __init__(self, policy, dynamics, reward_function,
                  function_approximator, gamma=0.98):
         """Initialization.
 
         See `PolicyIteration` for details.
         """
         super(PolicyIteration, self).__init__()
-
-        self.state_space = np.asarray(state_space)
         self.dynamics = dynamics
         self.reward_function = reward_function
         self.value_function = function_approximator
         self.gamma = gamma
+        self.state_space = self.value_function.discretization.all_points
 
         self.policy = policy
-        self.values = tf.Variable(
-            np.zeros((len(state_space), 1), dtype=np.float))
 
+    @with_scope('future_values')
     def future_values(self, states, policy=None):
         """Return the value at the current states.
 
@@ -90,6 +86,7 @@ class PolicyIteration(object):
         updated_values = rewards + self.gamma * expected_values
         return updated_values
 
+    @with_scope('bellmann_error')
     def bellmann_error(self, states):
         """Compute the squared bellmann erlrror.
 
@@ -108,6 +105,7 @@ class PolicyIteration(object):
         return tf.reduce_sum(tf.square(target - self.value_function(states)),
                              name='bellmann_error')
 
+    @with_scope('value_iteration')
     def value_iteration(self):
         """Perform one step of value iteration."""
         future_values = self.future_values(self.state_space)
@@ -150,6 +148,7 @@ class PolicyIteration(object):
 
         return np.array(values.value)
 
+    @with_scope('optimize_value_function')
     def optimize_value_function(self):
         """Optimize the value function using cvx."""
         if not isinstance(cvxpy, ModuleType):
