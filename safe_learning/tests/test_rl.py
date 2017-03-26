@@ -102,7 +102,7 @@ class TestPolicyIteration(object):
                                                          dtype=np.float))
 
         states = np.arange(4, dtype=np.float)[:, None]
-        value_function.discretizaiton.all_points = states
+        value_function.discretization.all_points = states
 
         policy = mock.Mock()
         policy.return_value = 'actions'
@@ -150,7 +150,7 @@ class TestPolicyIteration(object):
 
         value_function = mock.Mock()
         value_function.return_value = np.arange(4, dtype=np.float)[:, None]
-        value_function.discretizaiton.all_points = \
+        value_function.discretization.all_points = \
             np.arange(4, dtype=np.float)[:, None]
 
         policy = mock.Mock()

@@ -51,7 +51,9 @@ class PolicyIteration(object):
         self.reward_function = reward_function
         self.value_function = value_function
         self.gamma = gamma
-        self.state_space = self.value_function.discretization.all_points
+
+        state_space = self.value_function.discretization.all_points
+        self.state_space = tf.stack(state_space, name='state_space')
 
         self.policy = policy
 
