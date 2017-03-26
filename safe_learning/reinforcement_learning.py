@@ -33,15 +33,15 @@ class PolicyIteration(object):
     reward_function : callable
         A function that takes the state, action, and next state as input and
         returns the reward corresponding to this transition.
-    function_approximator : instance of `DeterministicFunction`
+    value_function : instance of `DeterministicFunction`
         The function approximator for the value function. It is used to
         evaluate the value function at states.
     gamma : float
         The discount factor for reinforcement learning.
     """
 
-    def __init__(self, policy, dynamics, reward_function,
-                 function_approximator, gamma=0.98):
+    def __init__(self, policy, dynamics, reward_function, value_function,
+                 gamma=0.98):
         """Initialization.
 
         See `PolicyIteration` for details.
@@ -49,7 +49,7 @@ class PolicyIteration(object):
         super(PolicyIteration, self).__init__()
         self.dynamics = dynamics
         self.reward_function = reward_function
-        self.value_function = function_approximator
+        self.value_function = value_function
         self.gamma = gamma
         self.state_space = self.value_function.discretization.all_points
 
