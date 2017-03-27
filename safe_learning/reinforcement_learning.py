@@ -63,12 +63,15 @@ class PolicyIteration(object):
 
         Parameters
         ----------
-        actions : ndarray
-            The actions taken in the corresponding states.
+        states : ndarray
+            The states at which to compute future values.
+        policy : callable, optional
+            The policy for which to evaluate. Defaults to `self.policy`.
 
         Returns
         -------
-        The expected long term reward corresponding to the states and actions.
+        The expected long term reward when taking an action according to the 
+        policy and then taking the value of `self.value_function`.
         """
         if policy is None:
             policy = self.policy
@@ -116,7 +119,7 @@ class PolicyIteration(object):
 
     @make_tf_fun(tf.float64)
     def _run_cvx_optimization(self, next_states, rewards):
-        """A tensorflow wrapper around a cvxpy optimization for the value function.
+        """A tensorflow wrapper around a cvxpy value function optimization.
 
         Parameters
         ----------
