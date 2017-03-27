@@ -19,7 +19,7 @@ from functools import wraps, partial
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
-           'with_scope', 'use_parent_scope']
+           'with_scope', 'use_parent_scope', 'add_constraint']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -145,6 +145,33 @@ def concatenate_inputs(start=0):
         return wrapped_function
 
     return wrap
+
+
+def add_constraint(optimization, var_list, bound_list):
+    """Add constraints to an optimization step.
+
+    Parameters
+    ----------
+    optimization : tf.Tensor
+        The optimization routine that updates the parameters.
+    var_list : list
+        A list of variables that should be bounded.
+    bound_list : list
+        A list of bounds (lower, upper) for each variable in var_list.
+
+    Returns
+    -------
+    assign_operations : list
+        A list of assign operations that correspond to one step of the
+        constrained optimization.
+    """
+    with tf.control_dependencies([optimization]):
+        new_list = []
+        for var, bound in zip(var_list, bound_list):
+            clipped_var = tf.clip_by_value(var, bound[0], bound[1])
+            assign = tf.assign(var, clipped_var)
+            new_list.append(assign)
+    return new_list
 
 
 def combinations(arrays):
