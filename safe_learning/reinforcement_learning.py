@@ -58,7 +58,7 @@ class PolicyIteration(object):
         self.policy = policy
 
     @with_scope('future_values')
-    def future_values(self, states, policy=None):
+    def future_values(self, states, policy=None, actions=None):
         """Return the value at the current states.
 
         Parameters
@@ -66,17 +66,20 @@ class PolicyIteration(object):
         states : ndarray
             The states at which to compute future values.
         policy : callable, optional
-            The policy for which to evaluate. Defaults to `self.policy`.
+            The policy for which to evaluate. Defaults to `self.policy`. This
+            argument is ignored if actions is not None.
+        actions : array or tensor, optional
+            The actions to be taken for the states.
 
         Returns
         -------
-        The expected long term reward when taking an action according to the 
-        policy and then taking the value of `self.value_function`.
+        The expected long term reward when taking an action according to the
+        policy and then taking the value of self.value_function.
         """
-        if policy is None:
-            policy = self.policy
-
-        actions = policy(states)
+        if actions is None:
+            if policy is None:
+                policy = self.policy
+            actions = policy(states)
 
         next_states = self.dynamics(states, actions)
         rewards = self.reward_function(states, actions)
@@ -172,3 +175,45 @@ class PolicyIteration(object):
         values = self._run_cvx_optimization(next_states, rewards)
 
         return tf.assign(self.value_function.parameters, values)
+
+    def discrete_policy_optimization(self, action_space, constraint=None):
+        """Optimize the policy for a given value function.
+
+        Parameters
+        ----------
+        action_space : ndarray
+            The parameter value to evaluate (for each parameter). This is
+            geared towards piecewise linear functions.
+        constraint : callable
+            A function that can be called with a policy. Returns the slack of
+            the safety constraint for each state. A policy is safe if the slack
+            is >=0 for all constraints.
+        """
+        n = self.state_space.shape[0]
+        n_par, m = action_space.shape
+
+        # Initialize
+        values = np.empty((n, n_par), dtype=np.float)
+        action_array = np.broadcast_to(np.zeros(m), (n, m))
+
+        # Create future values object
+        actions = tf.placeholder(tf.float64, shape=action_array.shape)
+        future_values = self.future_values(self.state_space, actions=actions)
+        feed_dict = {actions: action_array}
+
+        # Compute values for each action
+        for i, action in enumerate(action_space):
+            # Update feed dict
+            action_array.base[:] = action
+            # Compute values
+            values[:, i] = future_values.eval(feed_dict=feed_dict)[:, 0]
+
+            if constraint is not None:
+                # TODO: optimize safety if unsafe
+                unsafe = constraint(action_array) < 0
+                values[unsafe, i] = -np.inf
+
+        # Select best action for policy
+        assign = tf.assign(self.policy.parameters,
+                           action_space[np.argmax(values, axis=1)])
+        assign.eval()
