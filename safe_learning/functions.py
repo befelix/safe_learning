@@ -19,12 +19,12 @@ try:
 except ImportError as exception:
     GPflow = exception
 
-from scipy import spatial, sparse, interpolate, linalg
+from scipy import spatial, sparse, linalg
 import tensorflow as tf
 from itertools import product as cartesian
 
-from .utilities import (linearly_spaced_combinations, concatenate_inputs,
-                        make_tf_fun, with_scope, use_parent_scope)
+from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
+                        use_parent_scope)
 
 _EPS = np.finfo(np.float).eps
 tf_dtype = tf.float64
@@ -1246,88 +1246,62 @@ class LinearSystem(DeterministicFunction):
                    for point, matrix in zip(points, self.parameters))
 
 
-def sample_gp_function(kernel, bounds, num_samples, noise_var,
-                       interpolation='kernel', mean_function=None):
+def sample_gp_function(discretization, gpfun):
     """
     Sample a function from a gp with corresponding kernel within its bounds.
 
     Parameters
     ----------
-    kernel : instance of GPy.kern.*
-    bounds : list of tuples
-        [(x1_min, x1_max), (x2_min, x2_max), ...]
-    num_samples : int or list
-        If integer draws the corresponding number of samples in all
-        dimensions and test all possible input combinations. If a list then
-        the list entries correspond to the number of linearly spaced samples of
-        the corresponding input
-    noise_var : float
-        Variance of the observation noise of the GP function
-    interpolation : string
-        If 'linear' interpolate linearly between samples, if 'kernel' use the
-        corresponding mean RKHS-function of the GP.
-    mean_function : callable
-        Mean of the sample function. Note that if you are trying to pass a GPy
-        mapping then you need to pass `mapping.f`.
+    discretization : instance of safe_learning.GridWorld
+        The discretization on which to draw a sample from the GP.
+    gpfun : instance of safe_learning.GaussianProcess
+        The GP from which to draw a sample.
 
     Returns
     -------
     function : object
         function(x, noise=True)
         A function that takes as inputs new locations x to be evaluated and
-        returns the corresponding noisy function values. If noise=False is
-        set the true function values are returned (useful for plotting).
+        returns the corresponding noisy function values as a tensor. If
+        noise=False is set the true function values are returned (useful for
+        plotting).
     """
-    inputs = linearly_spaced_combinations(bounds, num_samples)
-    cov = kernel.K(inputs) + np.eye(inputs.shape[0]) * 1e-6
-    output = np.random.multivariate_normal(np.zeros(inputs.shape[0]),
-                                           cov)
+    discrete_points = discretization.all_points
 
-    if interpolation == 'linear':
+    gp = gpfun.gaussian_process
 
-        @concatenate_inputs()
-        def evaluate_gp_function_linear(x, noise=True):
-            """
-            Evaluate the GP sample function with linear interpolation.
+    with gp.tf_mode():
+        mean, cov = gp.build_predict(discrete_points, full_cov=True)
 
-            Parameters
-            ----------
-            x : np.array
-                2D array with inputs
-            noise : bool
-                Whether to include prediction noise
-            """
-            x = np.atleast_2d(x)
-            y = interpolate.griddata(inputs, output, x, method='linear')
-            y = np.atleast_2d(y)
-            if mean_function is not None:
-                y += mean_function(x)
+    # Evaluate
+    sess = tf.get_default_session()
+    mean, cov = sess.run([mean, cov], feed_dict=gpfun.feed_dict)
+
+    # Turn mean and covariance into 1D and 2D arrays
+    mean = mean.squeeze(-1)
+    cov = cov.squeeze(-1)
+
+    # Make sure the covariance is positive definite
+    cov += np.eye(len(cov)) * 1E-8
+
+    # Draw a sample
+    output = np.random.multivariate_normal(mean, cov)
+
+    # cholesky
+    cho_factor = linalg.cho_factor(cov, lower=True)
+    alpha = linalg.cho_solve(cho_factor, output)[:, None]
+
+    @concatenate_inputs()
+    def gp_sample(x, noise=True):
+        with gp.tf_mode():
+            k = gp.kern.K(x, discrete_points)
+            y = gp.mean_function(x) + tf.matmul(k, alpha)
             if noise:
-                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
-            return y
-        return evaluate_gp_function_linear
-    elif interpolation == 'kernel':
-        cho_factor = linalg.cho_factor(cov)
-        alpha = linalg.cho_solve(cho_factor, output)
+                y += tf.sqrt(gp.likelihood.variance) * tf.random_normal(
+                    tf.shape(y), dtype=tf.float64)
+        return y
 
-        @concatenate_inputs()
-        def evaluate_gp_function_kernel(x, noise=True):
-            """
-            Evaluate the GP sample function with kernel interpolation.
+    # Attach the feed_dict for ease of use
+    gp_sample.feed_dict = gpfun.feed_dict
 
-            Parameters
-            ----------
-            x : np.array
-                2D array with inputs
-            noise : bool
-                Whether to include prediction noise.
-            """
-            x = np.atleast_2d(x)
-            y = kernel.K(x, inputs).dot(alpha)
-            y = y[:, None]
-            if mean_function is not None:
-                y += mean_function(x)
-            if noise:
-                y += np.sqrt(noise_var) * np.random.randn(x.shape[0], 1)
-            return y
-        return evaluate_gp_function_kernel
+    return gp_sample
