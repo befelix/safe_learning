@@ -1226,10 +1226,11 @@ class LinearSystem(DeterministicFunction):
     def __init__(self, *matrices):
         """Initialize."""
         super(LinearSystem, self).__init__()
-        self.parameters = matrices
+        self.parameters = np.hstack(map(np.atleast_2d, matrices))
 
     @with_scope('evaluate')
-    def evaluate(self, *points):
+    @concatenate_inputs(start=1)
+    def evaluate(self, points):
         """Return the function values.
 
         Parameters
@@ -1243,8 +1244,7 @@ class LinearSystem(DeterministicFunction):
         values : tf.Tensor
             A 2D array with the function values at the points.
         """
-        return sum(tf.matmul(point, matrix.T)
-                   for point, matrix in zip(points, self.parameters))
+        return tf.matmul(points, self.parameters.T)
 
 
 def sample_gp_function(discretization, gpfun, number=1, return_function=True):
