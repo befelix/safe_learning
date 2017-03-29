@@ -22,6 +22,7 @@ except ImportError as exception:
 from scipy import spatial, sparse, linalg
 import tensorflow as tf
 from itertools import product as cartesian
+from functools import partial
 
 from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
                         use_parent_scope)
@@ -1246,7 +1247,7 @@ class LinearSystem(DeterministicFunction):
                    for point, matrix in zip(points, self.parameters))
 
 
-def sample_gp_function(discretization, gpfun):
+def sample_gp_function(discretization, gpfun, number=1, return_function=True):
     """
     Sample a function from a gp with corresponding kernel within its bounds.
 
@@ -1256,10 +1257,14 @@ def sample_gp_function(discretization, gpfun):
         The discretization on which to draw a sample from the GP.
     gpfun : instance of safe_learning.GaussianProcess
         The GP from which to draw a sample.
+    number : int
+        The number of functions to sample.
+    return_function : bool, optional
+        Whether to return a function or the sampled data only.
 
     Returns
     -------
-    function : object
+    function : list of functions or ndarray
         function(x, noise=True)
         A function that takes as inputs new locations x to be evaluated and
         returns the corresponding noisy function values as a tensor. If
@@ -1285,23 +1290,33 @@ def sample_gp_function(discretization, gpfun):
     cov += np.eye(len(cov)) * 1E-8
 
     # Draw a sample
-    output = np.random.multivariate_normal(mean, cov)
+    output = np.random.multivariate_normal(mean, cov, size=number)
+
+    if not return_function:
+        return output
 
     # cholesky
     cho_factor = linalg.cho_factor(cov, lower=True)
-    alpha = linalg.cho_solve(cho_factor, output)[:, None]
 
-    @concatenate_inputs()
-    def gp_sample(x, noise=True):
+    @concatenate_inputs(start=1)
+    def gp_sample(alpha, x, noise=True):
         with gp.tf_mode():
             k = gp.kern.K(x, discrete_points)
             y = gp.mean_function(x) + tf.matmul(k, alpha)
             if noise:
-                y += tf.sqrt(gp.likelihood.variance) * tf.random_normal(
-                    tf.shape(y), dtype=tf.float64)
+                y += (tf.sqrt(gp.likelihood.variance)
+                      * tf.random_normal(tf.shape(y), dtype=tf.float64))
         return y
 
-    # Attach the feed_dict for ease of use
-    gp_sample.feed_dict = gpfun.feed_dict
+    # Now let's plug in the alpha to generate samples
+    functions = []
+    for i in range(number):
+        alpha = linalg.cho_solve(cho_factor, output[[i], :].T)
+        fun = partial(gp_sample, alpha)
 
-    return gp_sample
+        # Attach the feed_dict for ease of use
+        fun.feed_dict = gpfun.feed_dict
+
+        functions.append(fun)
+
+    return functions
