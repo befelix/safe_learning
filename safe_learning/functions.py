@@ -1253,8 +1253,9 @@ def sample_gp_function(discretization, gpfun, number=1, return_function=True):
 
     Parameters
     ----------
-    discretization : instance of safe_learning.GridWorld
-        The discretization on which to draw a sample from the GP.
+    discretization : ndarray
+        The discretization on which to draw a sample from the GP. Can be
+        obtained, for example, from GridWorld.all_points.
     gpfun : instance of safe_learning.GaussianProcess
         The GP from which to draw a sample.
     number : int
@@ -1271,12 +1272,13 @@ def sample_gp_function(discretization, gpfun, number=1, return_function=True):
         noise=False is set the true function values are returned (useful for
         plotting).
     """
-    discrete_points = discretization.all_points
+    if isinstance(discretization, GridWorld):
+        discretization = discretization.all_points
 
     gp = gpfun.gaussian_process
 
     with gp.tf_mode():
-        mean, cov = gp.build_predict(discrete_points, full_cov=True)
+        mean, cov = gp.build_predict(discretization, full_cov=True)
 
     # Evaluate
     sess = tf.get_default_session()
@@ -1301,7 +1303,7 @@ def sample_gp_function(discretization, gpfun, number=1, return_function=True):
     @concatenate_inputs(start=1)
     def gp_sample(alpha, x, noise=True):
         with gp.tf_mode():
-            k = gp.kern.K(x, discrete_points)
+            k = gp.kern.K(x, discretization)
             y = gp.mean_function(x) + tf.matmul(k, alpha)
             if noise:
                 y += (tf.sqrt(gp.likelihood.variance)
