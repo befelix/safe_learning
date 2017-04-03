@@ -396,6 +396,9 @@ class GridWorld(object):
                                       axis=1)
 
         # Statistics about the grid
+        self.discrete_points = [np.linspace(low, up, n) for (low, up), n
+                                in zip(self.limits, self.num_points)]
+
         self.nrectangles = np.prod(self.num_points - 1)
         self.nindex = np.prod(self.num_points)
         self.ndim = len(self.limits)
@@ -481,33 +484,32 @@ class GridWorld(object):
         states = np.atleast_2d(states)
         self._check_dimensions(states)
         states = np.clip(states, self.limits[:, 0], self.limits[:, 1])
-        states = (states - self.offset) / self.unit_maxes
+        states = (states - self.offset) * (1. / self.unit_maxes)
         ijk_index = np.rint(states).astype(np.int)
         return np.ravel_multi_index(ijk_index.T, self.num_points)
 
-    def state_to_rectangle(self, states, offset=True):
+    def state_to_rectangle(self, states):
         """Convert physical states to its closest rectangle index.
 
         Parameters
         ----------
         states : ndarray
             Physical states on the discretization.
-        offset : bool, optional
-            If False the data is assumed to be already centered and clipped.
 
         Returns
         -------
         rectangles : ndarray (int)
             The indices that correspond to rectangles of the physical states.
         """
-        states = np.atleast_2d(states)
-        # clip to domain (find closest rectangle)
-        if offset:
-            self._check_dimensions(states)
-            states = self._center_states(states, clip=True)
+        ind = []
+        for i, (discrete, num_points) in enumerate(zip(self.discrete_points,
+                                                       self.num_points)):
+            idx = np.digitize(states[:, i], discrete)
+            idx -= 1
+            np.clip(idx, 0, num_points - 2, out=idx)
 
-        ijk_index = np.floor_divide(states, self.unit_maxes).astype(np.int)
-        return np.ravel_multi_index(ijk_index.T, self.num_points - 1)
+            ind.append(idx)
+        return np.ravel_multi_index(ind, self.num_points - 1)
 
     def rectangle_to_state(self, rectangles):
         """
@@ -822,6 +824,9 @@ class _Triangulation(DeterministicFunction):
             The indices of the simplices
         """
         disc = self.discretization
+        rectangles = disc.state_to_rectangle(points)
+
+        # Convert to unit coordinates
         points = disc._center_states(points, clip=True)
 
         # Convert to basic hyperrectangle coordinates and find simplex
@@ -830,7 +835,6 @@ class _Triangulation(DeterministicFunction):
         simplex_ids = np.atleast_1d(simplex_ids)
 
         # Adjust for the hyperrectangle index
-        rectangles = disc.state_to_rectangle(points, offset=False)
         simplex_ids += rectangles * self.triangulation.nsimplex
 
         return simplex_ids
