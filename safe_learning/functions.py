@@ -27,9 +27,9 @@ from functools import partial
 from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
                         use_parent_scope)
 
-_EPS = np.finfo(np.float).eps
-tf_dtype = tf.float64
-np_dtype = np.float64
+from safe_learning import config
+
+_EPS = np.finfo(config.np_dtype).eps
 
 
 class Function(object):
@@ -197,9 +197,9 @@ class GPRCached(GPflow.gpr.GPR):
         GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
-        self.cholesky = DataHolder(np.empty((0, 0), dtype=np_dtype),
+        self.cholesky = DataHolder(np.empty((0, 0), dtype=config.np_dtype),
                                    on_shape_change='pass')
-        self.alpha = DataHolder(np.empty((0, 0), dtype=np_dtype),
+        self.alpha = DataHolder(np.empty((0, 0), dtype=config.np_dtype),
                                 on_shape_change='pass')
         self.update_cache()
 
@@ -278,7 +278,7 @@ class GaussianProcess(UncertainFunction):
         self.gaussian_process = gaussian_process
         self.beta = float(beta)
 
-        self.parameters = tf.placeholder(tf_dtype, [None])
+        self.parameters = tf.placeholder(config.dtype, [None])
         self.gaussian_process.make_tf_array(self.parameters)
 
         self.feed_dict = {}
@@ -352,7 +352,7 @@ class ScipyDelaunay(spatial.Delaunay):
 
     def __init__(self, limits, num_points):
         self.numpoints = num_points
-        self.limits = np.asarray(limits, dtype=np_dtype)
+        self.limits = np.asarray(limits, dtype=config.np_dtype)
         params = [np.linspace(limit[0], limit[1], n) for limit, n in
                   zip(limits, num_points)]
         output = np.meshgrid(*params)
@@ -443,7 +443,8 @@ class GridWorld(object):
         -------
         offset_states : ndarray
         """
-        states = np.atleast_2d(states).astype(np_dtype) - self.offset[None, :]
+        states = np.atleast_2d(states).astype(config.np_dtype)
+        states = states - self.offset[None, :]
         if clip:
             np.clip(states,
                     self.offset_limits[:, 0] + 2 * _EPS,
@@ -736,7 +737,7 @@ class _Triangulation(DeterministicFunction):
         else:
             product = cartesian(*np.diag(disc.unit_maxes))
             hyperrectangle_corners = np.array(list(product),
-                                              dtype=np_dtype)
+                                              dtype=config.np_dtype)
             self.triangulation = spatial.Delaunay(hyperrectangle_corners)
         self.unit_simplices = self._triangulation_simplex_indices()
 
@@ -802,7 +803,7 @@ class _Triangulation(DeterministicFunction):
         """Compute the simplex hyperplane parameters on the triangulation."""
         self.hyperplanes = np.empty((self.triangulation.nsimplex,
                                      self.ndim, self.ndim),
-                                    dtype=np_dtype)
+                                    dtype=config.np_dtype)
 
         # Use that the bottom-left rectangle has the index zero, so that the
         # index numbers of scipy correspond to ours.
@@ -898,7 +899,7 @@ class _Triangulation(DeterministicFunction):
         if self.project:
             points = np.clip(points, disc.limits[:, 0], disc.limits[:, 1])
 
-        weights = np.empty((npoints, nsimp), dtype=np_dtype)
+        weights = np.empty((npoints, nsimp), dtype=config.np_dtype)
 
         # Pre-multiply each hyperplane by (point - origin)
         offset = points - origins
@@ -997,7 +998,7 @@ class _Triangulation(DeterministicFunction):
         npoints = len(simplex_ids)
 
         # weights
-        weights = np.empty((npoints, self.ndim, nsimp), dtype=np_dtype)
+        weights = np.empty((npoints, self.ndim, nsimp), dtype=config.np_dtype)
 
         weights[:, :, 1:] = self.hyperplanes[simplex_ids]
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
@@ -1107,7 +1108,7 @@ class Triangulation(DeterministicFunction):
             # Make sure the variable has the correct size
             if not isinstance(vertex_values, tf.Variable):
                 self.tri.parameters = vertex_values
-                vertex_values = self.tri.parameters.astype(np_dtype)
+                vertex_values = self.tri.parameters.astype(config.np_dtype)
                 vertex_values = tf.Variable(vertex_values,
                                             name='vertex_values')
             self.parameters = vertex_values
@@ -1132,7 +1133,7 @@ class Triangulation(DeterministicFunction):
         """Return the number of parameters."""
         return self.tri.nindex
 
-    @make_tf_fun([tf_dtype, tf_dtype, tf.int64], stateful=False)
+    @make_tf_fun([config.dtype, config.dtype, tf.int64], stateful=False)
     def _get_hyperplanes(self, points):
         """Return the linear weights associated with points.
 
@@ -1204,7 +1205,7 @@ class QuadraticFunction(DeterministicFunction):
     def __init__(self, matrix):
         """Initialization, see `QuadraticLyapunovFunction`."""
         super(QuadraticFunction, self).__init__()
-        self.matrix = matrix.astype(np_dtype)
+        self.matrix = matrix.astype(config.np_dtype)
 
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
