@@ -6,11 +6,12 @@ from numpy.testing import assert_allclose, assert_equal
 import pytest
 import unittest
 import numpy as np
+import tensorflow as tf
 import sys
 
-from safe_learning.functions import (DeterministicFunction, UncertainFunction)
+from safe_learning.functions import (DeterministicFunction, GridWorld)
 from safe_learning.lyapunov import (line_search_bisection, Lyapunov,
-                                    LyapunovContinuous, LyapunovDiscrete)
+                                    smallest_boundary_value)
 
 if sys.version_info.major <= 2:
     import mock
@@ -199,6 +200,15 @@ class LyapunovDiscreteTest(unittest.TestCase):
         a1, a2 = lyap.v_decrease_confidence(None, (dynamics, dynamics))
         assert_allclose(a1, true_mean)
         assert_allclose(a2, true_error)
+
+
+def test_smallest_boundary_value():
+    """Test the boundary value function."""
+    with tf.Session() as sess:
+        fun = lambda x: 2 * tf.reduce_sum(tf.abs(x), axis=1)
+        discretization = GridWorld([[-1.5, 1], [-1, 1.5]], [3, 3])
+        min_value = smallest_boundary_value(fun, discretization)
+        assert min_value == 2.5
 
 
 if __name__ == '__main__':

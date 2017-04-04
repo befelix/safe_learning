@@ -5,10 +5,11 @@ from __future__ import absolute_import, division, print_function
 from collections import Sequence
 
 import numpy as np
+import tensorflow as tf
 
 from .functions import UncertainFunction
 
-__all__ = ['LyapunovContinuous', 'LyapunovDiscrete']
+__all__ = ['Lyapunov', 'smallest_boundary_value']
 
 
 def line_search_bisection(f, bound, accuracy):
@@ -56,8 +57,48 @@ def line_search_bisection(f, bound, accuracy):
     return bound
 
 
+def smallest_boundary_value(fun, discretization):
+    """Determine the smallest value of a function on its boundary.
+
+    Parameters
+    ----------
+    fun : callable
+        A tensorflow function that we want to evaluate.
+    discretization : instance of `GridWorld`
+        The discretization. If None, then the function is assumed to be
+        defined on a discretization already.
+
+    Returns
+    -------
+    min_value : float
+        The smallest value on the boundary.
+    """
+    min_value = np.inf
+
+    if hasattr(fun, 'feed_dict'):
+        feed_dict = fun.feed_dict
+    else:
+        feed_dict = {}
+
+    # Check boundaries for each axis
+    for i in range(discretization.ndim):
+        # Use boundary values only for the ith element
+        tmp = list(discretization.discrete_points)
+        tmp[i] = discretization.discrete_points[i][[0, -1]]
+
+        # Generate all points
+        columns = (x.ravel() for x in np.meshgrid(*tmp, indexing='ij'))
+        all_points = np.column_stack(columns)
+
+        # Update the minimum value
+        smallest = tf.reduce_min(fun(all_points))
+        min_value = min(min_value, smallest.eval(feed_dict=feed_dict))
+
+    return min_value
+
+
 class Lyapunov(object):
-    """Base class for Lyapunov functions.
+    """A class for general Lyapunov functions.
 
     Parameters
     ----------

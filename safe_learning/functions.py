@@ -379,7 +379,7 @@ class GridWorld(object):
         """Initialization, see `GridWorld`."""
         super(GridWorld, self).__init__()
 
-        self.limits = np.atleast_2d(limits)
+        self.limits = np.atleast_2d(limits).astype(config.np_dtype)
         num_points = np.broadcast_to(num_points, len(self.limits))
         self.num_points = num_points.astype(np.int, copy=False)
 
@@ -390,14 +390,15 @@ class GridWorld(object):
         # Compute offset and unit hyperrectangle
         self.offset = self.limits[:, 0]
         self.unit_maxes = ((self.limits[:, 1] - self.offset)
-                           / (self.num_points - 1))
+                           / (self.num_points - 1)).astype(config.np_dtype)
         self.offset_limits = np.stack((np.zeros_like(self.limits[:, 0]),
                                        self.limits[:, 1] - self.offset),
                                       axis=1)
 
         # Statistics about the grid
-        self.discrete_points = [np.linspace(low, up, n) for (low, up), n
-                                in zip(self.limits, self.num_points)]
+        self.discrete_points = [np.linspace(low, up, n, dtype=config.np_dtype)
+                                for (low, up), n in zip(self.limits,
+                                                        self.num_points)]
 
         self.nrectangles = np.prod(self.num_points - 1)
         self.nindex = np.prod(self.num_points)
@@ -413,7 +414,8 @@ class GridWorld(object):
             An array with all the discrete points with size
             (self.nindex, self.ndim).
         """
-        return self.index_to_state(np.arange(self.nindex))
+        result = self.index_to_state(np.arange(self.nindex))
+        return result.astype(config.np_dtype)
 
     def __len__(self):
         """Return the number of points in the discretization."""
@@ -467,6 +469,7 @@ class GridWorld(object):
         """
         indices = np.atleast_1d(indices)
         ijk_index = np.vstack(np.unravel_index(indices, self.num_points)).T
+        ijk_index = ijk_index.astype(config.np_dtype)
         return ijk_index * self.unit_maxes + self.offset
 
     def state_to_index(self, states):
@@ -486,7 +489,7 @@ class GridWorld(object):
         self._check_dimensions(states)
         states = np.clip(states, self.limits[:, 0], self.limits[:, 1])
         states = (states - self.offset) * (1. / self.unit_maxes)
-        ijk_index = np.rint(states).astype(np.int)
+        ijk_index = np.rint(states).astype(np.int32)
         return np.ravel_multi_index(ijk_index.T, self.num_points)
 
     def state_to_rectangle(self, states):
@@ -530,6 +533,7 @@ class GridWorld(object):
         rectangles = np.atleast_1d(rectangles)
         ijk_index = np.vstack(np.unravel_index(rectangles,
                                                self.num_points - 1))
+        ijk_index = ijk_index.astype(config.np_dtype)
         return (ijk_index.T * self.unit_maxes) + self.offset
 
     def rectangle_corner_index(self, rectangles):
@@ -1049,7 +1053,7 @@ class _Triangulation(DeterministicFunction):
         -------
         gradient : scipy.sparse.coo_matrix
             A sparse matrix so that
-            `grad(points) = B.dot(V(vertices)).reshape(ndim, -1)` corresponds
+            `grad(points) = B.dot(vertex_val).reshape(ndim, -1)` corresponds
             to the true gradients
         """
         weights, simplices = self._get_weights_gradient(points=points,
@@ -1194,7 +1198,7 @@ class Triangulation(DeterministicFunction):
 class QuadraticFunction(DeterministicFunction):
     """A quadratic function.
 
-    V(x) = x.T P x
+    values(x) = x.T P x
 
     Parameters
     ----------
