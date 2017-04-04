@@ -2,15 +2,14 @@
 
 from __future__ import absolute_import, print_function, division
 
-import numpy as np
-
-__all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
-           'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
-           'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
-           'GPRCached', 'sample_gp_function', 'LinearSystem']
-
 from types import ModuleType
 
+from scipy import spatial, sparse, linalg
+import tensorflow as tf
+import numpy as np
+from itertools import product as cartesian
+from functools import partial
+from future.builtins import zip, range
 try:
     import GPflow
     from GPflow.param import AutoFlow, DataHolder
@@ -19,15 +18,14 @@ try:
 except ImportError as exception:
     GPflow = exception
 
-from scipy import spatial, sparse, linalg
-import tensorflow as tf
-from itertools import product as cartesian
-from functools import partial
-
 from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
                         use_parent_scope)
-
 from safe_learning import config
+
+__all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
+           'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
+           'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
+           'GPRCached', 'sample_gp_function', 'LinearSystem']
 
 _EPS = np.finfo(config.np_dtype).eps
 
@@ -1242,7 +1240,7 @@ class LinearSystem(DeterministicFunction):
         super(LinearSystem, self).__init__()
         self.parameters = np.hstack(map(np.atleast_2d, matrices))
 
-    @with_scope('evaluate')
+    @with_scope('linsys_evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Return the function values.
@@ -1258,7 +1256,7 @@ class LinearSystem(DeterministicFunction):
         values : tf.Tensor
             A 2D array with the function values at the points.
         """
-        return tf.matmul(points, self.parameters, transpose_b=True)
+        return tf.matmul(points, self.parameters.T, transpose_b=False)
 
 
 def sample_gp_function(discretization, gpfun, number=1, return_function=True):

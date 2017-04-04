@@ -3,3 +3,4 @@ scipy
 matplotlib
 cvxpy
 tensorflow>=1.0.0
+future
