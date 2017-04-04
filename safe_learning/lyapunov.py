@@ -3,13 +3,15 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Sequence
+from heapq import heappush, heappop
+import itertools
 
 import numpy as np
 import tensorflow as tf
 
 from .functions import UncertainFunction
 
-__all__ = ['Lyapunov', 'smallest_boundary_value']
+__all__ = ['Lyapunov', 'smallest_boundary_value', 'get_lyapunov_region']
 
 
 def line_search_bisection(f, bound, accuracy):
@@ -95,6 +97,91 @@ def smallest_boundary_value(fun, discretization):
         min_value = min(min_value, smallest.eval(feed_dict=feed_dict))
 
     return min_value
+
+
+def get_lyapunov_region(lyapunov, discretization, init_node):
+    """Get the region within which a function is a Lyapunov function.
+
+    Parameters
+    ----------
+    lyapunov : callable
+        A tensorflow function.
+    discretization : instance of `GridWorld`
+        The discretization on which to check the increasing property.
+    init_node : tuple
+        The node at which to start the verification.
+
+    Returns
+    -------
+    region : ndarray
+        A boolean array that contains all the states for which lyapunov is a
+        Lyapunov function that can be used for stability verification.
+    """
+    # Turn values into a multi-dim array
+    if hasattr(lyapunov, 'feed_dict'):
+        feed_dict = lyapunov.feed_dict
+    else:
+        feed_dict = {}
+
+    values = lyapunov(discretization.all_points).eval(feed_dict=feed_dict)
+    lyapunov_values = values.reshape(discretization.num_points)
+
+    # Starting point for the verification
+    init_value = lyapunov_values[init_node]
+
+    ndim = discretization.ndim
+    num_points = discretization.num_points
+
+    # Indeces for generating neighbors
+    index_generator = itertools.product(*[(0, -1, 1) for _ in range(ndim)])
+    neighbor_indeces = np.array(tuple(index_generator)[1:])
+
+    # Array keeping track of visited nodes
+    visited = np.zeros(discretization.num_points, dtype=np.bool)
+    visited[init_node] = True
+
+    # Create priority queue
+    tiebreaker = itertools.count()
+    last_value = init_value
+    priority_queue = [(init_value, tiebreaker.next(), init_node)]
+
+    while priority_queue:
+        value, _, next_node = heappop(priority_queue)
+
+        # Check if we reached the boundary of the discretization
+        if np.any(0 == next_node) or np.any(next_node == num_points - 1):
+            visited[tuple(next_node)] = False
+            break
+
+        # Make sure we are in the positive definite part of the function.
+        if value < last_value:
+            break
+
+        last_value = value
+
+        # Get all neighbors
+        neighbors = next_node + neighbor_indeces
+
+        # Remove neighbors that are already part of the visited set
+        is_new = ~visited[np.split(neighbors.T, ndim)]
+        neighbors = neighbors[is_new[0]]
+
+        if neighbors.size:
+            indices = np.split(neighbors.T, ndim)
+            # add to visited set
+            visited[indices] = True
+            # get values
+            values = lyapunov_values[indices][0]
+
+            # add to priority queue
+            for value, neighbor in zip(values, neighbors):
+                heappush(priority_queue, (value, next(tiebreaker), neighbor))
+
+    # Prune nodes that were neighbors, but haven't been visited
+    for _, _, node in priority_queue:
+        visited[tuple(node)] = False
+
+    return visited
 
 
 class Lyapunov(object):
