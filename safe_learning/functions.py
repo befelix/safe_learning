@@ -239,15 +239,15 @@ class GPRCached(GPflow.gpr.GPR):
 
         """
         Kx = self.kern.K(self.X, Xnew)
-        A = tf.matrix_triangular_solve(self.cholesky, Kx, lower=True)
-        fmean = (tf.matmul(tf.transpose(A), self.alpha)
+        a = tf.matrix_triangular_solve(self.cholesky, Kx, lower=True)
+        fmean = (tf.matmul(a, self.alpha, transpose_a=True)
                  + self.mean_function(Xnew))
         if full_cov:
-            fvar = self.kern.K(Xnew) - tf.matmul(tf.transpose(A), A)
+            fvar = self.kern.K(Xnew) - tf.matmul(a, a, transpose_a=True)
             shape = tf.stack([1, 1, tf.shape(self.Y)[1]])
             fvar = tf.tile(tf.expand_dims(fvar, 2), shape)
         else:
-            fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
+            fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(a), 0)
             fvar = tf.tile(tf.reshape(fvar, (-1, 1)),
                            [1, tf.shape(self.Y)[1]])
         return fmean, fvar
@@ -1258,7 +1258,7 @@ class LinearSystem(DeterministicFunction):
         values : tf.Tensor
             A 2D array with the function values at the points.
         """
-        return tf.matmul(points, self.parameters.T)
+        return tf.matmul(points, self.parameters, transpose_b=True)
 
 
 def sample_gp_function(discretization, gpfun, number=1, return_function=True):
