@@ -1116,6 +1116,11 @@ class Triangulation(DeterministicFunction):
                 vertex_values = tf.Variable(vertex_values,
                                             name='vertex_values')
             self.parameters = vertex_values
+            # Initialize parameters
+            sess = tf.get_default_session()
+            if sess is not None:
+                init = tf.variables_initializer([self.parameters])
+                tf.get_default_session().run(init)
 
     @property
     def project(self):
