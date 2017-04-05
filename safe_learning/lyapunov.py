@@ -324,15 +324,16 @@ class Lyapunov(object):
         batch_size = config.gp_batch_size
 
         # reset the safe set
-        self.safe_set[:] = False
+        safe_set = np.zeros_like(self.safe_set)
+
         if self.initial_safe_set is not None:
-            self.safe_set[self.initial_safe_set] = True
+            safe_set[self.initial_safe_set] = True
 
             # Permute the initial safe set too
-            self.safe_set = self.safe_set[order]
+            safe_set = safe_set[order]
 
         # Verify safety in batches
-        batch_generator = batchify((state_order, self.safe_set), batch_size)
+        batch_generator = batchify((state_order, safe_set), batch_size)
 
         for state_batch, safe_batch in batch_generator:
 
@@ -354,4 +355,6 @@ class Lyapunov(object):
                 break
 
         # Restore the order of the safe set
-        self.safe_set = self.safe_set[order]
+        safe_nodes = order[safe_set]
+        self.safe_set[:] = False
+        self.safe_set[safe_nodes] = True
