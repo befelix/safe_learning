@@ -49,7 +49,9 @@ class TestLyapunov(object):
         """Test the update step."""
         with tf.Session():
             discretization = GridWorld([[-1, 1]], 3)
-            lyap_fun = lambda x: tf.reduce_sum(tf.square(x), axis=1)
+            lyap_fun = lambda x: tf.reduce_sum(tf.square(x),
+                                               axis=1,
+                                               keep_dims=True)
             policy = lambda x: -.1 * x
 
             dynamics = LinearSystem(np.array([[1, 1.]]))

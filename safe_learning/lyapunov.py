@@ -255,7 +255,7 @@ class Lyapunov(object):
         v_decrease = (self.lyapunov_function(next_states)
                       - self.lyapunov_function(states))
 
-        return v_decrease, bound
+        return tf.squeeze(v_decrease, axis=1), bound
 
     def v_decrease_bound(self, states, next_states):
         """
