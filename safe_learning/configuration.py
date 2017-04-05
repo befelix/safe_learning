@@ -22,3 +22,11 @@ class Configuration(object):
     def np_dtype(self):
         """Return the numpy dtype."""
         return self.dtype.as_numpy_dtype
+
+    def __repr__(self):
+        """Print the parameters."""
+        params = ['Configuration parameters:', '']
+        for param, value in self.__dict__.items():
+            params.append('{}: {}'.format(param, value.__repr__()))
+
+        return '\n'.join(params)
