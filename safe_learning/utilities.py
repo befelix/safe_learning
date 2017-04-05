@@ -15,11 +15,13 @@ import numpy as np
 import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
+import itertools
 from functools import wraps, partial
+from future.builtins import zip
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
-           'with_scope', 'use_parent_scope', 'add_constraint']
+           'with_scope', 'use_parent_scope', 'add_constraint', 'batchify']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -172,6 +174,34 @@ def add_constraint(optimization, var_list, bound_list):
             assign = tf.assign(var, clipped_var)
             new_list.append(assign)
     return new_list
+
+
+def batchify(arrays, batch_size):
+    """A generator that yields the arrays in batches and in order.
+
+    The last batch might be smaller than batch_size.
+
+    Parameters
+    ----------
+    arrays : list of ndarray
+        The arrays that we want to convert to batches.
+    batch_size : int
+        The size of each individual batch.
+    """
+    if not isinstance(arrays, (list, tuple)):
+        arrays = (arrays,)
+
+    # Iterate over array in batche
+    for i, i_next in zip(itertools.count(start=0, step=batch_size),
+                         itertools.count(start=batch_size, step=batch_size)):
+
+        batches = [array[i:i_next] for array in arrays]
+
+        # Break if there are no points left
+        if batches[0].size:
+            yield batches
+        else:
+            break
 
 
 def combinations(arrays):
