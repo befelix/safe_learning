@@ -16,7 +16,7 @@ class Configuration(object):
         self.dtype = tf.float64
 
         # Batch size for stability verification
-        self.gp_batch_size = 100
+        self.gp_batch_size = 10000
 
     @property
     def np_dtype(self):

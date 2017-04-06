@@ -302,9 +302,12 @@ def dlqr(a, b, q, r):
     p = scipy.linalg.solve_discrete_are(a, b, q, r)
 
     # LQR gain
-    tmp1 = np.linalg.multi_dot((b.T, p, b))
-    tmp2 = np.linalg.multi_dot((b.T, p, a))
-    k = np.linalg.solve(tmp1 + r, tmp2)
+    # k = (b.T * p * b + r)^-1 * (b.T * p * a)
+    bp = b.T.dot(p)
+    tmp1 = bp.dot(b)
+    tmp1 += r
+    tmp2 = bp.dot(a)
+    k = np.linalg.solve(tmp1, tmp2)
 
     return k, p
 
