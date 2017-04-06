@@ -10,7 +10,6 @@ from safe_learning.utilities import dlqr
 
 def test_dlqr():
     """Test the dlqr function."""
-
     true_k = np.array([[0.61803399]])
     true_p = np.array([[1.61803399]])
 
