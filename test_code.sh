@@ -22,7 +22,7 @@ NC='\033[0m'
 
 # Run style tests
 echo -e "${GREEN}Running style tests.${NC}"
-flake8 $module --exclude test*.py,__init__.py --ignore=E402,W503 --show-source
+flake8 $module --exclude test*.py,__init__.py --ignore=E402,E731,W503 --show-source
 
 # Ignore import errors for __init__ and tests
 flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source

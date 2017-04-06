@@ -16,12 +16,14 @@ import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
 import itertools
+import inspect
 from functools import wraps, partial
 from future.builtins import zip
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
-           'with_scope', 'use_parent_scope', 'add_constraint', 'batchify']
+           'with_scope', 'use_parent_scope', 'add_constraint', 'batchify',
+           'get_storage']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -361,3 +363,38 @@ def ellipse_bounds(P, level, n=100):
 
     # Return x-position (symmetric) and upper/lower bounds
     return pos[:n, 0], pos[:n, 1], pos[:n - 1:-1, 1]
+
+
+def get_storage(instance):
+    """Get a unique storage point within a class method.
+
+    Parameters
+    ----------
+    instance : instance of some class
+
+    Returns
+    -------
+    storage : object
+        The storage object. Is an empty list if newly created, otherwise it
+        has the value of whatever was previously put in storage.
+    """
+    frame = inspect.currentframe()
+    function_name = inspect.getframeinfo(frame.f_back).function
+
+    storage_name = '_storage_{}'.format(function_name)
+    return getattr(instance, storage_name, None)
+
+
+def set_storage(instance, value):
+    """Set the storage point within a class method.
+
+    Parameters
+    ----------
+    instance : instance of some class
+    value : object
+        Some value that is to be written to the storage.
+    """
+    frame = inspect.currentframe()
+    function_name = inspect.getframeinfo(frame.f_back).function
+    storage_name = '_storage_{}'.format(function_name)
+    setattr(instance, storage_name, value)
