@@ -11,7 +11,9 @@ try:
 except ImportError as exception:
     cvxpy = exception
 
-from .utilities import make_tf_fun, with_scope
+from .utilities import make_tf_fun, with_scope, get_storage, set_storage
+
+from safe_learning import config
 
 __all__ = ['PolicyIteration']
 
@@ -56,6 +58,14 @@ class PolicyIteration(object):
         self.state_space = tf.stack(state_space, name='state_space')
 
         self.policy = policy
+
+    @property
+    def feed_dict(self):
+        """Return the feed dict of the class."""
+        if hasattr(self.dynamics, 'feed_dict'):
+            return self.dynamics.feed_dict
+        else:
+            return {}
 
     @with_scope('future_values')
     def future_values(self, states, policy=None, actions=None):
@@ -176,6 +186,7 @@ class PolicyIteration(object):
 
         return tf.assign(self.value_function.parameters, values)
 
+    @with_scope('discrete_policy_optimization')
     def discrete_policy_optimization(self, action_space, constraint=None):
         """Optimize the policy for a given value function.
 
@@ -193,13 +204,29 @@ class PolicyIteration(object):
         n_par, m = action_space.shape
 
         # Initialize
-        values = np.empty((n, n_par), dtype=np.float)
-        action_array = np.broadcast_to(np.zeros(m), (n, m))
+        values = np.empty((n, n_par), dtype=config.np_dtype)
+        action_array = np.broadcast_to(np.zeros(m, dtype=config.np_dtype),
+                                       (n, m))
 
-        # Create future values object
-        actions = tf.placeholder(tf.float64, shape=action_array.shape)
-        future_values = self.future_values(self.state_space, actions=actions)
-        feed_dict = {actions: action_array}
+        # Create future values object, but reuse previous graph elements
+        storage = get_storage(self)
+
+        if storage is None:
+            actions = tf.placeholder(tf.float64, shape=action_array.shape,
+                                     name='actions')
+            future_values = self.future_values(self.state_space,
+                                               actions=actions)
+
+            parameters = tf.placeholder(config.dtype, action_array.shape)
+            assign_op = tf.assign(self.policy.parameters, parameters)
+            storage = (actions, future_values, parameters, assign_op)
+            set_storage(self, storage)
+        else:
+            # Get items out of storage
+            actions, future_values, parameters, assign_op = storage
+
+        feed_dict = self.feed_dict.copy()
+        feed_dict[actions] = action_array
 
         # Compute values for each action
         for i, action in enumerate(action_space):
@@ -214,6 +241,5 @@ class PolicyIteration(object):
                 values[unsafe, i] = -np.inf
 
         # Select best action for policy
-        assign = tf.assign(self.policy.parameters,
-                           action_space[np.argmax(values, axis=1)])
-        assign.eval()
+        best_actions = action_space[np.argmax(values, axis=1)]
+        assign_op.eval({parameters: best_actions})
