@@ -38,7 +38,7 @@ class TestStorage(object):
 
             def method(self, value):
                 storage = get_storage(self)
-                set_storage(self, value)
+                set_storage(self, [('value', value)])
                 return storage
 
         return A()
@@ -48,8 +48,8 @@ class TestStorage(object):
         storage = sample_class.method(5)
         assert storage is None
         storage = sample_class.method(4)
-        assert storage == 5
+        assert storage['value'] == 5
         storage = sample_class.method(None)
-        assert storage == 4
+        assert storage['value'] == 4
         storage = sample_class.method(None)
-        assert storage is None
+        assert storage['value'] is None

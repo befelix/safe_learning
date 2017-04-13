@@ -11,14 +11,16 @@ Author: Felix Berkenkamp, Learning & Adaptive Systems Group, ETH Zurich
 
 from __future__ import absolute_import, division, print_function
 
+import itertools
+import inspect
+from functools import wraps, partial
+
 import numpy as np
 import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
-import itertools
-import inspect
-from functools import wraps, partial
 from future.builtins import zip
+from future.backports import OrderedDict
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
@@ -374,9 +376,9 @@ def get_storage(instance):
 
     Returns
     -------
-    storage : object
-        The storage object. Is an empty list if newly created, otherwise it
-        has the value of whatever was previously put in storage.
+    storage : OrderedDict
+        The storage object. Is None if no storage exists. Otherwise it
+        returns the OrderedDict that was previously put in the storage.
     """
     frame = inspect.currentframe()
     function_name = inspect.getframeinfo(frame.f_back).function
@@ -385,16 +387,20 @@ def get_storage(instance):
     return getattr(instance, storage_name, None)
 
 
-def set_storage(instance, value):
+def set_storage(instance, name_value):
     """Set the storage point within a class method.
 
     Parameters
     ----------
     instance : instance of some class
-    value : object
-        Some value that is to be written to the storage.
+    name_value : tuple
+        A list of tuples, where each tuple contains a string with the name
+        of the storage object and the corresponding value that is to be put
+        in storage. These are stored as OrderedDicts.
     """
     frame = inspect.currentframe()
     function_name = inspect.getframeinfo(frame.f_back).function
     storage_name = '_storage_{}'.format(function_name)
-    setattr(instance, storage_name, value)
+
+    storage = OrderedDict(name_value)
+    setattr(instance, storage_name, storage)

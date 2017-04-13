@@ -208,22 +208,29 @@ class PolicyIteration(object):
         action_array = np.broadcast_to(np.zeros(m, dtype=config.np_dtype),
                                        (n, m))
 
-        # Create future values object, but reuse previous graph elements
+        # Create tensorflow operations, but reuse previous graph elements
         storage = get_storage(self)
 
         if storage is None:
+            # Computation of future values
             actions = tf.placeholder(tf.float64, shape=action_array.shape,
                                      name='actions')
             future_values = self.future_values(self.state_space,
                                                actions=actions)
 
+            # Assigning new parameters
             parameters = tf.placeholder(config.dtype, action_array.shape)
             assign_op = tf.assign(self.policy.parameters, parameters)
-            storage = (actions, future_values, parameters, assign_op)
+
+            # Put things into storage
+            storage = [('actions', actions),
+                       ('future_values', future_values),
+                       ('parameters', parameters),
+                       ('assign_op', assign_op)]
             set_storage(self, storage)
         else:
             # Get items out of storage
-            actions, future_values, parameters, assign_op = storage
+            actions, future_values, parameters, assign_op = storage.values()
 
         feed_dict = self.feed_dict.copy()
         feed_dict[actions] = action_array
