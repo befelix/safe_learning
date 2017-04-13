@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from IPython.display import display, HTML
 
+from safe_learning.utilities import with_scope
 
+@with_scope('plot_lyapunov_1d')
 def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     """Plot the lyapunov function of a 1D system
 

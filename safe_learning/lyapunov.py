@@ -10,7 +10,7 @@ from future.builtins import zip, range
 import numpy as np
 import tensorflow as tf
 
-from .utilities import batchify
+from .utilities import batchify, get_storage, set_storage, with_scope
 from safe_learning import config
 
 __all__ = ['Lyapunov', 'smallest_boundary_value', 'get_lyapunov_region']
@@ -307,17 +307,26 @@ class Lyapunov(object):
 
         return v_dot_negative
 
+    @with_scope('update_safe_set')
     def update_safe_set(self):
         """Compute and update the safe set."""
         order = np.argsort(self.values)
         state_order = self.discretization.index_to_state(order)
 
-        # Set up the tensorflow pipeline
-        states = tf.placeholder(config.dtype,
-                                shape=[None, self.discretization.ndim],
-                                name='verification_states')
-        next_states = self.dynamics(states, self.policy(states))
-        decrease = self.v_decrease_bound(states, next_states)
+        storage = get_storage(self)
+
+        if storage is None:
+            # Set up the tensorflow pipeline
+            states = tf.placeholder(config.dtype,
+                                    shape=[None, self.discretization.ndim],
+                                    name='verification_states')
+            next_states = self.dynamics(states, self.policy(states))
+            decrease = self.v_decrease_bound(states, next_states)
+
+            storage = [('states', states), ('decrease', decrease)]
+            set_storage(self, storage)
+        else:
+            states, decrease = storage.values()
 
         # Get relevant properties
         feed_dict = self.dynamics.feed_dict.copy()

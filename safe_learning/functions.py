@@ -3,17 +3,16 @@
 from __future__ import absolute_import, print_function, division
 
 from types import ModuleType
+from itertools import product as cartesian
+from functools import partial
 
+from future.builtins import zip, range
 from scipy import spatial, sparse, linalg
 import tensorflow as tf
 import numpy as np
-from itertools import product as cartesian
-from functools import partial
-from future.builtins import zip, range
 try:
     import GPflow
     from GPflow.param import AutoFlow, DataHolder
-    from GPflow.tf_wraps import eye
     from GPflow.mean_functions import Zero
 except ImportError as exception:
     GPflow = exception
@@ -192,6 +191,7 @@ class GPRCached(GPflow.gpr.GPR):
         if not isinstance(GPflow, ModuleType):
             raise GPflow
 
+        # self.scope_name = scope.original_name_scope
         GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
@@ -201,11 +201,12 @@ class GPRCached(GPflow.gpr.GPR):
                                 on_shape_change='pass')
         self.update_cache()
 
+    @with_scope('compute_cache')
     @AutoFlow()
     def _compute_cache(self):
         """Compute cache."""
-        kernel = (self.kern.K(self.X)
-                  + eye(tf.shape(self.X)[0]) * self.likelihood.variance)
+        identity = tf.eye(tf.shape(self.X)[0], dtype=config.dtype)
+        kernel = self.kern.K(self.X) + identity * self.likelihood.variance
 
         cholesky = tf.cholesky(kernel, name='gp_cholesky')
 
@@ -217,6 +218,7 @@ class GPRCached(GPflow.gpr.GPR):
         """Update the cache after adding data points."""
         self.cholesky, self.alpha = self._compute_cache()
 
+    @with_scope('build_predict')
     def build_predict(self, Xnew, full_cov=False):
         """Predict mean and variance of the GP at locations in Xnew.
 
@@ -269,20 +271,23 @@ class GaussianProcess(UncertainFunction):
     passed to the GP.
     """
 
-    def __init__(self, gaussian_process, beta=2.):
+    def __init__(self, gaussian_process, beta=2., name='gaussian_process'):
         """Initialization."""
         super(GaussianProcess, self).__init__()
-        self.n_dim = gaussian_process.X.shape[-1]
-        self.gaussian_process = gaussian_process
-        self.beta = float(beta)
 
-        self.parameters = tf.placeholder(config.dtype, [None])
-        self.gaussian_process.make_tf_array(self.parameters)
+        with tf.variable_scope(name) as scope:
+            self.scope_name = scope.original_name_scope
+            self.n_dim = gaussian_process.X.shape[-1]
+            self.gaussian_process = gaussian_process
+            self.beta = float(beta)
 
-        self.feed_dict = {}
-        self.update_feed_dict()
+            self.parameters = tf.placeholder(config.dtype, [None])
+            self.gaussian_process.make_tf_array(self.parameters)
 
-        self.storage = None
+            self.feed_dict = {}
+            self.update_feed_dict()
+
+            self.storage = None
 
     @property
     def X(self):
@@ -294,6 +299,8 @@ class GaussianProcess(UncertainFunction):
         """Observed output. One observation per row."""
         return self.gaussian_process.Y.value
 
+    @use_parent_scope
+    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Evaluate the model, but return tensorflow tensors."""
@@ -312,6 +319,8 @@ class GaussianProcess(UncertainFunction):
         gp.update_feed_dict(gp.get_feed_dict_keys(), feed_dict)
         feed_dict[self.parameters] = gp.get_free_state()
 
+    @use_parent_scope
+    @with_scope('add_data_point')
     def add_data_point(self, x, y):
         """Add data points to the GP model and update cholesky.
 
@@ -1260,6 +1269,7 @@ class LinearSystem(DeterministicFunction):
         return tf.matmul(points, self.parameters.T, transpose_b=False)
 
 
+@with_scope('sample_gp_function')
 def sample_gp_function(discretization, gpfun, number=1, return_function=True):
     """
     Sample a function from a gp with corresponding kernel within its bounds.
