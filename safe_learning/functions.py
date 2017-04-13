@@ -1212,7 +1212,7 @@ class QuadraticFunction(DeterministicFunction):
     def __init__(self, matrix):
         """Initialization, see `QuadraticLyapunovFunction`."""
         super(QuadraticFunction, self).__init__()
-        self.matrix = matrix.astype(config.np_dtype)
+        self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
 
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
@@ -1238,7 +1238,8 @@ class LinearSystem(DeterministicFunction):
     def __init__(self, *matrices):
         """Initialize."""
         super(LinearSystem, self).__init__()
-        self.parameters = np.hstack(map(np.atleast_2d, matrices))
+        fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
+        self.parameters = np.hstack(map(fun, matrices))
 
     @with_scope('linsys_evaluate')
     @concatenate_inputs(start=1)
