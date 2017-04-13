@@ -111,7 +111,12 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
 
 def strip_consts(graph_def, max_const_size=32):
-    """Strip large constant values from graph_def."""
+    """Strip large constant values from graph_def.
+
+    Taken from
+    http://stackoverflow.com/questions/38189119/simple-way-to-visualize-a-
+    tensorflow-graph-in-jupyter
+    """
     strip_def = tf.GraphDef()
     for n0 in graph_def.node:
         n = strip_def.node.add()
@@ -125,7 +130,12 @@ def strip_consts(graph_def, max_const_size=32):
 
 
 def show_graph(graph_def, max_const_size=32):
-    """Visualize TensorFlow graph."""
+    """Visualize TensorFlow graph.
+
+    Taken from
+    http://stackoverflow.com/questions/38189119/simple-way-to-visualize-a-
+    tensorflow-graph-in-jupyter
+    """
     if hasattr(graph_def, 'as_graph_def'):
         graph_def = graph_def.as_graph_def()
     strip_def = strip_consts(graph_def, max_const_size=max_const_size)
