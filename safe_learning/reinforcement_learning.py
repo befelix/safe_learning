@@ -195,22 +195,25 @@ class PolicyIteration(object):
             the safety constraint for each state. A policy is safe if the slack
             is >=0 for all constraints.
         """
-        n = self.state_space.shape[0]
-        n_par, m = action_space.shape
+        states = self.policy.discretization.all_points
+        n_states = states.shape[0]
+        n_options, n_actions = action_space.shape
 
         # Initialize
-        values = np.empty((n, n_par), dtype=config.np_dtype)
-        action_array = np.broadcast_to(np.zeros(m, dtype=config.np_dtype),
-                                       (n, m))
+        values = np.empty((n_states, n_options), dtype=config.np_dtype)
+        action_array = np.broadcast_to(np.zeros(n_actions,
+                                                dtype=config.np_dtype),
+                                       (n_states, n_actions))
 
         # Create tensorflow operations, but reuse previous graph elements
         storage = get_storage(self._storage)
 
         if storage is None:
             # Computation of future values
-            actions = tf.placeholder(tf.float64, shape=action_array.shape,
+            actions = tf.placeholder(config.dtype,
+                                     shape=action_array.shape,
                                      name='actions')
-            future_values = self.future_values(self.state_space,
+            future_values = self.future_values(states,
                                                actions=actions)
 
             # Assigning new parameters
