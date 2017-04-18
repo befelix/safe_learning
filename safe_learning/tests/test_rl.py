@@ -42,7 +42,7 @@ class TestPolicyIteration(object):
                                        0. * discretization.all_points,
                                        project=True)
 
-        dynamics = LinearSystem(a, b)
+        dynamics = LinearSystem((a, b))
 
         policy_discretization = GridWorld([-1, 1], 5)
         policy = Triangulation(policy_discretization,

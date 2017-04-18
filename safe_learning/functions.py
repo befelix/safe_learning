@@ -1215,11 +1215,13 @@ class QuadraticFunction(DeterministicFunction):
         2d cost matrix for lyapunov function.
     """
 
-    def __init__(self, matrix):
+    def __init__(self, matrix, name='quadratic'):
         """Initialization, see `QuadraticLyapunovFunction`."""
         super(QuadraticFunction, self).__init__()
+        self.scope_name = name
         self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
 
+    @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -1241,12 +1243,14 @@ class LinearSystem(DeterministicFunction):
         is multiplied by the corresponding state that is passed to evaluate.
     """
 
-    def __init__(self, *matrices):
+    def __init__(self, matrices, name='linear_system'):
         """Initialize."""
         super(LinearSystem, self).__init__()
+        self.scope_name = name
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
         self.parameters = np.hstack(map(fun, matrices))
 
+    @use_parent_scope
     @with_scope('linsys_evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
