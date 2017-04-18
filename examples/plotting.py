@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from IPython.display import display, HTML
 
-from safe_learning.utilities import with_scope, get_storage, set_storage
+from safe_learning.utilities import (with_scope, get_storage, set_storage,
+                                     get_feed_dict)
 
 
 _STORAGE = {}
@@ -20,10 +21,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     legend : bool, optional
     """
     sess = tf.get_default_session()
-    if hasattr(lyapunov.dynamics, 'feed_dict'):
-        feed_dict = lyapunov.dynamics.feed_dict
-    else:
-        feed_dict = {}
+    feed_dict = get_feed_dict(sess.graph)
 
     # Make storage instance-specific
     if lyapunov not in _STORAGE:

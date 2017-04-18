@@ -11,7 +11,8 @@ try:
 except ImportError as exception:
     cvxpy = exception
 
-from .utilities import make_tf_fun, with_scope, get_storage, set_storage
+from .utilities import (make_tf_fun, with_scope, get_storage, set_storage,
+                        get_feed_dict)
 
 from safe_learning import config
 
@@ -58,14 +59,7 @@ class PolicyIteration(object):
         self.state_space = tf.stack(state_space, name='state_space')
 
         self.policy = policy
-
-    @property
-    def feed_dict(self):
-        """Return the feed dict of the class."""
-        if hasattr(self.dynamics, 'feed_dict'):
-            return self.dynamics.feed_dict
-        else:
-            return {}
+        self.feed_dict = get_feed_dict(tf.get_default_graph())
 
     @with_scope('future_values')
     def future_values(self, states, policy=None, actions=None):
@@ -232,7 +226,7 @@ class PolicyIteration(object):
             # Get items out of storage
             actions, future_values, parameters, assign_op = storage.values()
 
-        feed_dict = self.feed_dict.copy()
+        feed_dict = self.feed_dict
         feed_dict[actions] = action_array
 
         # Compute values for each action

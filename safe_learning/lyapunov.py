@@ -10,7 +10,8 @@ from future.builtins import zip, range
 import numpy as np
 import tensorflow as tf
 
-from .utilities import batchify, get_storage, set_storage, with_scope
+from .utilities import (batchify, get_storage, set_storage, with_scope,
+                        get_feed_dict)
 from safe_learning import config
 
 __all__ = ['Lyapunov', 'smallest_boundary_value', 'get_lyapunov_region']
@@ -33,11 +34,7 @@ def smallest_boundary_value(fun, discretization):
         The smallest value on the boundary.
     """
     min_value = np.inf
-
-    if hasattr(fun, 'feed_dict'):
-        feed_dict = fun.feed_dict
-    else:
-        feed_dict = {}
+    feed_dict = get_feed_dict(tf.get_default_graph())
 
     # Check boundaries for each axis
     for i in range(discretization.ndim):
@@ -75,10 +72,7 @@ def get_lyapunov_region(lyapunov, discretization, init_node):
         Lyapunov function that can be used for stability verification.
     """
     # Turn values into a multi-dim array
-    if hasattr(lyapunov, 'feed_dict'):
-        feed_dict = lyapunov.feed_dict
-    else:
-        feed_dict = {}
+    feed_dict = lyapunov.feed_dict
 
     values = lyapunov(discretization.all_points).eval(feed_dict=feed_dict)
     lyapunov_values = values.reshape(discretization.num_points)
@@ -199,6 +193,7 @@ class Lyapunov(object):
 
         # Storage for graph
         self._storage = dict()
+        self.feed_dict = get_feed_dict(tf.get_default_graph())
 
         # Lyapunov values
         self.values = None
@@ -332,7 +327,7 @@ class Lyapunov(object):
             states, decrease = storage.values()
 
         # Get relevant properties
-        feed_dict = self.dynamics.feed_dict.copy()
+        feed_dict = self.feed_dict
         batch_size = config.gp_batch_size
 
         # reset the safe set

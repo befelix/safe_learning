@@ -4,9 +4,11 @@ from __future__ import absolute_import, print_function, division
 
 import pytest
 import numpy as np
+import tensorflow as tf
 from numpy.testing import assert_allclose
 
-from safe_learning.utilities import dlqr, get_storage, set_storage
+from safe_learning.utilities import (dlqr, get_storage, set_storage,
+                                     get_feed_dict)
 
 
 def test_dlqr():
@@ -54,3 +56,17 @@ class TestStorage(object):
         assert storage['value'] == 4
         storage = sample_class.method(None)
         assert storage['value'] is None
+
+
+def test_get_feed_dict():
+    """Test the global get_feed_dict method."""
+    graph = tf.Graph()
+    feed_dict = get_feed_dict(graph)
+    # Initialized new dictionary
+    assert feed_dict == {}
+
+    # Test assignment
+    feed_dict['test'] = 5
+
+    # Make sure we keep getting the same object
+    assert feed_dict is get_feed_dict(graph)

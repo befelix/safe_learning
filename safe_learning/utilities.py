@@ -404,3 +404,24 @@ def set_storage(dictionary, name_value):
     storage_name = '_storage_{}'.format(function_name)
 
     dictionary[storage_name] = OrderedDict(name_value)
+
+
+def get_feed_dict(graph):
+    """Return the global feed_dict used for this graph.
+
+    Parameters
+    ----------
+    graph : tf.Graph
+
+    Returns
+    -------
+    feed_dict : dict
+        The feed_dict for this graph.
+    """
+    try:
+        # Just return the feed_dict
+        return graph.feed_dict_sl
+    except AttributeError:
+        # Create a new feed_dict for this graph
+        graph.feed_dict_sl = {}
+        return graph.feed_dict_sl

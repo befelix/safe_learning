@@ -18,7 +18,7 @@ except ImportError as exception:
     GPflow = exception
 
 from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
-                        use_parent_scope)
+                        use_parent_scope, get_feed_dict)
 from safe_learning import config
 
 __all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
@@ -35,6 +35,7 @@ class Function(object):
     def __init__(self):
         super(Function, self).__init__()
         self.ndim = None
+        self.feed_dict = get_feed_dict(tf.get_default_graph())
 
     def __call__(self, *points):
         """Equivalent to `self.evaluate()`.
@@ -107,7 +108,6 @@ class DeterministicFunction(Function):
         super(DeterministicFunction, self).__init__()
 
         self.parameters = None
-        self.feed_dict = {}
 
     def evaluate(self, *points):
         """Return the function values.
@@ -284,10 +284,7 @@ class GaussianProcess(UncertainFunction):
             self.parameters = tf.placeholder(config.dtype, [None])
             self.gaussian_process.make_tf_array(self.parameters)
 
-            self.feed_dict = {}
             self.update_feed_dict()
-
-            self.storage = None
 
     @property
     def X(self):
