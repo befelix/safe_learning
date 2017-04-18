@@ -35,10 +35,11 @@ class TestStorage(object):
             def __init__(self):
                 """Initialize."""
                 super(A, self).__init__()
+                self.storage = {}
 
             def method(self, value):
-                storage = get_storage(self)
-                set_storage(self, [('value', value)])
+                storage = get_storage(self.storage)
+                set_storage(self.storage, [('value', value)])
                 return storage
 
         return A()

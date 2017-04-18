@@ -197,6 +197,9 @@ class Lyapunov(object):
         # Make sure Lyapunov fits into standard framework
         self.lyapunov_function = lyapunov_function
 
+        # Storage for graph
+        self._storage = dict()
+
         # Lyapunov values
         self.values = None
         self.update_values()
@@ -313,7 +316,7 @@ class Lyapunov(object):
         order = np.argsort(self.values)
         state_order = self.discretization.index_to_state(order)
 
-        storage = get_storage(self)
+        storage = get_storage(self._storage)
 
         if storage is None:
             # Set up the tensorflow pipeline
@@ -324,7 +327,7 @@ class Lyapunov(object):
             decrease = self.v_decrease_bound(states, next_states)
 
             storage = [('states', states), ('decrease', decrease)]
-            set_storage(self, storage)
+            set_storage(self._storage, storage)
         else:
             states, decrease = storage.values()
 

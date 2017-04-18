@@ -367,12 +367,13 @@ def ellipse_bounds(P, level, n=100):
     return pos[:n, 0], pos[:n, 1], pos[:n - 1:-1, 1]
 
 
-def get_storage(instance):
+def get_storage(dictionary):
     """Get a unique storage point within a class method.
 
     Parameters
     ----------
-    instance : instance of some class
+    dictionary : dict
+        A dictionary used for storage.
 
     Returns
     -------
@@ -384,15 +385,15 @@ def get_storage(instance):
     function_name = inspect.getframeinfo(frame.f_back).function
 
     storage_name = '_storage_{}'.format(function_name)
-    return getattr(instance, storage_name, None)
+    return dictionary.get(storage_name)
 
 
-def set_storage(instance, name_value):
+def set_storage(dictionary, name_value):
     """Set the storage point within a class method.
 
     Parameters
     ----------
-    instance : instance of some class
+    dictionary : dict
     name_value : tuple
         A list of tuples, where each tuple contains a string with the name
         of the storage object and the corresponding value that is to be put
@@ -402,5 +403,4 @@ def set_storage(instance, name_value):
     function_name = inspect.getframeinfo(frame.f_back).function
     storage_name = '_storage_{}'.format(function_name)
 
-    storage = OrderedDict(name_value)
-    setattr(instance, storage_name, storage)
+    dictionary[storage_name] = OrderedDict(name_value)

@@ -3,7 +3,11 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from IPython.display import display, HTML
 
-from safe_learning.utilities import with_scope
+from safe_learning.utilities import with_scope, get_storage, set_storage
+
+
+_STORAGE = {}
+
 
 @with_scope('plot_lyapunov_1d')
 def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
@@ -21,15 +25,36 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     else:
         feed_dict = {}
 
-    threshold = lyapunov.threshold
-    # Lyapunov function
-    states = lyapunov.discretization.all_points
-    actions = lyapunov.policy(states)
-    next_states = lyapunov.dynamics(states, actions)
-    v_bounds = lyapunov.v_decrease_confidence(states, next_states)
-    safe_set = lyapunov.safe_set
-    true_next_states = true_dynamics(states, actions, noise=False)
+    # Make storage instance-specific
+    if lyapunov not in _STORAGE:
+        _STORAGE[lyapunov] = dict()
+
+    storage_dict = _STORAGE[lyapunov]
+    storage = get_storage(storage_dict)
+
+    if storage is None:
+        # Lyapunov function
+        states = lyapunov.discretization.all_points
+        actions = lyapunov.policy(states)
+        next_states = lyapunov.dynamics(states, actions)
+        v_bounds = lyapunov.v_decrease_confidence(states, next_states)
+        true_next_states = true_dynamics(states, actions, noise=False)
+        delta_v_true, _ = lyapunov.v_decrease_confidence(states,
+                                                         true_next_states)
+
+        storage = [('states', states),
+                   ('next_states', next_states),
+                   ('v_bounds', v_bounds),
+                   ('true_next_states', true_next_states),
+                   ('delta_v_true', delta_v_true)]
+        set_storage(storage_dict, storage)
+    else:
+        (states, next_states, v_bounds,
+         true_next_states, delta_v_true) = storage.values()
+
     extent = [np.min(states), np.max(states)]
+    safe_set = lyapunov.safe_set
+    threshold = lyapunov.threshold
 
     # Create figure axes
     fig, axes = plt.subplots(2, 1, figsize=(10, 12))
@@ -70,9 +95,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
                               'k-.', label=r'Safety threshold ($L \tau$ )')
 
     # # Plot the true V_dot or Delta_V
-    delta_v, _ = lyapunov.v_decrease_confidence(states,
-                                                true_next_states)
-    delta_v = delta_v.eval(feed_dict=feed_dict)
+    delta_v = delta_v_true.eval(feed_dict=feed_dict)
     v_dot_true_plot = axes[1].plot(states[:, 0],
                                    delta_v,
                                    color='k',
