@@ -60,6 +60,7 @@ class PolicyIteration(object):
 
         self.policy = policy
         self.feed_dict = get_feed_dict(tf.get_default_graph())
+        self._storage = {}
 
     @with_scope('future_values')
     def future_values(self, states, policy=None, actions=None):
@@ -203,7 +204,7 @@ class PolicyIteration(object):
                                        (n, m))
 
         # Create tensorflow operations, but reuse previous graph elements
-        storage = get_storage(self)
+        storage = get_storage(self._storage)
 
         if storage is None:
             # Computation of future values
@@ -221,7 +222,7 @@ class PolicyIteration(object):
                        ('future_values', future_values),
                        ('parameters', parameters),
                        ('assign_op', assign_op)]
-            set_storage(self, storage)
+            set_storage(self._storage, storage)
         else:
             # Get items out of storage
             actions, future_values, parameters, assign_op = storage.values()
