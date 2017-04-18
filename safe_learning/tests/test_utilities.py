@@ -39,9 +39,9 @@ class TestStorage(object):
                 super(A, self).__init__()
                 self.storage = {}
 
-            def method(self, value):
-                storage = get_storage(self.storage)
-                set_storage(self.storage, [('value', value)])
+            def method(self, value, index=None):
+                storage = get_storage(self.storage, index=index)
+                set_storage(self.storage, [('value', value)], index=index)
                 return storage
 
         return A()
@@ -54,8 +54,16 @@ class TestStorage(object):
         assert storage['value'] == 5
         storage = sample_class.method(None)
         assert storage['value'] == 4
-        storage = sample_class.method(None)
-        assert storage['value'] is None
+
+        # Test index
+        storage = sample_class.method(3, index='test')
+        assert storage is None
+        storage = sample_class.method(4, index='test')
+        assert storage['value'] == 3
+        storage = sample_class.method(3, index='test2')
+        assert storage is None
+        storage = sample_class.method(3, index='test')
+        assert storage['value'] is 4
 
 
 def test_get_feed_dict():

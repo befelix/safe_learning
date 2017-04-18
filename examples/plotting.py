@@ -7,6 +7,7 @@ from safe_learning.utilities import (with_scope, get_storage, set_storage,
                                      get_feed_dict)
 
 
+# An object to store graph elements
 _STORAGE = {}
 
 
@@ -23,12 +24,8 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
     sess = tf.get_default_session()
     feed_dict = get_feed_dict(sess.graph)
 
-    # Make storage instance-specific
-    if lyapunov not in _STORAGE:
-        _STORAGE[lyapunov] = dict()
-
-    storage_dict = _STORAGE[lyapunov]
-    storage = get_storage(storage_dict)
+    # Get the storage (specific to the lyapunov function)
+    storage = get_storage(_STORAGE, index=lyapunov)
 
     if storage is None:
         # Lyapunov function
@@ -45,7 +42,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
                    ('v_bounds', v_bounds),
                    ('true_next_states', true_next_states),
                    ('delta_v_true', delta_v_true)]
-        set_storage(storage_dict, storage)
+        set_storage(_STORAGE, storage, index=lyapunov)
     else:
         (states, next_states, v_bounds,
          true_next_states, delta_v_true) = storage.values()

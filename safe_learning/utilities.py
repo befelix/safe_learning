@@ -367,13 +367,17 @@ def ellipse_bounds(P, level, n=100):
     return pos[:n, 0], pos[:n, 1], pos[:n - 1:-1, 1]
 
 
-def get_storage(dictionary):
+def get_storage(dictionary, index=None):
     """Get a unique storage point within a class method.
 
     Parameters
     ----------
     dictionary : dict
         A dictionary used for storage.
+    index : hashable
+        An index under which to store the element. Needs to be hashable.
+        This is useful for functions which might be accessed with multiple
+        different arguements.
 
     Returns
     -------
@@ -385,10 +389,19 @@ def get_storage(dictionary):
     function_name = inspect.getframeinfo(frame.f_back).function
 
     storage_name = '_storage_{}'.format(function_name)
-    return dictionary.get(storage_name)
+    storage = dictionary.get(storage_name)
+
+    if index is None:
+        return storage
+    elif storage is not None:
+        # Return directly the indexed object
+        try:
+            return storage[index]
+        except KeyError:
+            pass
 
 
-def set_storage(dictionary, name_value):
+def set_storage(dictionary, name_value, index=None):
     """Set the storage point within a class method.
 
     Parameters
@@ -398,12 +411,24 @@ def set_storage(dictionary, name_value):
         A list of tuples, where each tuple contains a string with the name
         of the storage object and the corresponding value that is to be put
         in storage. These are stored as OrderedDicts.
+    index : hashable
+        An index under which to store the element. Needs to be hashable.
+        This is useful for functions which might be accessed with multiple
+        different arguements.
     """
     frame = inspect.currentframe()
     function_name = inspect.getframeinfo(frame.f_back).function
     storage_name = '_storage_{}'.format(function_name)
 
-    dictionary[storage_name] = OrderedDict(name_value)
+    storage = OrderedDict(name_value)
+    if index is None:
+        dictionary[storage_name] = storage
+    else:
+        # Make sure the storage is initialized
+        if storage_name not in dictionary:
+            dictionary[storage_name] = {}
+        # Set the indexed storage
+        dictionary[storage_name][index] = storage
 
 
 def get_feed_dict(graph):
