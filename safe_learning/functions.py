@@ -1129,6 +1129,8 @@ class Triangulation(DeterministicFunction):
                 init = tf.variables_initializer([self.parameters])
                 tf.get_default_session().run(init)
 
+            self.ndim = self.tri.ndim
+
     @property
     def project(self):
         """Getter for the project parameter."""
