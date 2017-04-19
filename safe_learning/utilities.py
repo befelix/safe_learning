@@ -25,7 +25,7 @@ from future.backports import OrderedDict
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
            'with_scope', 'use_parent_scope', 'add_constraint', 'batchify',
-           'get_storage']
+           'get_storage', 'unique_rows']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -203,7 +203,7 @@ def batchify(arrays, batch_size):
 
         # Break if there are no points left
         if batches[0].size:
-            yield batches
+            yield i, batches
         else:
             break
 
@@ -450,3 +450,24 @@ def get_feed_dict(graph):
         # Create a new feed_dict for this graph
         graph.feed_dict_sl = {}
         return graph.feed_dict_sl
+
+
+def unique_rows(array):
+    """Return the unique rows of the array.
+
+    Parameters
+    ----------
+    array : ndarray
+        A 2D numpy array.
+
+    unique_array : ndarray
+        A 2D numpy array that contains all the unique rows of array.
+    """
+    array = np.ascontiguousarray(array)
+    # Combine all the rows into a single element of the flexible void datatype
+    dtype = np.dtype((np.void, array.dtype.itemsize * array.shape[1]))
+    combined_array = array.view(dtype=dtype)
+    # Get all the unique rows of the combined array
+    _, idx = np.unique(combined_array, return_index=True)
+
+    return array[idx]

@@ -8,7 +8,7 @@ import tensorflow as tf
 from numpy.testing import assert_allclose
 
 from safe_learning.utilities import (dlqr, get_storage, set_storage,
-                                     get_feed_dict)
+                                     get_feed_dict, unique_rows)
 
 
 def test_dlqr():
@@ -78,3 +78,11 @@ def test_get_feed_dict():
 
     # Make sure we keep getting the same object
     assert feed_dict is get_feed_dict(graph)
+
+
+def test_unique_rows():
+    """Test the unique_rows function."""
+    a = np.array([[1, 1], [1, 2], [1, 3], [1, 2], [1, 3], [1, 4], [2, 3]])
+    uniques = np.array([[1, 1], [1, 2], [1, 3], [1, 4], [2, 3]])
+
+    assert_allclose(unique_rows(a), uniques)

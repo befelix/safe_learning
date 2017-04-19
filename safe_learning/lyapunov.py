@@ -11,10 +11,11 @@ import numpy as np
 import tensorflow as tf
 
 from .utilities import (batchify, get_storage, set_storage, with_scope,
-                        get_feed_dict)
+                        get_feed_dict, unique_rows)
 from safe_learning import config
 
-__all__ = ['Lyapunov', 'smallest_boundary_value', 'get_lyapunov_region']
+__all__ = ['Lyapunov', 'smallest_boundary_value', 'get_lyapunov_region',
+           'get_safe_sample']
 
 
 def smallest_boundary_value(fun, discretization):
@@ -197,6 +198,10 @@ class Lyapunov(object):
 
         # Lyapunov values
         self.values = None
+
+        self.c_max = tf.placeholder(config.dtype, shape=())
+        self.feed_dict[self.c_max] = 0.
+
         self.update_values()
 
         # Origin node
@@ -314,17 +319,17 @@ class Lyapunov(object):
         storage = get_storage(self._storage)
 
         if storage is None:
-            # Set up the tensorflow pipeline
-            states = tf.placeholder(config.dtype,
-                                    shape=[None, self.discretization.ndim],
-                                    name='verification_states')
-            next_states = self.dynamics(states, self.policy(states))
-            decrease = self.v_decrease_bound(states, next_states)
+            # Placeholder for states to evaluate for safety
+            tf_states = tf.placeholder(config.dtype,
+                                       shape=[None, self.discretization.ndim],
+                                       name='verification_states')
+            next_states = self.dynamics(tf_states, self.policy(tf_states))
+            decrease = self.v_decrease_bound(tf_states, next_states)
 
-            storage = [('states', states), ('decrease', decrease)]
+            storage = [('tf_states', tf_states), ('decrease', decrease)]
             set_storage(self._storage, storage)
         else:
-            states, decrease = storage.values()
+            tf_states, decrease = storage.values()
 
         # Get relevant properties
         feed_dict = self.feed_dict
@@ -342,9 +347,9 @@ class Lyapunov(object):
         # Verify safety in batches
         batch_generator = batchify((state_order, safe_set), batch_size)
 
-        for state_batch, safe_batch in batch_generator:
+        for i, (state_batch, safe_batch) in batch_generator:
 
-            feed_dict[states] = state_batch
+            feed_dict[tf_states] = state_batch
             result = decrease.eval(feed_dict=feed_dict)
 
             # TODO: Make the discretization adaptive depending on result
@@ -361,7 +366,166 @@ class Lyapunov(object):
                 safe_batch[bound:] = False
                 break
 
+        # The largest index of a safe value
+        max_index = i + bound - 1
+        # Set placeholder for c_max to the corresponding value
+        feed_dict[self.c_max] = self.values[order[max_index]]
+
         # Restore the order of the safe set
         safe_nodes = order[safe_set]
         self.safe_set[:] = False
         self.safe_set[safe_nodes] = True
+
+
+def perturb_actions(states, actions, perturbations, limits=None):
+    """Create state-action pairs by perturbing the actions.
+
+    Parameters
+    ----------
+    states : ndarray
+        An (N x n) array of states at which we want to generate state-action
+        pairs.
+    actions : ndarray
+        An (N x m) array of baseline actions at these states. These
+        corresponds to the actions taken by the current policy.
+    perturbations : ndarray
+        An (X x m) array of policy perturbations that are to be applied to
+        each state-action pair.
+
+    Returns
+    -------
+    state-actions : ndarray
+        An (N*X x n+m) array of state-actions pairs, where for each state
+        the corresponding action is perturbed by the perturbations.
+    """
+    num_states, state_dim = states.shape
+
+    # repeat states
+    states_new = np.repeat(states, len(perturbations), axis=0)
+
+    # generate perturbations from perturbations around baseline policy
+    actions_new = (np.repeat(actions, len(perturbations), axis=0)
+                   + np.tile(perturbations, (num_states, 1)))
+
+    state_actions = np.column_stack((states_new, actions_new))
+
+    if limits is not None:
+        # Clip the actions
+        perturbations = state_actions[:, state_dim:]
+        np.clip(perturbations, limits[:, 0], limits[:, 1], out=perturbations)
+        # Remove rows that are not unique
+        state_actions = unique_rows(state_actions)
+
+    return state_actions
+
+
+_STORAGE = {}
+
+
+@with_scope('get_safe_samples')
+def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
+    """Compute a safe state-action pair for sampling.
+
+    This function returns the most uncertain state-action pair close to the
+    current policy (as a result of the perturbations) that is safe (maps
+    back into the region of attraction).
+
+    Parameters
+    ----------
+    lyapunov : instance of `Lyapunov'
+        A Lyapunov instance with an up-to-date safe set.
+    perturbations : ndarray
+        An array that, on each row, has a perturbation that is added to the
+        baseline policy in `lyapunov.policy`.
+    limits : ndarray, optional
+        The actuator limits. Of the form [(u_1_min, u_1_max), (u_2_min,..)...].
+        If provided, state-action pairs are clipped to ensure the limits.
+    positive : bool
+        Whether the Lyapunov function is positive-definite (radially
+        increasing). If not, additional checks are carried out to ensure
+        safety of samples.
+
+    Returns
+    -------
+    state-action : ndarray
+        A row-vector that contains a safe state-action pair that is
+        promising for obtaining future observations.
+    var : float
+        The uncertainty remaining at this state.
+    """
+    state_disc = lyapunov.discretization
+
+    state_dim = state_disc.ndim
+    action_dim = perturbations.shape[1]
+    action_limits = limits
+
+    storage = get_storage(_STORAGE, index=lyapunov)
+
+    if storage is None:
+        # Placeholder for safe states
+        tf_safe_states = tf.placeholder(config.dtype, shape=[None, state_dim])
+        tf_actions = lyapunov.policy(tf_safe_states)
+
+        # Placeholder for state-actions to evaluate
+        tf_state_actions = tf.placeholder(config.dtype,
+                                          shape=[None, state_dim + action_dim])
+
+        mean, bound = lyapunov.dynamics(tf_state_actions)
+        # Account for deviations of the next value due to uncertainty
+        values = (lyapunov.lyapunov_function(mean)
+                  + lyapunov.lipschitz_lyapunov * bound)
+        # Check whether the value is below c_max
+        maps_inside = tf.less(values, lyapunov.c_max,
+                              name='maps_inside_levelset')
+
+        # Put everything into storage
+        storage = [('tf_safe_states', tf_safe_states),
+                   ('tf_actions', tf_actions),
+                   ('tf_state_actions', tf_state_actions),
+                   ('mean', mean),
+                   ('bound', bound),
+                   ('maps_inside', maps_inside)]
+        set_storage(_STORAGE, storage, index=lyapunov)
+    else:
+        (tf_safe_states, tf_actions, tf_state_actions,
+         mean, bound, maps_inside) = storage.values()
+
+    # All the safe states within the discretization
+    safe_states = state_disc.index_to_state(np.where(lyapunov.safe_set))
+
+    # Update the feed_dict accordingly
+    feed_dict = lyapunov.feed_dict
+    feed_dict[tf_safe_states] = safe_states
+
+    # Generate state-action pairs around the current policy
+    safe_actions = tf_actions.eval(feed_dict=feed_dict)
+    state_actions = perturb_actions(safe_states,
+                                    safe_actions,
+                                    perturbations=perturbations,
+                                    limits=action_limits)
+
+    # If we want to try all actions for all states:
+    # arrays = [arr.ravel() for arr in np.meshgrid(safe_states,
+    #                                              safe_actions,
+    #                                              indexing='ij')]
+    # state_actions = np.column_stack(arrays)
+
+    # Update feed value
+    lyapunov.feed_dict[tf_state_actions] = state_actions
+
+    # Evaluate the safety of the proposed state-action pairs
+    session = tf.get_default_session()
+    maps_inside, mean, var = session.run([maps_inside, mean, bound],
+                                         feed_dict=lyapunov.feed_dict)
+    maps_inside = maps_inside.squeeze(-1)
+
+    # Check whether states map back to the safe set in expectation
+    if not positive:
+        next_state_index = lyapunov.discretization.state_to_index(mean)
+        safe_in_expectation = lyapunov.safe_set[next_state_index]
+        maps_inside &= safe_in_expectation
+
+    # Return only state-actions pairs that are safe
+    var_safe = var[maps_inside]
+    max_id = np.argmax(var_safe)
+    return state_actions[maps_inside, :][[max_id]], var_safe[max_id].squeeze()
