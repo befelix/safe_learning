@@ -2,5 +2,5 @@ mock
 flake8
 pytest
 pytest-cov
-pydocstyle
+pydocstyle>=2.0
 

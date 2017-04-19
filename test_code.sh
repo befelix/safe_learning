@@ -29,7 +29,7 @@ flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-sourc
 
 echo -e "${GREEN}Testing docstring conventions.${NC}"
 # Test docstring conventions
-pydocstyle $module --match='(?!__init__).*\.py' 2>&1 | grep -v "WARNING: __all__"
+pydocstyle $module --convention=numpy
 
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"

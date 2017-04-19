@@ -48,6 +48,7 @@ class Function(object):
         -------
         array : ndarray
             The values of the evaluated function.
+
         """
         return self.evaluate(*points)
 
@@ -654,6 +655,7 @@ class PiecewiseConstant(DeterministicFunction):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
+
         Returns
         -------
         gradient : ndarray
@@ -1020,6 +1022,7 @@ class _Triangulation(DeterministicFunction):
         points : ndarray
             The points at which to evaluate the function. One row for each
             data points.
+
         Returns
         -------
         gradient : ndarray

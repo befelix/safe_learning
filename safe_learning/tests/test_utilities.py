@@ -30,7 +30,7 @@ class TestStorage(object):
 
     @pytest.fixture
     def sample_class(self):
-        """A sample class for testing."""
+        """Sample class for testing."""
         class A(object):
             """Some class."""
 

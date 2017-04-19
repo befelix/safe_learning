@@ -127,7 +127,7 @@ class PolicyIteration(object):
 
     @make_tf_fun(tf.float64)
     def _run_cvx_optimization(self, next_states, rewards):
-        """A tensorflow wrapper around a cvxpy value function optimization.
+        """Tensorflow wrapper around a cvxpy value function optimization.
 
         Parameters
         ----------

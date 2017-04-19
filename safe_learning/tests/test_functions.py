@@ -271,7 +271,7 @@ class TestConcatenateDecorator(object):
 
     @concatenate_inputs(start=1)
     def fun(self, x):
-        """Dummy testing function."""
+        """Test function."""
         return x
 
     def test_concatenate_numpy(self):
@@ -558,8 +558,7 @@ class TestTriangulation(object):
 
     @pytest.fixture(scope="class")
     def setup(self):
-        """Creating testing environment."""
-        limits = [[0, 1], [0, 1]]
+        """Create testing environment."""
         npoints = 3
 
         discretization = GridWorld([[0, 1], [0, 1]], npoints)

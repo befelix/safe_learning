@@ -125,7 +125,7 @@ def concatenate_inputs(start=0):
     def wrap(function):
         @wraps(function)
         def wrapped_function(*args, **kwargs):
-            """A function that concatenates inputs."""
+            """Concatenate the input arguments."""
             nargs = len(args) - start
             # Check for tensorflow objects
             tf_objects = (tf.Tensor, tf.Variable)
@@ -181,7 +181,7 @@ def add_constraint(optimization, var_list, bound_list):
 
 
 def batchify(arrays, batch_size):
-    """A generator that yields the arrays in batches and in order.
+    """Yield the arrays in batches and in order.
 
     The last batch might be smaller than batch_size.
 
