@@ -67,7 +67,9 @@ class TestLyapunov(object):
             lyap.update_safe_set()
             assert_equal(lyap.safe_set, np.array([False, True, False]))
 
-            lyap.epsilon = 0.
+            eps = 0.
+            lyap = Lyapunov(discretization, lyap_fun, dynamics, lf, lv,
+                            eps, policy, initial_set=initial_set)
             lyap.update_safe_set()
             assert_equal(lyap.safe_set, np.ones(3, dtype=np.bool))
 

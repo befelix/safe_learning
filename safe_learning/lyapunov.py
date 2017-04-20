@@ -208,20 +208,63 @@ class Lyapunov(object):
         origin = np.argmin(np.abs(discretization.discrete_points), axis=1)
         self.origin = origin
 
-        self.lipschitz_dynamics = lipschitz_dynamics
-        self.lipschitz_lyapunov = lipschitz_lyapunov
+        self._lipschitz_dynamics = lipschitz_dynamics
+        self._lipschitz_lyapunov = lipschitz_lyapunov
 
-    @property
-    def threshold(self):
-        """Return the safety threshold for the Lyapunov condition."""
-        lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
+    def lipschitz_dynamics(self, states, actions):
+        """Return the Lipschitz constant for given states and actions.
+
+        Parameters
+        ----------
+        states : ndarray or Tensor
+        actions : ndarray or Tensor
+
+        Returns
+        -------
+        lipschitz : float, ndarray or Tensor
+            If lipschitz_dynamics is a callable then returns local Lipschitz
+            constants. Otherwise returns the Lipschitz constant as a scalar.
+        """
+        if hasattr(self._lipschitz_dynamics, '__call__'):
+            return self._lipschitz_dynamics(states, actions)
+        else:
+            return self._lipschitz_dynamics
+
+    def lipschitz_lyapunov(self, states):
+        """Return the local Lipschitz constant at a given state.
+
+        Parameters
+        ----------
+        states : ndarray or Tensor
+
+        Returns
+        -------
+        lipschitz : float, ndarray or Tensor
+            If lipschitz_lyapunov is a callable then returns local Lipschitz
+            constants. Otherwise returns the Lipschitz constant as a scalar.
+        """
+        if hasattr(self._lipschitz_lyapunov, '__call__'):
+            return self._lipschitz_lyapunov(states)
+        else:
+            return self._lipschitz_lyapunov
+
+    def threshold(self, states, actions):
+        """Return the safety threshold for the Lyapunov condition.
+
+        Parameters
+        ----------
+        states : ndarray or Tensor
+        actions : ndarray or Tensor
+
+        Returns
+        -------
+        lipschitz : float, ndarray or Tensor
+            Either the scalar threshold or local thresholds, depending on
+            whether lipschitz_lyapunov and lipschitz_dynamics are local or not.
+        """
+        lv = self.lipschitz_lyapunov(states)
+        lf = self.lipschitz_dynamics(states, actions)
         return -lv * (1. + lf) * self.epsilon
-
-    @property
-    def lipschitz(self):
-        """Return the lipschitz constant."""
-        lv, lf = self.lipschitz_lyapunov, self.lipschitz_dynamics
-        return lv * (1. + lf)
 
     def update_values(self):
         """Update the discretized values when the Lyapunov function changes."""
@@ -250,8 +293,8 @@ class Lyapunov(object):
         """
         if isinstance(next_states, Sequence):
             next_states, error_bounds = next_states
-            bound = self.lipschitz_lyapunov * tf.reduce_sum(error_bounds,
-                                                            axis=1)
+            lv = self.lipschitz_lyapunov(next_states)
+            bound = lv * tf.reduce_sum(error_bounds, axis=1)
         else:
             bound = tf.constant(0., dtype=config.dtype)
 
@@ -323,13 +366,17 @@ class Lyapunov(object):
             tf_states = tf.placeholder(config.dtype,
                                        shape=[None, self.discretization.ndim],
                                        name='verification_states')
-            next_states = self.dynamics(tf_states, self.policy(tf_states))
-            decrease = self.v_decrease_bound(tf_states, next_states)
+            tf_actions = self.policy(tf_states)
+            next_states = self.dynamics(tf_states, tf_actions)
 
-            storage = [('tf_states', tf_states), ('decrease', decrease)]
+            decrease = self.v_decrease_bound(tf_states, next_states)
+            threshold = self.threshold(tf_states, tf_actions)
+            tf_negative = tf.less(decrease, threshold)
+
+            storage = [('tf_states', tf_states), ('negative', tf_negative)]
             set_storage(self._storage, storage)
         else:
-            tf_states, decrease = storage.values()
+            tf_states, tf_negative = storage.values()
 
         # Get relevant properties
         feed_dict = self.feed_dict
@@ -350,11 +397,10 @@ class Lyapunov(object):
         for i, (state_batch, safe_batch) in batch_generator:
 
             feed_dict[tf_states] = state_batch
-            result = decrease.eval(feed_dict=feed_dict)
 
-            # TODO: Make the discretization adaptive depending on result
-            negative = result <= self.threshold
-            safe_batch |= negative
+            # Update the safety with the safe_batch result
+            safe_batch |= tf_negative.eval(feed_dict=feed_dict)
+            # TODO: Make the discretization adaptive?
 
             # Boolean array: argmin returns first element that is False
             # If all are safe then it returns 0
@@ -375,6 +421,10 @@ class Lyapunov(object):
         safe_nodes = order[safe_set]
         self.safe_set[:] = False
         self.safe_set[safe_nodes] = True
+
+        # Ensure the initial safe set is kept
+        if self.initial_safe_set is not None:
+            safe_set[self.initial_safe_set] = True
 
 
 def perturb_actions(states, actions, perturbations, limits=None):
