@@ -472,8 +472,9 @@ def perturb_actions(states, actions, perturbations, limits=None):
 _STORAGE = {}
 
 
-@with_scope('get_safe_samples')
-def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
+@with_scope('get_safe_sample')
+def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
+                    num_samples=None):
     """Compute a safe state-action pair for sampling.
 
     This function returns the most uncertain state-action pair close to the
@@ -494,6 +495,9 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
         Whether the Lyapunov function is positive-definite (radially
         increasing). If not, additional checks are carried out to ensure
         safety of samples.
+    num_samples : int, optional
+        Number of samples to select (uniformly at random) from the safe
+        states within lyapunov.discretization as testing points.
 
     Returns
     -------
@@ -544,6 +548,11 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
 
     # All the safe states within the discretization
     safe_states = state_disc.index_to_state(np.where(lyapunov.safe_set))
+
+    # Subsample safe states
+    if num_samples is not None and len(safe_states) > num_samples:
+        idx = np.random.choice(len(safe_states), num_samples, replace=False)
+        safe_states = safe_states[idx]
 
     # Update the feed_dict accordingly
     feed_dict = lyapunov.feed_dict
