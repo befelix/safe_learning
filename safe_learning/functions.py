@@ -24,7 +24,7 @@ from safe_learning import config
 __all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
            'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
            'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
-           'GPRCached', 'sample_gp_function', 'LinearSystem']
+           'GPRCached', 'sample_gp_function', 'LinearSystem', 'Saturation']
 
 _EPS = np.finfo(config.np_dtype).eps
 
@@ -174,6 +174,32 @@ class FunctionStack(UncertainFunction):
         """
         for fun, yi in zip(self.functions, y.squeeze()):
             fun.add_data_point(x, yi)
+
+
+class Saturation(DeterministicFunction):
+    """Saturate the output of a `DeterministicFunction`.
+
+    Parameters
+    ----------
+    fun : instance of `DeterministicFunction`.
+    lower : float or arraylike
+        Lower bound. Passed to `tf.clip_by_value`.
+    upper : float or arraylike
+        Upper bound. Passed to `tf.clip_by_value`.
+    """
+
+    def __init__(self, fun, lower, upper):
+        """Initialization. See `Saturation`."""
+        super(Saturation, self).__init__()
+        self.fun = fun
+        self.ndim = self.fun.ndim
+        self.lower = lower
+        self.upper = upper
+
+    def evaluate(self, points):
+        """Evaluation, see `DeterministicFunction.evaluate`."""
+        res = self.fun(points)
+        return tf.clip_by_value(res, self.lower, self.upper)
 
 
 class GPRCached(GPflow.gpr.GPR):
