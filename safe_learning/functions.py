@@ -160,6 +160,21 @@ class FunctionStack(UncertainFunction):
 
         return mean, error
 
+    def add_data_point(self, x, y):
+        """Add data points to the GP model and update cholesky.
+
+        Parameters
+        ----------
+        x : ndarray
+            A 2d array with the new states to add to the GP model. Each new
+            state is on a new row.
+        y : ndarray
+            A 2d array with the new measurements to add to the GP model.
+            Each measurements is on a new row.
+        """
+        for fun, yi in zip(self.functions, y.squeeze()):
+            fun.add_data_point(x, yi)
+
 
 class GPRCached(GPflow.gpr.GPR):
     """GPflow.gpr.GPR class that stores cholesky decomposition for efficiency.
