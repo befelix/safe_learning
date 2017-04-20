@@ -1214,6 +1214,7 @@ class QuadraticFunction(DeterministicFunction):
         super(QuadraticFunction, self).__init__()
         self.scope_name = name
         self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
+        self.ndim = self.matrix.shape[0]
 
     @use_parent_scope
     @with_scope('evaluate')
@@ -1243,6 +1244,7 @@ class LinearSystem(DeterministicFunction):
         self.scope_name = name
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
         self.parameters = np.hstack(map(fun, matrices))
+        self.ndim = self.parameters.shape[0]
 
     @use_parent_scope
     @with_scope('linsys_evaluate')

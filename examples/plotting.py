@@ -49,7 +49,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     extent = [np.min(states), np.max(states)]
     safe_set = lyapunov.safe_set
-    threshold = lyapunov.threshold
+    threshold = lyapunov.threshold(states, actions)
 
     # Create figure axes
     fig, axes = plt.subplots(2, 1, figsize=(10, 12))

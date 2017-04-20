@@ -520,10 +520,12 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
         tf_state_actions = tf.placeholder(config.dtype,
                                           shape=[None, state_dim + action_dim])
 
-        mean, bound = lyapunov.dynamics(tf_state_actions)
+        mean, var = lyapunov.dynamics(tf_state_actions)
+        bound = tf.reduce_sum(var, axis=1)
         # Account for deviations of the next value due to uncertainty
-        values = (lyapunov.lyapunov_function(mean)
-                  + lyapunov.lipschitz_lyapunov * bound)
+        error = lyapunov.lipschitz_lyapunov(mean) * bound
+        values = tf.squeeze(lyapunov.lyapunov_function(mean), axis=1) + error
+
         # Check whether the value is below c_max
         maps_inside = tf.less(values, lyapunov.c_max,
                               name='maps_inside_levelset')
@@ -567,7 +569,6 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False):
     session = tf.get_default_session()
     maps_inside, mean, var = session.run([maps_inside, mean, bound],
                                          feed_dict=lyapunov.feed_dict)
-    maps_inside = maps_inside.squeeze(-1)
 
     # Check whether states map back to the safe set in expectation
     if not positive:
