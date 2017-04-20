@@ -136,40 +136,29 @@ class FunctionStack(UncertainFunction):
         The functions. There should be one for each dimension of the output.
     """
 
-    def __init__(self, *functions):
+    def __init__(self, functions, name='function_stack'):
         """Initialization, see `FunctionStack`."""
         super(FunctionStack, self).__init__()
+        self.scope_name = name
         self.functions = functions
-        self.deterministic = [isinstance(fun, DeterministicFunction)
-                              for fun in functions]
-        self.deterministic = np.array(self.deterministic)
         self.num_fun = len(self.functions)
 
+    @use_parent_scope
+    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Evaluation, see `UncertainFunction.evaluate`."""
-        mean = np.empty((len(points), self.num_fun), dtype=np.float)
-        if np.all(self.deterministic):
-            error = np.broadcast_to(0, (len(points), self.num_fun))
-        else:
-            error = np.empty_like(mean)
-            error[:, self.deterministic] = 0.
+        means = []
+        errors = []
+        for fun in self.functions:
+            mean, error = fun.evaluate(points)
+            means.append(mean)
+            errors.append(error)
 
-        for i, (fun, deterministic) in enumerate(
-                zip(self.functions, self.deterministic)):
-            prediction = fun.evaluate(points)
-            if deterministic:
-                mean[:, i] = prediction.squeeze()
-            else:
-                mean[:, i] = prediction[0].squeeze()
-                error[:, i] = prediction[1].squeeze()
+        mean = tf.concat(means, axis=1, name='stacked_mean')
+        error = tf.concat(errors, axis=1, name='stacked_error')
 
         return mean, error
-
-    def gradient(self, *points):
-        """Gradient, see `UncertainFunction.gradient`."""
-        for fun in self.functions:
-            yield fun.gradient(*points)
 
 
 class GPRCached(GPflow.gpr.GPR):
