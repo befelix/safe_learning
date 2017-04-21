@@ -60,7 +60,7 @@ class Function(object):
 
     def __neg__(self):
         """Negate the function."""
-        return MultipliedFunction(-1, self)
+        return MultipliedFunction(self, -1)
 
 
 class ConstantFunction(Function):
