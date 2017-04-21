@@ -126,7 +126,7 @@ class PolicyIteration(object):
                          name='value_iteration_update')
 
     @make_tf_fun(tf.float64)
-    def _run_cvx_optimization(self, next_states, rewards):
+    def _run_cvx_optimization(self, next_states, rewards, **solver_options):
         """Tensorflow wrapper around a cvxpy value function optimization.
 
         Parameters
@@ -152,7 +152,7 @@ class PolicyIteration(object):
         prob = cvxpy.Problem(objective, constraints)
 
         # Solve optimization problem
-        prob.solve()
+        prob.solve(**solver_options)
 
         # Some error checking
         if not prob.status == cvxpy.OPTIMAL:
@@ -162,8 +162,19 @@ class PolicyIteration(object):
         return np.array(values.value)
 
     @with_scope('optimize_value_function')
-    def optimize_value_function(self):
-        """Optimize the value function using cvx."""
+    def optimize_value_function(self, **solver_options):
+        """Optimize the value function using cvx.
+
+        Parameters
+        ----------
+        solver_options : kwargs, optional
+            Additional solver options passes to cvxpy.Problem.solve.
+
+        Returns
+        -------
+        assign_op : tf.Tensor
+            An assign operation that updates the value function.
+        """
         if not isinstance(cvxpy, ModuleType):
             raise cvxpy
 
@@ -177,7 +188,9 @@ class PolicyIteration(object):
         rewards = self.reward_function(self.state_space,
                                        actions)
 
-        values = self._run_cvx_optimization(next_states, rewards)
+        values = self._run_cvx_optimization(next_states,
+                                            rewards,
+                                            **solver_options)
 
         return tf.assign(self.value_function.parameters, values)
 

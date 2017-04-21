@@ -53,8 +53,8 @@ def make_tf_fun(return_type, gradient=None, stateful=True):
         # Without gradients we can take the short route here
         if gradient is None:
             @wraps(function)
-            def wrapped_function(self, *args):
-                method = partial(function, self)
+            def wrapped_function(self, *args, **kwargs):
+                method = partial(function, self, **kwargs)
                 return tf.py_func(method, args, return_type,
                                   stateful=stateful, name=name)
 
