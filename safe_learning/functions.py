@@ -856,10 +856,10 @@ class _Triangulation(DeterministicFunction):
         super(_Triangulation, self).__init__()
 
         self.discretization = discretization
+        self.input_dim = discretization.ndim
+
         self._parameters = None
         self.parameters = vertex_values
-
-        self.input_dim = discretization.ndim
 
         disc = self.discretization
 
