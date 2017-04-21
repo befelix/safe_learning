@@ -34,7 +34,6 @@ class Function(object):
 
     def __init__(self):
         super(Function, self).__init__()
-        self.ndim = None
         self.feed_dict = get_feed_dict(tf.get_default_graph())
 
     def __call__(self, *points):
@@ -143,6 +142,9 @@ class FunctionStack(UncertainFunction):
         self.functions = functions
         self.num_fun = len(self.functions)
 
+        self.input_dim = self.functions[0].input_dim
+        self.output_dim = sum(fun.output_dim for fun in self.functions)
+
     @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
@@ -192,9 +194,11 @@ class Saturation(DeterministicFunction):
         """Initialization. See `Saturation`."""
         super(Saturation, self).__init__()
         self.fun = fun
-        self.ndim = self.fun.ndim
         self.lower = lower
         self.upper = upper
+
+        self.input_dim = self.fun.input_dim
+        self.output_dim = self.fun.output_dim
 
     def evaluate(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
@@ -311,6 +315,9 @@ class GaussianProcess(UncertainFunction):
             self.n_dim = gaussian_process.X.shape[-1]
             self.gaussian_process = gaussian_process
             self.beta = float(beta)
+
+            self.input_dim = gaussian_process.X.shape[1]
+            self.output_dim = gaussian_process.Y.shape[1]
 
             self.parameters = tf.placeholder(config.dtype, [None])
             self.gaussian_process.make_tf_array(self.parameters)
@@ -437,6 +444,7 @@ class GridWorld(object):
 
         self.nrectangles = np.prod(self.num_points - 1)
         self.nindex = np.prod(self.num_points)
+
         self.ndim = len(self.limits)
 
     @property
@@ -606,9 +614,16 @@ class PiecewiseConstant(DeterministicFunction):
         super(PiecewiseConstant, self).__init__()
 
         self.discretization = discretization
-        self.ndim = discretization.ndim
         self._parameters = None
         self.parameters = vertex_values
+
+        self.input_dim = discretization.ndim
+
+    @property
+    def output_dim(self):
+        """Return the output dimensions of the function."""
+        if self.parameters is not None:
+            return self.parameters.shape[1]
 
     @property
     def parameters(self):
@@ -691,7 +706,7 @@ class PiecewiseConstant(DeterministicFunction):
         gradient : ndarray
             The function gradient at the points.
         """
-        return np.broadcast_to(0, (len(points), self.ndim))
+        return np.broadcast_to(0, (len(points), self.input_dim))
 
 
 class _Delaunay1D(object):
@@ -763,10 +778,10 @@ class _Triangulation(DeterministicFunction):
         super(_Triangulation, self).__init__()
 
         self.discretization = discretization
-        self.ndim = discretization.ndim
-
         self._parameters = None
         self.parameters = vertex_values
+
+        self.input_dim = discretization.ndim
 
         disc = self.discretization
 
@@ -789,6 +804,12 @@ class _Triangulation(DeterministicFunction):
         self._update_hyperplanes()
 
         self.project = project
+
+    @property
+    def output_dim(self):
+        """Return the output dimensions of the function."""
+        if self.parameters is not None:
+            return self.parameters.shape[1]
 
     @property
     def parameters(self):
@@ -842,7 +863,7 @@ class _Triangulation(DeterministicFunction):
     def _update_hyperplanes(self):
         """Compute the simplex hyperplane parameters on the triangulation."""
         self.hyperplanes = np.empty((self.triangulation.nsimplex,
-                                     self.ndim, self.ndim),
+                                     self.input_dim, self.input_dim),
                                     dtype=config.np_dtype)
 
         # Use that the bottom-left rectangle has the index zero, so that the
@@ -933,7 +954,7 @@ class _Triangulation(DeterministicFunction):
         hyperplanes = self.hyperplanes[simplex_ids]
 
         # Some numbers for convenience
-        nsimp = self.ndim + 1
+        nsimp = self.input_dim + 1
         npoints = len(points)
 
         if self.project:
@@ -995,7 +1016,7 @@ class _Triangulation(DeterministicFunction):
         weights, simplices = self._get_weights(points)
         # Construct sparse matrix for optimization
 
-        nsimp = self.ndim + 1
+        nsimp = self.input_dim + 1
         npoints = len(simplices)
         # Indices of constraints (nsimp points per simplex, so we have nsimp
         #  values in each row; one for each simplex)
@@ -1034,11 +1055,12 @@ class _Triangulation(DeterministicFunction):
         simplex_ids %= self.triangulation.nsimplex
 
         # Some numbers for convenience
-        nsimp = self.ndim + 1
+        nsimp = self.input_dim + 1
         npoints = len(simplex_ids)
 
         # weights
-        weights = np.empty((npoints, self.ndim, nsimp), dtype=config.np_dtype)
+        weights = np.empty((npoints, self.input_dim, nsimp),
+                           dtype=config.np_dtype)
 
         weights[:, :, 1:] = self.hyperplanes[simplex_ids]
         weights[:, :, 0] = -np.sum(weights[:, :, 1:], axis=2)
@@ -1097,18 +1119,18 @@ class _Triangulation(DeterministicFunction):
                                                         indices=indices)
 
         # Some numbers for convenience
-        nsimp = self.ndim + 1
+        nsimp = self.input_dim + 1
         npoints = len(simplices)
 
         # Construct sparse matrix for optimization
 
         # Indices of constraints (ndim gradients for each point, which each
         # depend on the nsimp vertices of the simplex.
-        rows = np.repeat(np.arange(npoints * self.ndim), nsimp)
-        cols = np.tile(simplices, (1, self.ndim)).ravel()
+        rows = np.repeat(np.arange(npoints * self.input_dim), nsimp)
+        cols = np.tile(simplices, (1, self.input_dim)).ravel()
 
         return sparse.coo_matrix((weights.ravel(), (rows, cols)),
-                                 shape=(self.ndim * npoints,
+                                 shape=(self.input_dim * npoints,
                                         self.discretization.nindex))
 
 
@@ -1159,7 +1181,8 @@ class Triangulation(DeterministicFunction):
                 init = tf.variables_initializer([self.parameters])
                 tf.get_default_session().run(init)
 
-            self.ndim = self.tri.ndim
+            self.input_dim = self.tri.input_dim
+            self.output_dim = self.tri.output_dim
 
     @property
     def project(self):
@@ -1285,7 +1308,8 @@ class LinearSystem(DeterministicFunction):
         self.scope_name = name
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
         self.parameters = np.hstack(map(fun, matrices))
-        self.ndim = self.parameters.shape[0]
+
+        self.output_dim, self.input_dim = self.parameters.shape
 
     @use_parent_scope
     @with_scope('linsys_evaluate')

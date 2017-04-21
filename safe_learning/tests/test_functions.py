@@ -190,7 +190,7 @@ def test_scipy_delaunay():
     delaunay = _Triangulation(discretization)
 
     assert_equal(delaunay.nsimplex, sp_delaunay.nsimplex)
-    assert_equal(delaunay.ndim, sp_delaunay.ndim)
+    assert_equal(delaunay.input_dim, sp_delaunay.ndim)
     sp_delaunay.find_simplex(np.array([[0, 0]]))
 
 
@@ -362,7 +362,7 @@ class TestTriangulationNumpy(object):
 
         # Test the basic properties
         assert_equal(delaunay.discretization.nrectangles, 2 * 6)
-        assert_equal(delaunay.ndim, 2)
+        assert_equal(delaunay.input_dim, 2)
         assert_equal(delaunay.nsimplex, 2 * 2 * 6)
         assert_equal(delaunay.discretization.offset, np.array([-1, -1]))
         assert_equal(delaunay.discretization.unit_maxes,
@@ -449,7 +449,7 @@ class TestTriangulationNumpy(object):
         limits = [[0, 1]] * 3
         discretization = GridWorld(limits, [2] * 3)
         delaunay = _Triangulation(discretization)
-        assert_equal(delaunay.ndim, 3)
+        assert_equal(delaunay.input_dim, 3)
         assert_equal(delaunay.discretization.nrectangles, 1)
         assert_equal(delaunay.nsimplex, np.math.factorial(3))
 
@@ -504,7 +504,7 @@ class TestTriangulationNumpy(object):
         true_grad = np.array([[1, 2], [-2, -1]])
 
         # Construct true H (gradient as function of values)
-        true_H = np.zeros((2 * delaunay.ndim, delaunay.nindex))
+        true_H = np.zeros((2 * delaunay.input_dim, delaunay.nindex))
 
         true_H[0, nodes[[0, 1]]] = [-1, 1]
         true_H[1, nodes[[0, 2]]] = [-1, 1]
@@ -519,7 +519,8 @@ class TestTriangulationNumpy(object):
         # Compare
         assert_allclose(grad, true_grad)
         assert_allclose(H, true_H)
-        assert_allclose(true_grad, H.dot(values).reshape(-1, delaunay.ndim))
+        assert_allclose(true_grad,
+                        H.dot(values).reshape(-1, delaunay.input_dim))
 
     def test_1d(self):
         """Test the triangulation for 1D inputs."""
