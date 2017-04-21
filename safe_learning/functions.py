@@ -47,9 +47,87 @@ class Function(object):
         -------
         array : ndarray
             The values of the evaluated function.
-
         """
         return self.evaluate(*points)
+
+    def __add__(self, other):
+        """Add this function to another."""
+        return AddedFunction(self, other)
+
+    def __mul__(self, other):
+        """Multiply this function with another."""
+        return MultipliedFunction(self, other)
+
+    def __neg__(self):
+        """Negate the function."""
+        return MultipliedFunction(-1, self)
+
+
+class ConstantFunction(Function):
+    """A function with a constant value."""
+
+    def __init__(self, constant):
+        """Initialize, see `ConstantFunction`."""
+        super(ConstantFunction, self).__init__()
+        self.constant = constant
+
+    @concatenate_inputs(start=1)
+    def evaluate(self, points):
+        return self.constant
+
+
+class AddedFunction(Function):
+    """A class for adding two individual functions.
+
+    Parameters
+    ----------
+    fun1 : instance of Function or scalar
+    fun2 : instance of Function or scalar
+    """
+
+    def __init__(self, fun1, fun2):
+        """Initialization, see `AddedFunction`."""
+        super(AddedFunction, self).__init__()
+
+        if not isinstance(fun1, Function):
+            fun1 = ConstantFunction(fun1)
+        if not isinstance(fun2, Function):
+            fun2 = ConstantFunction(fun2)
+
+        self.fun1 = fun1
+        self.fun2 = fun2
+
+    @concatenate_inputs(start=1)
+    def evaluate(self, points):
+        """Evaluate the function."""
+        return self.fun1.evaluate(points) + self.fun2.evaluate(points)
+
+
+class MultipliedFunction(Function):
+    """A class for pointwise multiplying two individual functions.
+
+    Parameters
+    ----------
+    fun1 : instance of Function or scalar
+    fun2 : instance of Function or scalar
+    """
+
+    def __init__(self, fun1, fun2):
+        """Initialization, see `AddedFunction`."""
+        super(MultipliedFunction, self).__init__()
+
+        if not isinstance(fun1, Function):
+            fun1 = ConstantFunction(fun1)
+        if not isinstance(fun2, Function):
+            fun2 = ConstantFunction(fun2)
+
+        self.fun1 = fun1
+        self.fun2 = fun2
+
+    @concatenate_inputs(start=1)
+    def evaluate(self, points):
+        """Evaluate the function."""
+        return self.fun1.evaluate(points) * self.fun2.evaluate(points)
 
 
 class UncertainFunction(Function):
