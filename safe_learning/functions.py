@@ -1339,6 +1339,17 @@ class Triangulation(DeterministicFunction):
         # Compute the values
         return tf.reduce_sum(weights[:, :, None] * parameter_vector, axis=1)
 
+    @make_tf_fun([config.dtype], stateful=False)
+    def _get_gradients(self, points, parameters):
+        self.tri.parameters = parameters
+        return self.tri.gradient(points)
+
+    @use_parent_scope
+    @with_scope('derivative')
+    def gradient(self, points):
+        """Compute derivatives using tensorflow."""
+        return self._get_gradients(points, self.parameters)[0]
+
 
 class QuadraticFunction(DeterministicFunction):
     """A quadratic function.
