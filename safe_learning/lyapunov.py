@@ -294,14 +294,14 @@ class Lyapunov(object):
         if isinstance(next_states, Sequence):
             next_states, error_bounds = next_states
             lv = self.lipschitz_lyapunov(next_states)
-            bound = lv * tf.reduce_sum(error_bounds, axis=1)
+            bound = lv * tf.reduce_sum(error_bounds, axis=1, keep_dims=True)
         else:
             bound = tf.constant(0., dtype=config.dtype)
 
         v_decrease = (self.lyapunov_function(next_states)
                       - self.lyapunov_function(states))
 
-        return tf.squeeze(v_decrease, axis=1), bound
+        return v_decrease, bound
 
     def v_decrease_bound(self, states, next_states):
         """
@@ -371,7 +371,7 @@ class Lyapunov(object):
 
             decrease = self.v_decrease_bound(tf_states, next_states)
             threshold = self.threshold(tf_states, tf_actions)
-            tf_negative = tf.less(decrease, threshold)
+            tf_negative = tf.squeeze(tf.less(decrease, threshold), axis=1)
 
             storage = [('tf_states', tf_states), ('negative', tf_negative)]
             set_storage(self._storage, storage)
@@ -420,11 +420,12 @@ class Lyapunov(object):
         # Restore the order of the safe set
         safe_nodes = order[safe_set]
         self.safe_set[:] = False
+
         self.safe_set[safe_nodes] = True
 
         # Ensure the initial safe set is kept
         if self.initial_safe_set is not None:
-            safe_set[self.initial_safe_set] = True
+            self.safe_set[self.initial_safe_set] = True
 
 
 def perturb_actions(states, actions, perturbations, limits=None):
@@ -525,10 +526,10 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
                                           shape=[None, state_dim + action_dim])
 
         mean, var = lyapunov.dynamics(tf_state_actions)
-        bound = tf.reduce_sum(var, axis=1)
+        bound = tf.reduce_sum(var, axis=1, keep_dims=True)
         # Account for deviations of the next value due to uncertainty
         error = lyapunov.lipschitz_lyapunov(mean) * bound
-        values = tf.squeeze(lyapunov.lyapunov_function(mean), axis=1) + error
+        values = lyapunov.lyapunov_function(mean) + error
 
         # Check whether the value is below c_max
         maps_inside = tf.less(values, lyapunov.c_max,
@@ -578,6 +579,7 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
     session = tf.get_default_session()
     maps_inside, mean, var = session.run([maps_inside, mean, bound],
                                          feed_dict=lyapunov.feed_dict)
+    maps_inside = maps_inside.squeeze(axis=1)
 
     # Check whether states map back to the safe set in expectation
     if not positive:
