@@ -63,7 +63,8 @@ class PolicyIteration(object):
         self._storage = {}
 
     @with_scope('future_values')
-    def future_values(self, states, policy=None, actions=None):
+    def future_values(self, states, policy=None, actions=None, lyapunov=None,
+                      lyapunov_scaling=1):
         """Return the value at the current states.
 
         Parameters
@@ -75,6 +76,10 @@ class PolicyIteration(object):
             argument is ignored if actions is not None.
         actions : array or tensor, optional
             The actions to be taken for the states.
+        lyapunov : instance of `Lyapunov`
+            A Lyapunov function that acts as a constraint for the optimization.
+        lyapunov_scaling: float
+            A scaling factor for the `slack` of the optimization problem.
 
         Returns
         -------
@@ -91,12 +96,18 @@ class PolicyIteration(object):
 
         # Only use the mean dynamics
         if isinstance(next_states, tuple):
-            next_states, _ = next_states
+            next_states, var = next_states
 
         expected_values = self.value_function(next_states)
 
         # Perform value update
         updated_values = rewards + self.gamma * expected_values
+
+        # Adjust the cost for the Lyapunov decrease
+        if lyapunov is not None:
+            decrease = lyapunov.v_decrease_bound(states, (next_states, var))
+            updated_values -= lyapunov_scaling * decrease
+
         return updated_values
 
     @with_scope('bellmann_error')
