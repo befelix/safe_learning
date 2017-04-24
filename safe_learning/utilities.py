@@ -25,7 +25,7 @@ from future.backports import OrderedDict
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
            'with_scope', 'use_parent_scope', 'add_constraint', 'batchify',
-           'get_storage', 'unique_rows']
+           'get_storage', 'unique_rows', 'gradient_clipping']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -178,6 +178,41 @@ def add_constraint(optimization, var_list, bound_list):
             assign = tf.assign(var, clipped_var)
             new_list.append(assign)
     return new_list
+
+
+def gradient_clipping(optimizer, loss, var_list, limits):
+    """Clip the gradients for the optimization problem.
+
+    Parameters
+    ----------
+    optimizer : instance of tensorflow optimizer
+    loss : tf.Tensor
+        The loss that we want to optimize.
+    var_list : tuple
+        A list of variables for which we want to compute gradients.
+    limits : tuple
+        A list of tuples with lower/upper bounds for each variable.
+
+    Returns
+    -------
+    opt : tf.Tensor
+        One optimization step with clipped gradients.
+
+    Examples
+    --------
+    >>> from safe_learning.utilities import gradient_clipping
+    >>> var = tf.Variable(1.)
+    >>> loss = tf.square(var - 1.)
+    >>> optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+    >>> opt_loss = gradient_clipping(optimizer, loss, [var], [(-1, 1)])
+    """
+    gradients = optimizer.compute_gradients(loss, var_list=var_list)
+
+    clipped_gradients = [(tf.clip_by_value(grad, low, up), var)
+                         for (grad, var), (low, up) in zip(gradients, limits)]
+
+    # Return optimization step
+    return optimizer.apply_gradients(clipped_gradients)
 
 
 def batchify(arrays, batch_size):
