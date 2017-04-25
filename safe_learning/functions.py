@@ -1378,6 +1378,10 @@ class QuadraticFunction(DeterministicFunction):
         quadratic = linear_form * points
         return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
 
+    def gradient(self, points):
+        """Return the gradient of the function."""
+        return tf.matmul(points, self.matrix + self.matrix.T)
+
 
 class LinearSystem(DeterministicFunction):
     """A linear system.
