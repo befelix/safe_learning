@@ -567,6 +567,39 @@ class GridWorld(object):
         """Return the number of points in the discretization."""
         return self.nindex
 
+    def sample_continuous(self, num_samples):
+        """Sample uniformly at random from the continuous domain.
+
+        Parameters
+        ----------
+        num_samples : int
+
+        Returns
+        -------
+        points : ndarray
+            Random points on the continuous rectangle.
+        """
+        limits = self.limits
+        rand = np.random.uniform(0, 1, size=(num_samples, self.ndim))
+        return rand * np.diff(limits, axis=1).T + self.offset
+
+    def sample_discrete(self, num_samples, replace=False):
+        """Sample uniformly at random from the discrete domain.
+
+        Parameters
+        ----------
+        num_samples : int
+        replace : bool, optional
+            Whether to sample with replacement.
+
+        Returns
+        -------
+        points : ndarray
+            Random points on the continuous rectangle.
+        """
+        idx = np.random.choice(self.nindex, size=num_samples, replace=replace)
+        return self.index_to_state(idx)
+
     def _check_dimensions(self, states):
         """Raise an error if the states have the wrong dimension.
 
