@@ -205,10 +205,6 @@ class Lyapunov(object):
 
         self.update_values()
 
-        # Origin node
-        origin = np.argmin(np.abs(discretization.discrete_points), axis=1)
-        self.origin = origin
-
         self._lipschitz_dynamics = lipschitz_dynamics
         self._lipschitz_lyapunov = lipschitz_lyapunov
 
