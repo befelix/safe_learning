@@ -152,7 +152,8 @@ class Lyapunov(object):
     lipschitz_dynamics : ndarray or float
         The Lipschitz constant of the dynamics. Either globally, or locally
         for each point in the discretization (within a radius given by the
-        discretization constant.
+        discretization constant. This is the closed-loop Lipschitz constant
+        including the policy!
     lipschitz_lyapunov : ndarray or float
         The Lipschitz constant of the lyapunov function. Either globally, or
         locally for each point in the discretization (within a radius given by
@@ -211,13 +212,12 @@ class Lyapunov(object):
         self._lipschitz_dynamics = lipschitz_dynamics
         self._lipschitz_lyapunov = lipschitz_lyapunov
 
-    def lipschitz_dynamics(self, states, actions):
+    def lipschitz_dynamics(self, states):
         """Return the Lipschitz constant for given states and actions.
 
         Parameters
         ----------
         states : ndarray or Tensor
-        actions : ndarray or Tensor
 
         Returns
         -------
@@ -226,7 +226,7 @@ class Lyapunov(object):
             constants. Otherwise returns the Lipschitz constant as a scalar.
         """
         if hasattr(self._lipschitz_dynamics, '__call__'):
-            return self._lipschitz_dynamics(states, actions)
+            return self._lipschitz_dynamics(states)
         else:
             return self._lipschitz_dynamics
 
@@ -248,13 +248,12 @@ class Lyapunov(object):
         else:
             return self._lipschitz_lyapunov
 
-    def threshold(self, states, actions):
+    def threshold(self, states):
         """Return the safety threshold for the Lyapunov condition.
 
         Parameters
         ----------
         states : ndarray or Tensor
-        actions : ndarray or Tensor
 
         Returns
         -------
@@ -263,7 +262,7 @@ class Lyapunov(object):
             whether lipschitz_lyapunov and lipschitz_dynamics are local or not.
         """
         lv = self.lipschitz_lyapunov(states)
-        lf = self.lipschitz_dynamics(states, actions)
+        lf = self.lipschitz_dynamics(states)
         return -lv * (1. + lf) * self.epsilon
 
     def update_values(self):
@@ -370,7 +369,7 @@ class Lyapunov(object):
             next_states = self.dynamics(tf_states, tf_actions)
 
             decrease = self.v_decrease_bound(tf_states, next_states)
-            threshold = self.threshold(tf_states, tf_actions)
+            threshold = self.threshold(tf_states)
             tf_negative = tf.squeeze(tf.less(decrease, threshold), axis=1)
 
             storage = [('tf_states', tf_states), ('negative', tf_negative)]
