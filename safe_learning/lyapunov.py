@@ -351,9 +351,6 @@ class Lyapunov(object):
     @with_scope('update_safe_set')
     def update_safe_set(self):
         """Compute and update the safe set."""
-        order = np.argsort(self.values)
-        state_order = self.discretization.index_to_state(order)
-
         storage = get_storage(self._storage)
 
         if storage is None:
@@ -379,19 +376,21 @@ class Lyapunov(object):
 
         # reset the safe set
         safe_set = np.zeros_like(self.safe_set)
+        value_order = np.argsort(self.values)
 
         if self.initial_safe_set is not None:
             safe_set[self.initial_safe_set] = True
 
             # Permute the initial safe set too
-            safe_set = safe_set[order]
+            safe_set = safe_set[value_order]
 
         # Verify safety in batches
-        batch_generator = batchify((state_order, safe_set), batch_size)
+        batch_generator = batchify((value_order, safe_set), batch_size)
+        index_to_state = self.discretization.index_to_state
 
-        for i, (state_batch, safe_batch) in batch_generator:
+        for i, (indices, safe_batch) in batch_generator:
 
-            feed_dict[tf_states] = state_batch
+            feed_dict[tf_states] = index_to_state(indices)
 
             # Update the safety with the safe_batch result
             safe_batch |= tf_negative.eval(feed_dict=feed_dict)
@@ -410,10 +409,10 @@ class Lyapunov(object):
         # The largest index of a safe value
         max_index = i + bound - 1
         # Set placeholder for c_max to the corresponding value
-        feed_dict[self.c_max] = self.values[order[max_index]]
+        feed_dict[self.c_max] = self.values[value_order[max_index]]
 
         # Restore the order of the safe set
-        safe_nodes = order[safe_set]
+        safe_nodes = value_order[safe_set]
         self.safe_set[:] = False
 
         self.safe_set[safe_nodes] = True
