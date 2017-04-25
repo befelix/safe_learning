@@ -13,7 +13,7 @@ from safe_learning.functions import (_Triangulation, Triangulation,
                                      PiecewiseConstant, DeterministicFunction,
                                      UncertainFunction, QuadraticFunction,
                                      DimensionError, GPRCached,
-                                     GaussianProcess)
+                                     GaussianProcess, NeuralNetwork)
 from safe_learning.utilities import concatenate_inputs
 
 try:
@@ -658,6 +658,23 @@ class TestTriangulation(object):
             dense_gradient[:] = 0.
             dense_gradient[gradient.indices] = gradient.values
             assert_allclose(dense_gradient, true_gradient[i])
+
+
+def test_neural_network():
+    """Test the NeuralNetwork class init."""
+    relu = tf.nn.relu
+
+    with tf.Session() as sess:
+        nn = NeuralNetwork(layers=[2, 4, 3, 1],
+                           nonlinearities=[relu, relu, None],
+                           limits=[(-1, 1)])
+
+        res = nn(np.random.rand(4, 2))
+        res, lipschitz = sess.run([res, nn.lipschitz])
+
+    assert np.all(res <= 1)
+    assert np.all(res >= -1)
+    assert lipschitz > 0.
 
 
 if __name__ == '__main__':

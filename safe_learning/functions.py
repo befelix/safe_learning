@@ -24,7 +24,8 @@ from safe_learning import config
 __all__ = ['DeterministicFunction', '_Triangulation', 'Triangulation',
            'PiecewiseConstant', 'GridWorld', 'UncertainFunction',
            'FunctionStack', 'QuadraticFunction', 'GaussianProcess',
-           'GPRCached', 'sample_gp_function', 'LinearSystem', 'Saturation']
+           'GPRCached', 'sample_gp_function', 'LinearSystem', 'Saturation',
+           'NeuralNetwork']
 
 _EPS = np.finfo(config.np_dtype).eps
 
@@ -1521,3 +1522,83 @@ def sample_gp_function(discretization, gpfun, number=1, return_function=True):
         functions.append(fun)
 
     return functions
+
+
+class NeuralNetwork(DeterministicFunction):
+    """A simple neural network.
+
+    The neural network also exposes its Lipschitz constant as
+    `NeuralNetwork.lipschitz`.
+
+    Parameters
+    ----------
+    layers : list
+        A list of layer sizes, [l1, l2, l3, .., ln]. l1 corresponds to the
+        input dimension of the neural network, while ln is the output
+        dimension.
+    nonlinearities : list
+        A list of nonlinearities applied after each layer. Should typically be
+        equal to None for the last layer.
+    limits : list, optional
+        A list of lower and upper bounds for the ouput. If not None, the
+        output is thresholded.
+    """
+
+    def __init__(self, layers, nonlinearities, limits=None):
+        """Initialization, see `NeuralNetwork`."""
+        super(NeuralNetwork, self).__init__()
+
+        self.layers = layers
+        self.nonlinearities = nonlinearities
+        self.limits = np.atleast_2d(limits)
+
+        self.input_dim = layers[0]
+        self.output_dim = layers[-1]
+
+        self.parameters = []
+        self._initialize_parameters()
+
+        # Initialize variables
+        sess = tf.get_default_session()
+        if sess is not None:
+            sess.run(tf.variables_initializer(self.parameters))
+
+    def _initialize_parameters(self):
+        """Initialize the parameters of the neural network."""
+        lipschitz = tf.constant(1, config.dtype)
+
+        for i, (input_dim, output_dim) in enumerate(zip(self.layers[:-1],
+                                                        self.layers[1:])):
+            W_init = np.random.randn(input_dim, output_dim)
+            W_init = W_init.astype(config.np_dtype)
+            W_init /= np.sqrt(input_dim)
+            W = tf.Variable(W_init, name='W{}'.format(i))
+
+            b = tf.Variable(tf.zeros([output_dim], dtype=config.dtype),
+                            name='b{}'.format(i))
+
+            self.parameters.append(W)
+            self.parameters.append(b)
+
+            lipschitz *= tf.reduce_max(tf.svd(W, compute_uv=False))
+
+        self.lipschitz = lipschitz
+
+    def evaluate(self, points):
+        """Evaluate the neural network at given input points."""
+        out = points
+
+        # By defining parameters as an iterable zip(parameters, parameters)
+        # returns the next two elements as a group.
+        parameters = iter(self.parameters)
+        for W, b, fun in zip(parameters, parameters, self.nonlinearities):
+            out = tf.matmul(out, W) + b
+            # Apply nonlinearity
+            if fun is not None:
+                out = fun(out)
+
+        # Clip output to specified limits.
+        if self.limits is not None:
+            out = tf.clip_by_value(out, self.limits[:, 0], self.limits[:, 1])
+
+        return out
