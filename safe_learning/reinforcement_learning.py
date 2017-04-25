@@ -133,7 +133,7 @@ class PolicyIteration(object):
     def value_iteration(self):
         """Perform one step of value iteration."""
         future_values = self.future_values(self.state_space)
-        return tf.assign(self.value_function.parameters, future_values,
+        return tf.assign(self.value_function.parameters[0], future_values,
                          name='value_iteration_update')
 
     @make_tf_fun(tf.float64)
@@ -203,7 +203,7 @@ class PolicyIteration(object):
                                             rewards,
                                             **solver_options)
 
-        return tf.assign(self.value_function.parameters, values)
+        return tf.assign(self.value_function.parameters[0], values)
 
     @with_scope('discrete_policy_optimization')
     def discrete_policy_optimization(self, action_space, constraint=None):
@@ -242,7 +242,7 @@ class PolicyIteration(object):
 
             # Assigning new parameters
             parameters = tf.placeholder(config.dtype, action_array.shape)
-            assign_op = tf.assign(self.policy.parameters, parameters)
+            assign_op = tf.assign(self.policy.parameters[0], parameters)
 
             # Put things into storage
             storage = [('actions', actions),

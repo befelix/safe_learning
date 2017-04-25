@@ -58,7 +58,7 @@ class TestPolicyIteration(object):
 
         adapt_policy = tf.train.GradientDescentOptimizer(0.01).minimize(
             -tf.reduce_sum(rl.future_values(rl.state_space)),
-            var_list=[rl.policy.parameters])
+            var_list=rl.policy.parameters)
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
@@ -68,9 +68,9 @@ class TestPolicyIteration(object):
                 for _ in range(5):
                     sess.run(adapt_policy)
 
-            values = rl.value_function.parameters.eval()
+            values = rl.value_function.parameters[0].eval()
             true_values = true_value(rl.state_space).eval()
-            policy_values = rl.policy.parameters.eval()
+            policy_values = rl.policy.parameters[0].eval()
 
         assert_allclose(values, true_values, atol=0.1)
         assert_allclose(policy_values, -k * policy_discretization.all_points,
@@ -98,8 +98,8 @@ class TestPolicyIteration(object):
         value_function = mock.Mock()
         value_function.tri.parameter_derivative.return_value = trans_probs
         value_function.nindex = 4
-        value_function.parameters = tf.Variable(np.zeros((4, 1),
-                                                         dtype=np.float))
+        value_function.parameters = [tf.Variable(np.zeros((4, 1),
+                                                          dtype=np.float))]
 
         states = np.arange(4, dtype=np.float)[:, None]
         value_function.discretization.all_points = states
@@ -119,7 +119,8 @@ class TestPolicyIteration(object):
             sess.run(rl.optimize_value_function())
 
             # Confirm result
-            assert_allclose(rl.value_function.parameters.eval(), true_values)
+            assert_allclose(rl.value_function.parameters[0].eval(),
+                            true_values)
 
         dynamics.assert_called_with(rl.state_space, 'actions')
         rewards.assert_called_with(rl.state_space, 'actions')

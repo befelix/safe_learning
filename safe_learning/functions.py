@@ -70,6 +70,7 @@ class ConstantFunction(Function):
         """Initialize, see `ConstantFunction`."""
         super(ConstantFunction, self).__init__()
         self.constant = constant
+        self.parameters = []
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -97,6 +98,11 @@ class AddedFunction(Function):
         self.fun1 = fun1
         self.fun2 = fun2
 
+    @property
+    def parameters(self):
+        """Return the parameters."""
+        return self.fun1.parameters + self.fun2.parameters
+
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Evaluate the function."""
@@ -123,6 +129,11 @@ class MultipliedFunction(Function):
 
         self.fun1 = fun1
         self.fun2 = fun2
+
+    @property
+    def parameters(self):
+        """Return the parameters."""
+        return self.fun1.parameters + self.fun2.parameters
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -185,8 +196,6 @@ class DeterministicFunction(Function):
         """Initialization, see `Function` for details."""
         super(DeterministicFunction, self).__init__()
 
-        self.parameters = None
-
     def evaluate(self, *points):
         """Return the function values.
 
@@ -222,6 +231,11 @@ class FunctionStack(UncertainFunction):
 
         self.input_dim = self.functions[0].input_dim
         self.output_dim = sum(fun.output_dim for fun in self.functions)
+
+    @property
+    def parameters(self):
+        """Return the parameters."""
+        return sum(fun.parameters for fun in self.functions)
 
     @use_parent_scope
     @with_scope('evaluate')
@@ -277,6 +291,11 @@ class Saturation(DeterministicFunction):
 
         self.input_dim = self.fun.input_dim
         self.output_dim = self.fun.output_dim
+
+    @property
+    def parameters(self):
+        """Return the function parameters."""
+        return self.fun.parameters
 
     def evaluate(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
@@ -397,8 +416,8 @@ class GaussianProcess(UncertainFunction):
             self.input_dim = gaussian_process.X.shape[1]
             self.output_dim = gaussian_process.Y.shape[1]
 
-            self.parameters = tf.placeholder(config.dtype, [None])
-            self.gaussian_process.make_tf_array(self.parameters)
+            self.parameters = [tf.placeholder(config.dtype, [None])]
+            self.gaussian_process.make_tf_array(self.parameters[0])
 
             self.update_feed_dict()
 
@@ -430,7 +449,7 @@ class GaussianProcess(UncertainFunction):
         feed_dict = self.feed_dict
 
         gp.update_feed_dict(gp.get_feed_dict_keys(), feed_dict)
-        feed_dict[self.parameters] = gp.get_free_state()
+        feed_dict[self.parameters[0]] = gp.get_free_state()
 
     @use_parent_scope
     @with_scope('add_data_point')
@@ -1252,11 +1271,11 @@ class Triangulation(DeterministicFunction):
                 vertex_values = self.tri.parameters.astype(config.np_dtype)
                 vertex_values = tf.Variable(vertex_values,
                                             name='vertex_values')
-            self.parameters = vertex_values
+            self.parameters = [vertex_values]
             # Initialize parameters
             sess = tf.get_default_session()
             if sess is not None:
-                init = tf.variables_initializer([self.parameters])
+                init = tf.variables_initializer(self.parameters)
                 tf.get_default_session().run(init)
 
             self.input_dim = self.tri.input_dim
@@ -1332,7 +1351,7 @@ class Triangulation(DeterministicFunction):
         weights = tf.concat((w0, w1), axis=1)
 
         # Collect the value on the vertices
-        parameter_vector = tf.gather(self.parameters,
+        parameter_vector = tf.gather(self.parameters[0],
                                      indices=simplices,
                                      validate_indices=False)
 
@@ -1348,7 +1367,7 @@ class Triangulation(DeterministicFunction):
     @with_scope('derivative')
     def gradient(self, points):
         """Compute derivatives using tensorflow."""
-        return self._get_gradients(points, self.parameters)[0]
+        return self._get_gradients(points, self.parameters[0])[0]
 
 
 class QuadraticFunction(DeterministicFunction):
@@ -1368,6 +1387,7 @@ class QuadraticFunction(DeterministicFunction):
         self.scope_name = name
         self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
         self.ndim = self.matrix.shape[0]
+        self.parameters = []
 
     @use_parent_scope
     @with_scope('evaluate')
@@ -1400,9 +1420,10 @@ class LinearSystem(DeterministicFunction):
         super(LinearSystem, self).__init__()
         self.scope_name = name
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
-        self.parameters = np.hstack(map(fun, matrices))
+        self.matrix = np.hstack(map(fun, matrices))
+        self.parameters = []
 
-        self.output_dim, self.input_dim = self.parameters.shape
+        self.output_dim, self.input_dim = self.matrix.shape
 
     @use_parent_scope
     @with_scope('linsys_evaluate')
@@ -1421,7 +1442,7 @@ class LinearSystem(DeterministicFunction):
         values : tf.Tensor
             A 2D array with the function values at the points.
         """
-        return tf.matmul(points, self.parameters.T, transpose_b=False)
+        return tf.matmul(points, self.matrix.T, transpose_b=False)
 
 
 @with_scope('sample_gp_function')
