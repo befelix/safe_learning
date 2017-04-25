@@ -666,14 +666,11 @@ def test_neural_network():
 
     with tf.Session() as sess:
         nn = NeuralNetwork(layers=[2, 4, 3, 1],
-                           nonlinearities=[relu, relu, None],
-                           limits=[(-1, 1)])
+                           nonlinearities=[relu, relu, None])
 
         res = nn(np.random.rand(4, 2))
         res, lipschitz = sess.run([res, nn.lipschitz])
 
-    assert np.all(res <= 1)
-    assert np.all(res >= -1)
     assert lipschitz > 0.
 
 

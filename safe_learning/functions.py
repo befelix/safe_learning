@@ -293,10 +293,11 @@ class Saturation(DeterministicFunction):
         self.input_dim = self.fun.input_dim
         self.output_dim = self.fun.output_dim
 
-    @property
-    def parameters(self):
-        """Return the function parameters."""
-        return self.fun.parameters
+        # Copy over attributes and functions from fun
+        for par in dir(self.fun):
+            if par.startswith('__') or hasattr(self, par):
+                continue
+            setattr(self, par, eval('self.fun.' + par))
 
     def evaluate(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
@@ -1539,18 +1540,14 @@ class NeuralNetwork(DeterministicFunction):
     nonlinearities : list
         A list of nonlinearities applied after each layer. Should typically be
         equal to None for the last layer.
-    limits : list, optional
-        A list of lower and upper bounds for the ouput. If not None, the
-        output is thresholded.
     """
 
-    def __init__(self, layers, nonlinearities, limits=None):
+    def __init__(self, layers, nonlinearities):
         """Initialization, see `NeuralNetwork`."""
         super(NeuralNetwork, self).__init__()
 
         self.layers = layers
         self.nonlinearities = nonlinearities
-        self.limits = np.atleast_2d(limits)
 
         self.input_dim = layers[0]
         self.output_dim = layers[-1]
@@ -1596,9 +1593,5 @@ class NeuralNetwork(DeterministicFunction):
             # Apply nonlinearity
             if fun is not None:
                 out = fun(out)
-
-        # Clip output to specified limits.
-        if self.limits is not None:
-            out = tf.clip_by_value(out, self.limits[:, 0], self.limits[:, 1])
 
         return out
