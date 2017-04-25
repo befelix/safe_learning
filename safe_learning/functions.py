@@ -545,6 +545,7 @@ class GridWorld(object):
         self.nindex = np.prod(self.num_points)
 
         self.ndim = len(self.limits)
+        self._all_points = None
 
     @property
     def all_points(self):
@@ -556,8 +557,11 @@ class GridWorld(object):
             An array with all the discrete points with size
             (self.nindex, self.ndim).
         """
-        result = self.index_to_state(np.arange(self.nindex))
-        return result.astype(config.np_dtype)
+        if self._all_points is None:
+            mesh = np.meshgrid(*self.discrete_points, indexing='ij')
+            points = np.column_stack(col.ravel() for col in mesh)
+            self._all_points = points.astype(config.np_dtype)
+        return self._all_points
 
     def __len__(self):
         """Return the number of points in the discretization."""
