@@ -24,8 +24,8 @@ from future.backports import OrderedDict
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
-           'with_scope', 'use_parent_scope', 'add_constraint', 'batchify',
-           'get_storage', 'unique_rows', 'gradient_clipping']
+           'with_scope', 'use_parent_scope', 'add_weight_constraint',
+           'batchify', 'get_storage', 'unique_rows', 'gradient_clipping']
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -153,8 +153,8 @@ def concatenate_inputs(start=0):
     return wrap
 
 
-def add_constraint(optimization, var_list, bound_list):
-    """Add constraints to an optimization step.
+def add_weight_constraint(optimization, var_list, bound_list):
+    """Add weight constraints to an optimization step.
 
     Parameters
     ----------
