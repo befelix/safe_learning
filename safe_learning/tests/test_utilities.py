@@ -8,7 +8,10 @@ import tensorflow as tf
 from numpy.testing import assert_allclose
 
 from safe_learning.utilities import (dlqr, get_storage, set_storage,
-                                     get_feed_dict, unique_rows)
+                                     get_feed_dict, unique_rows,
+                                     compute_trajectory)
+
+from safe_learning import LinearSystem
 
 
 def test_dlqr():
@@ -86,3 +89,26 @@ def test_unique_rows():
     uniques = np.array([[1, 1], [1, 2], [1, 3], [1, 4], [2, 3]])
 
     assert_allclose(unique_rows(a), uniques)
+
+
+def test_compute_trajectory():
+    """Test the compute_trajectory function."""
+    A = np.array([[1., 0.1],
+                  [0., 1.]])
+    B = np.array([[0.01],
+                  [0.1]])
+
+    dynamics = LinearSystem((A, B))
+    Q = np.diag([1., 0.01])
+    R = np.array([[0.01]])
+    K, _ = dlqr(A, B, Q, R)
+    policy = LinearSystem([-K])
+
+    x0 = np.array([[0.1, 0.]])
+    with tf.Session() as sess:
+        res = compute_trajectory(dynamics, policy, x0, num_steps=20)
+
+    states, actions = res
+    assert_allclose(states[[0], :], x0)
+    assert_allclose(states[-1, :], np.array([0., 0.]), atol=0.01)
+    assert_allclose(actions, states[:-1].dot(-K.T))

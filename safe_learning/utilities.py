@@ -19,13 +19,18 @@ import numpy as np
 import scipy.interpolate
 import scipy.linalg
 import tensorflow as tf
-from future.builtins import zip
+from future.builtins import zip, range
 from future.backports import OrderedDict
+
+from safe_learning import config
 
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
            'with_scope', 'use_parent_scope', 'add_weight_constraint',
            'batchify', 'get_storage', 'unique_rows', 'gradient_clipping']
+
+
+_STORAGE = {}
 
 
 def make_tf_fun(return_type, gradient=None, stateful=True):
@@ -506,3 +511,70 @@ def unique_rows(array):
     _, idx = np.unique(combined_array, return_index=True)
 
     return array[idx]
+
+
+def compute_trajectory(dynamics, policy, initial_state, num_steps):
+    """Compute a state trajectory given dynamics and a policy.
+
+    Parameters
+    ----------
+    dynamics : callable
+        A function that takes the current state and action as input and returns
+        the next state.
+    policy : callable
+        A function that takes the current state as input and returns the
+        action.
+    initial_state : Tensor or ndarray
+        The initial state at which to start simulating.
+    num_steps : int
+        The number of steps for which to simulate the system.
+
+    Returns
+    -------
+    states : ndarray
+        A (num_steps x state_dim) array with one state on each row.
+    actions : ndarray
+        A (num_steps x action_dim) array with the corresponding action on each
+        row.
+    """
+    initial_state = np.atleast_2d(initial_state)
+    state_dim = initial_state.shape[1]
+
+    # Get storage (indexed by dynamics and policy)
+    index = (dynamics, policy)
+    storage = get_storage(_STORAGE, index=index)
+
+    if storage is None:
+        # Compute next state under the policy
+        tf_state = tf.placeholder(config.dtype, [1, state_dim])
+        tf_action = policy(tf_state)
+        tf_next_state = dynamics(tf_state, tf_action)
+
+        storage = [('tf_state', tf_state),
+                   ('tf_action', tf_action),
+                   ('tf_next_state', tf_next_state)]
+
+        set_storage(_STORAGE, storage, index=index)
+    else:
+        tf_state, tf_action, tf_next_state = storage.values()
+
+    # Initialize
+    dtype = config.np_dtype
+    states = np.empty((num_steps, state_dim), dtype=dtype)
+    actions = np.empty((num_steps - 1, policy.output_dim), dtype=dtype)
+
+    states[0, :] = initial_state
+
+    # Get the feed dict
+    session = tf.get_default_session()
+    feed_dict = get_feed_dict(session.graph)
+
+    next_data = [tf_next_state, tf_action]
+
+    # Run simulation
+    for i in range(num_steps - 1):
+        feed_dict[tf_state] = states[[i], :]
+        states[i + 1, :], actions[i, :] = session.run(next_data,
+                                                      feed_dict=feed_dict)
+
+    return states, actions
