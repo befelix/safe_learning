@@ -425,10 +425,10 @@ def get_storage(dictionary, index=None):
         The storage object. Is None if no storage exists. Otherwise it
         returns the OrderedDict that was previously put in the storage.
     """
+    # Use function name as storage name
     frame = inspect.currentframe()
-    function_name = inspect.getframeinfo(frame.f_back).function
+    storage_name = inspect.getframeinfo(frame.f_back).function
 
-    storage_name = '_storage_{}'.format(function_name)
     storage = dictionary.get(storage_name)
 
     if index is None:
@@ -456,9 +456,9 @@ def set_storage(dictionary, name_value, index=None):
         This is useful for functions which might be accessed with multiple
         different arguements.
     """
+    # Use function name as storage name
     frame = inspect.currentframe()
-    function_name = inspect.getframeinfo(frame.f_back).function
-    storage_name = '_storage_{}'.format(function_name)
+    storage_name = inspect.getframeinfo(frame.f_back).function
 
     storage = OrderedDict(name_value)
     if index is None:
