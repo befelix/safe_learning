@@ -80,7 +80,8 @@ class Function(object):
             def new_variables():
                 """Copy over variables."""
                 # Create new variables
-                new_par = [tf.Variable(par) for par in self.parameters]
+                new_par = [tf.Variable(par, name=par.name.split(':')[0])
+                           for par in self.parameters]
                 # Initialize (copy over values)
                 session.run(tf.variables_initializer(new_par))
                 # Assign to new instance
@@ -135,6 +136,10 @@ class AddedFunction(Function):
         """Return the parameters."""
         return self.fun1.parameters + self.fun2.parameters
 
+    def copy(self):
+        """Copy not suported."""
+        raise NotImplementedError('Not implemented for composed functions.')
+
     @concatenate_inputs(start=1)
     def evaluate(self, points):
         """Evaluate the function."""
@@ -166,6 +171,10 @@ class MultipliedFunction(Function):
     def parameters(self):
         """Return the parameters."""
         return self.fun1.parameters + self.fun2.parameters
+
+    def copy(self):
+        """Copy not suported."""
+        raise NotImplementedError('Not implemented for composed functions.')
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -329,6 +338,20 @@ class Saturation(DeterministicFunction):
             if par.startswith('__') or hasattr(self, par):
                 continue
             setattr(self, par, eval('self.fun.' + par))
+
+    @property
+    def parameters(self):
+        """Return the parameters of the saturated function."""
+        return self.fun.parameters
+
+    @parameters.setter
+    def parameters(self, value):
+        """Set the parameters of the saturated function."""
+        self.fun.parameters = value
+
+    def copy(self):
+        """Copy not suported."""
+        raise NotImplementedError('Not implemented for composed functions.')
 
     def evaluate(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
