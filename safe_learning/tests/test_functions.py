@@ -22,6 +22,102 @@ except ImportError:
     GPflow = None
 
 
+class TestFunction(object):
+    """Test the function class."""
+
+    @pytest.fixture(scope='class')
+    def testing_class(self):
+        class A(DeterministicFunction):
+            def __init__(self, value, name='a'):
+                super(A, self).__init__()
+                with tf.variable_scope(name):
+                    self.parameters = [tf.Variable(value)]
+                    sess = tf.get_default_session()
+                    sess.run(tf.variables_initializer(self.parameters))
+
+            def evaluate(self, point):
+                return self.parameters[0] * point
+
+        with tf.Session() as sess:
+            return A, sess
+
+    def test_class(self, testing_class):
+        """Test the the class is working."""
+        A, sess = testing_class
+        with sess.as_default():
+            a = A(2.)
+            input = np.array(1.)
+            output = a(input)
+
+            assert_allclose(2. * input, output.eval())
+
+    def test_add(self, testing_class):
+        """Test adding functions."""
+        A, sess = testing_class
+        with sess.as_default():
+            a1 = A(3.)
+            a2 = A(2.)
+
+            a = a1 + a2
+
+            input = np.array(1.)
+            output = a(input)
+
+            assert_allclose(5. * input, output.eval())
+
+            assert a1.parameters[0] in a.parameters
+            assert a2.parameters[0] in a.parameters
+
+    def test_mult(self, testing_class):
+        """Test multiplying functions."""
+        A, sess = testing_class
+        with sess.as_default():
+            a1 = A(3.)
+            a2 = A(2.)
+
+            a = a1 * a2
+
+            input = np.array(1.)
+            output = a(input)
+
+            assert_allclose(6. * input, output.eval())
+
+            assert a1.parameters[0] in a.parameters
+            assert a2.parameters[0] in a.parameters
+
+            # Test multiplying with constant
+            a = a1 * 2.
+            output = a(input)
+            assert_allclose(6. * input, output.eval())
+
+    def test_neg(self, testing_class):
+        """Test multiplying functions."""
+        A, sess = testing_class
+        with sess.as_default():
+            a = A(3.)
+            b = -a
+
+            input = np.array(2.)
+            output = b(input)
+
+            assert_allclose(-3. * input, output.eval())
+
+            assert a.parameters[0] is b.parameters[0]
+
+    def test_copy(self, testing_class):
+        """Test copying"""
+        A, sess = testing_class
+        with sess.as_default():
+            a = A(2.)
+            b = a.copy()
+
+            p1 = a.parameters[0]
+            p2 = b.parameters[0]
+
+            assert p1.eval() == p2.eval()
+            assert p1 is not p2
+
+
 class TestDeterministicFuction(object):
     """Test the base class."""
 
@@ -560,24 +656,24 @@ class TestTriangulation(object):
     @pytest.fixture(scope="class")
     def setup(self):
         """Create testing environment."""
-        npoints = 3
+        with tf.Session(graph=tf.Graph()) as sess:
+            npoints = 3
 
-        discretization = GridWorld([[0, 1], [0, 1]], npoints)
-        parameters = np.sum(discretization.all_points ** 2,
-                            axis=1, keepdims=True)
-        trinp = _Triangulation(discretization, vertex_values=parameters)
+            discretization = GridWorld([[0, 1], [0, 1]], npoints)
+            parameters = np.sum(discretization.all_points ** 2,
+                                axis=1, keepdims=True)
+            trinp = _Triangulation(discretization, vertex_values=parameters)
 
-        tri = Triangulation(discretization, vertex_values=parameters)
+            tri = Triangulation(discretization, vertex_values=parameters)
 
-        test_points = np.array([[-10, -10],
-                                [0.2, 0.7],
-                                [0, 0],
-                                [0, 1],
-                                [1, 1],
-                                [-0.2, 0.5],
-                                [0.43, 0.21]])
+            test_points = np.array([[-10, -10],
+                                    [0.2, 0.7],
+                                    [0, 0],
+                                    [0, 1],
+                                    [1, 1],
+                                    [-0.2, 0.5],
+                                    [0.43, 0.21]])
 
-        with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             yield sess, tri, trinp, test_points
 

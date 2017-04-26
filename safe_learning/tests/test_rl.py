@@ -29,38 +29,39 @@ class TestPolicyIteration(object):
 
     def test_integration(self):
         """Test the values."""
-        a = np.array([[1.2]])
-        b = np.array([[0.9]])
-        q = np.array([[1]])
-        r = np.array([[0.1]])
+        with tf.Session(graph=tf.Graph()) as sess:
+            a = np.array([[1.2]])
+            b = np.array([[0.9]])
+            q = np.array([[1]])
+            r = np.array([[0.1]])
 
-        k, p = dlqr(a, b, q, r)
-        true_value = QuadraticFunction(-p)
+            k, p = dlqr(a, b, q, r)
+            true_value = QuadraticFunction(-p)
 
-        discretization = GridWorld([[-1, 1]], 19)
-        value_function = Triangulation(discretization,
-                                       0. * discretization.all_points,
-                                       project=True)
+            discretization = GridWorld([[-1, 1]], 19)
+            value_function = Triangulation(discretization,
+                                           0. * discretization.all_points,
+                                           project=True)
 
-        dynamics = LinearSystem((a, b))
+            dynamics = LinearSystem((a, b))
 
-        policy_discretization = GridWorld([-1, 1], 5)
-        policy = Triangulation(policy_discretization,
-                               -k / 2 * policy_discretization.all_points)
-        reward_function = QuadraticFunction(-scipy.linalg.block_diag(q, r))
+            policy_discretization = GridWorld([-1, 1], 5)
+            policy = Triangulation(policy_discretization,
+                                   -k / 2 * policy_discretization.all_points)
+            reward_function = QuadraticFunction(-scipy.linalg.block_diag(q, r))
 
-        rl = PolicyIteration(policy,
-                             dynamics,
-                             reward_function,
-                             value_function)
+            rl = PolicyIteration(policy,
+                                 dynamics,
+                                 reward_function,
+                                 value_function)
 
-        value_iter = rl.value_iteration()
+            value_iter = rl.value_iteration()
 
-        adapt_policy = tf.train.GradientDescentOptimizer(0.01).minimize(
-            -tf.reduce_sum(rl.future_values(rl.state_space)),
-            var_list=rl.policy.parameters)
+            loss = -tf.reduce_sum(rl.future_values(rl.state_space))
+            optimizer = tf.train.GradientDescentOptimizer(0.01)
+            adapt_policy = optimizer.minimize(loss,
+                                              var_list=rl.policy.parameters)
 
-        with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
 
             for _ in range(10):

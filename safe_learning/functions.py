@@ -3,6 +3,7 @@
 from __future__ import absolute_import, print_function, division
 
 from types import ModuleType
+from copy import copy
 from itertools import product as cartesian
 from functools import partial
 
@@ -62,6 +63,36 @@ class Function(object):
     def __neg__(self):
         """Negate the function."""
         return MultipliedFunction(self, -1)
+
+    def copy(self):
+        """Return a copy of the current function (with new variables).
+
+        Returns
+        -------
+        new_instance : Function
+            A new instance of the current function with new tensorflow
+            variables (if they exist).
+        """
+        new_instance = copy(self)
+        if hasattr(self, 'parameters') and self.parameters:
+            session = tf.get_default_session()
+
+            def new_variables():
+                """Copy over variables."""
+                # Create new variables
+                new_par = [tf.Variable(par) for par in self.parameters]
+                # Initialize (copy over values)
+                session.run(tf.variables_initializer(new_par))
+                # Assign to new instance
+                new_instance.parameters = new_par
+
+            if hasattr(self, 'scope_name'):
+                with tf.variable_scope(self.scope_name):
+                    new_variables()
+            else:
+                new_variables()
+
+        return new_instance
 
 
 class ConstantFunction(Function):
