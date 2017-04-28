@@ -765,7 +765,7 @@ def test_neural_network():
                            nonlinearities=[relu, relu, None])
 
         res = nn(np.random.rand(4, 2))
-        res, lipschitz = sess.run([res, nn.lipschitz])
+        res, lipschitz = sess.run([res, nn.lipschitz()])
 
     assert lipschitz > 0.
 

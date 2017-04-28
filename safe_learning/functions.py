@@ -1631,12 +1631,14 @@ class NeuralNetwork(DeterministicFunction):
     nonlinearities : list
         A list of nonlinearities applied after each layer. Should typically be
         equal to None for the last layer.
+    name : string, optional
     """
 
-    def __init__(self, layers, nonlinearities):
+    def __init__(self, layers, nonlinearities, name='neural_network'):
         """Initialization, see `NeuralNetwork`."""
         super(NeuralNetwork, self).__init__()
 
+        self.scope_name = name
         self.layers = layers
         self.nonlinearities = nonlinearities
 
@@ -1646,15 +1648,10 @@ class NeuralNetwork(DeterministicFunction):
         self.parameters = []
         self._initialize_parameters()
 
-        # Initialize variables
-        sess = tf.get_default_session()
-        if sess is not None:
-            sess.run(tf.variables_initializer(self.parameters))
-
+    @use_parent_scope
+    @with_scope('initialization')
     def _initialize_parameters(self):
         """Initialize the parameters of the neural network."""
-        lipschitz = tf.constant(1, config.dtype)
-
         for i, (input_dim, output_dim) in enumerate(zip(self.layers[:-1],
                                                         self.layers[1:])):
             W_init = np.random.randn(input_dim, output_dim)
@@ -1668,18 +1665,71 @@ class NeuralNetwork(DeterministicFunction):
             self.parameters.append(W)
             self.parameters.append(b)
 
-            lipschitz *= tf.reduce_max(tf.svd(W, compute_uv=False))
+        # Initialize variables
+        sess = tf.get_default_session()
+        if sess is not None:
+            sess.run(tf.variables_initializer(self.parameters))
 
-        self.lipschitz = lipschitz
+    def _parameter_iter(self):
+        """Iterate over parameters in (W, b) tuples."""
+        # By defining parameters as an iterable zip(parameters, parameters)
+        # returns the next two elements as a group.
+        parameters = iter(self.parameters)
+        for W, b in zip(parameters, parameters):
+            yield W, b
 
+    @use_parent_scope
+    @with_scope('lipschitz_constant')
+    def lipschitz(self):
+        """Return the Lipschitz constant as a Tensor.
+
+        This assumes that only contractive nonlinearities are used! Examples
+        are ReLUs and Sigmoids.
+
+        Returns
+        -------
+        lipschitz : Tensor
+            The Lipschitz constant of the neural network.
+        """
+        lipschitz = tf.constant(1, config.dtype)
+
+        for W, b in self._parameter_iter():
+            # lipschitz *= tf.reduce_max(tf.svd(W, compute_uv=False))
+            lipschitz *= tf.reduce_max(self._svd(W))
+
+        return lipschitz
+
+    @staticmethod
+    def _svd(A, name=None):
+        """Tensorflow svd with gradient.
+
+        Parameters
+        ----------
+        A : Tensor
+            The matrix for which to compute singular values.
+        name : string, optional
+
+        Returns
+        -------
+        s : Tensor
+            The singular values of A.
+        """
+        S0, U0, V0 = map(tf.stop_gradient,
+                         tf.svd(A, full_matrices=True, name=name))
+        # A = U * S * V.T
+        # S = inv(U) * A * inv(V.T) = U.T * A * V  (orthogonal matrices)
+        S = tf.matmul(U0, tf.matmul(A, V0),
+                      transpose_a=True)
+        return tf.matrix_diag_part(S)
+
+    @use_parent_scope
+    @with_scope('evaluate')
     def evaluate(self, points):
         """Evaluate the neural network at given input points."""
         out = points
 
-        # By defining parameters as an iterable zip(parameters, parameters)
-        # returns the next two elements as a group.
-        parameters = iter(self.parameters)
-        for W, b, fun in zip(parameters, parameters, self.nonlinearities):
+        for (W, b), fun in zip(self._parameter_iter(), self.nonlinearities):
+            # Affine transform
             out = tf.matmul(out, W) + b
             # Apply nonlinearity
             if fun is not None:
