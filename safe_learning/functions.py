@@ -137,8 +137,8 @@ class AddedFunction(Function):
         return self.fun1.parameters + self.fun2.parameters
 
     def copy(self):
-        """Copy not suported."""
-        raise NotImplementedError('Not implemented for composed functions.')
+        """Return a copy of the function (new tf variables with same values."""
+        return AddedFunction(self.fun1.copy(), self.fun2.copy())
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -173,8 +173,8 @@ class MultipliedFunction(Function):
         return self.fun1.parameters + self.fun2.parameters
 
     def copy(self):
-        """Copy not suported."""
-        raise NotImplementedError('Not implemented for composed functions.')
+        """Return a copy of the function (copies parameters)."""
+        return MultipliedFunction(self.fun1.copy(), self.fun2.copy())
 
     @concatenate_inputs(start=1)
     def evaluate(self, points):
@@ -350,8 +350,8 @@ class Saturation(DeterministicFunction):
         self.fun.parameters = value
 
     def copy(self):
-        """Copy not suported."""
-        raise NotImplementedError('Not implemented for composed functions.')
+        """Return a copy of the function (copies parameters)."""
+        return Saturation(self.fun.copy(), self.lower, self.upper)
 
     def evaluate(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
