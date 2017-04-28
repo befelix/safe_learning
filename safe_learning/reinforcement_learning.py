@@ -64,7 +64,7 @@ class PolicyIteration(object):
 
     @with_scope('future_values')
     def future_values(self, states, policy=None, actions=None, lyapunov=None,
-                      lyapunov_scaling=1):
+                      lagrange_multiplier=1.):
         """Return the value at the current states.
 
         Parameters
@@ -78,7 +78,7 @@ class PolicyIteration(object):
             The actions to be taken for the states.
         lyapunov : instance of `Lyapunov`
             A Lyapunov function that acts as a constraint for the optimization.
-        lyapunov_scaling: float
+        lagrange_multiplier: float
             A scaling factor for the `slack` of the optimization problem.
 
         Returns
@@ -106,7 +106,10 @@ class PolicyIteration(object):
         # Adjust the cost for the Lyapunov decrease
         if lyapunov is not None:
             decrease = lyapunov.v_decrease_bound(states, (next_states, var))
-            updated_values -= lyapunov_scaling * decrease
+
+            # Want to enfore `constraint <= 0`
+            constraint = decrease - lyapunov.threshold(states)
+            updated_values -= lagrange_multiplier * constraint
 
         return updated_values
 
