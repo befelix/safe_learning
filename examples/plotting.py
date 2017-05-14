@@ -49,7 +49,7 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     extent = [np.min(states), np.max(states)]
     safe_set = lyapunov.safe_set
-    threshold = lyapunov.threshold(states, actions)
+    threshold = lyapunov.threshold(states)
 
     # Create figure axes
     fig, axes = plt.subplots(2, 1, figsize=(10, 12))
@@ -80,11 +80,12 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     v_dot_mean, v_dot_bound = sess.run(v_bounds, feed_dict=feed_dict)
     # # Plot V_dot
-    v_dot_est_plot = plt.fill_between(
-        states[:, 0],
-        v_dot_mean - v_dot_bound,
-        v_dot_mean + v_dot_bound,
-        color=(0.8, 0.8, 1))
+    print(v_dot_mean.shape)
+    print(v_dot_bound.shape)
+    plt.fill_between(states[:, 0],
+                     v_dot_mean[:, 0] - v_dot_bound[:, 0],
+                     v_dot_mean[:, 0] + v_dot_bound[:, 0],
+                     color=(0.8, 0.8, 1))
 
     threshold_plot = plt.plot(extent, [threshold, threshold],
                               'k-.', label=r'Safety threshold ($L \tau$ )')
