@@ -13,8 +13,6 @@ import tensorflow as tf
 import numpy as np
 try:
     import GPflow
-    from GPflow.param import AutoFlow, DataHolder
-    from GPflow.mean_functions import Zero
 except ImportError as exception:
     GPflow = exception
 
@@ -373,7 +371,8 @@ class GPRCached(GPflow.gpr.GPR):
 
     """
 
-    def __init__(self, x, y, kern, mean_function=Zero(), name='GPRCached'):
+    def __init__(self, x, y, kern, mean_function=GPflow.mean_functions.Zero(),
+                 name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
         # Make sure GPflow is imported
         if not isinstance(GPflow, ModuleType):
@@ -383,14 +382,15 @@ class GPRCached(GPflow.gpr.GPR):
         GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
-        self.cholesky = DataHolder(np.empty((0, 0), dtype=config.np_dtype),
-                                   on_shape_change='pass')
-        self.alpha = DataHolder(np.empty((0, 0), dtype=config.np_dtype),
-                                on_shape_change='pass')
+        dtype = config.np_dtype
+        self.cholesky = GPflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
+                                                on_shape_change='pass')
+        self.alpha = GPflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
+                                             on_shape_change='pass')
         self.update_cache()
 
     @with_scope('compute_cache')
-    @AutoFlow()
+    @GPflow.param.AutoFlow()
     def _compute_cache(self):
         """Compute cache."""
         identity = tf.eye(tf.shape(self.X)[0], dtype=config.dtype)
