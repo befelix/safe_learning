@@ -27,7 +27,8 @@ from safe_learning import config
 __all__ = ['combinations', 'linearly_spaced_combinations', 'lqr', 'dlqr',
            'ellipse_bounds', 'concatenate_inputs', 'make_tf_fun',
            'with_scope', 'use_parent_scope', 'add_weight_constraint',
-           'batchify', 'get_storage', 'unique_rows', 'gradient_clipping']
+           'batchify', 'get_storage', 'set_storage', 'unique_rows',
+           'gradient_clipping']
 
 
 _STORAGE = {}

@@ -261,6 +261,20 @@ class Lyapunov(object):
         lf = self.lipschitz_dynamics(states)
         return -lv * (1. + lf) * self.epsilon
 
+    def is_safe(self, state):
+        """Return a boolean array that indicates whether the state is safe.
+
+        Parameters
+        ----------
+        state : ndarray
+
+        Returns
+        -------
+        safe : boolean
+            Is true if the corresponding state is inside the safe set.
+        """
+        return self.safe_set[self.discretization.state_to_index(state)]
+
     def update_values(self):
         """Update the discretized values when the Lyapunov function changes."""
         points = self.discretization.all_points
@@ -436,6 +450,8 @@ def perturb_actions(states, actions, perturbations, limits=None):
     perturbations : ndarray
         An (X x m) array of policy perturbations that are to be applied to
         each state-action pair.
+    limits : list
+        List of action-limit tuples.
 
     Returns
     -------
@@ -468,8 +484,8 @@ _STORAGE = {}
 
 
 @with_scope('get_safe_sample')
-def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
-                    num_samples=None):
+def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
+                    num_samples=None, actions=None):
     """Compute a safe state-action pair for sampling.
 
     This function returns the most uncertain state-action pair close to the
@@ -493,6 +509,9 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
     num_samples : int, optional
         Number of samples to select (uniformly at random) from the safe
         states within lyapunov.discretization as testing points.
+    actions : ndarray
+        A list of actions to evaluate for each state. Ignored if perturbations
+        is not None.
 
     Returns
     -------
@@ -505,7 +524,10 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
     state_disc = lyapunov.discretization
 
     state_dim = state_disc.ndim
-    action_dim = perturbations.shape[1]
+    if perturbations is None:
+        action_dim = actions.shape[1]
+    else:
+        action_dim = perturbations.shape[1]
     action_limits = limits
 
     storage = get_storage(_STORAGE, index=lyapunov)
@@ -555,18 +577,19 @@ def get_safe_sample(lyapunov, perturbations, limits=None, positive=False,
     feed_dict = lyapunov.feed_dict
     feed_dict[tf_safe_states] = safe_states
 
-    # Generate state-action pairs around the current policy
-    safe_actions = tf_actions.eval(feed_dict=feed_dict)
-    state_actions = perturb_actions(safe_states,
-                                    safe_actions,
-                                    perturbations=perturbations,
-                                    limits=action_limits)
-
-    # If we want to try all actions for all states:
-    # arrays = [arr.ravel() for arr in np.meshgrid(safe_states,
-    #                                              safe_actions,
-    #                                              indexing='ij')]
-    # state_actions = np.column_stack(arrays)
+    if perturbations is None:
+        # Generate all state-action pairs
+        arrays = [arr.ravel() for arr in np.meshgrid(safe_states,
+                                                     actions,
+                                                     indexing='ij')]
+        state_actions = np.column_stack(arrays)
+    else:
+        # Generate state-action pairs around the current policy
+        safe_actions = tf_actions.eval(feed_dict=feed_dict)
+        state_actions = perturb_actions(safe_states,
+                                        safe_actions,
+                                        perturbations=perturbations,
+                                        limits=action_limits)
 
     # Update feed value
     lyapunov.feed_dict[tf_state_actions] = state_actions
