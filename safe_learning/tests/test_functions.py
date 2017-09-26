@@ -17,9 +17,9 @@ from safe_learning.functions import (_Triangulation, Triangulation,
 from safe_learning.utilities import concatenate_inputs
 
 try:
-    import GPflow
+    import gpflow
 except ImportError:
-    GPflow = None
+    gpflow = None
 
 
 class TestFunction(object):
@@ -143,17 +143,17 @@ class TestUncertainFunction(object):
         assert(fd(None) == 1)
 
 
-@pytest.mark.skipif(GPflow is None, reason='GPflow module not installed')
+@pytest.mark.skipif(gpflow is None, reason='gpflow module not installed')
 class TestGPRCached(object):
     """Test the GPR_cached class."""
 
     @pytest.fixture(scope="class")
     def gps(self):
-        """Create cached and uncached GPflow models and GPy model."""
+        """Create cached and uncached gpflow models and GPy model."""
         x = np.array([[1, 0], [0, 1]], dtype=float)
         y = np.array([[0], [1]], dtype=float)
-        kernel = GPflow.kernels.RBF(2)
-        gp = GPflow.gpr.GPR(x, y, kernel)
+        kernel = gpflow.kernels.RBF(2)
+        gp = gpflow.gpr.GPR(x, y, kernel)
         gp_cached = GPRCached(x, y, kernel)
         return gp, gp_cached
 
@@ -195,18 +195,18 @@ class TestGPRCached(object):
         assert_allclose(b1, b2)
 
 
-@pytest.mark.skipIf(GPflow is None, 'GPflow module not installed')
-class TestGPflow(object):
+@pytest.mark.skipIf(gpflow is None, 'gpflow module not installed')
+class Testgpflow(object):
     """Test the GaussianProcess function class."""
 
     @pytest.fixture(scope="class")
     def setup(self):
-        """Create GP model with GPflow and GPy."""
+        """Create GP model with gpflow and GPy."""
         with tf.Session() as sess:
             x = np.array([[1, 0], [0, 1]], dtype=float)
             y = np.array([[0], [1]], dtype=float)
-            kernel = GPflow.kernels.RBF(2)
-            gp = GPflow.gpr.GPR(x, y, kernel)
+            kernel = gpflow.kernels.RBF(2)
+            gp = gpflow.gpr.GPR(x, y, kernel)
             yield sess, gp
 
     def test_evaluation(self, setup):

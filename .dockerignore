@@ -5,5 +5,5 @@ htmlcov
 .git
 *.pyc
 .ipynb_checkpoints
-__pycache__
+**/__pycache__
 safe_learning.egg-info

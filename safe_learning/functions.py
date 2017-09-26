@@ -12,9 +12,9 @@ from scipy import spatial, sparse, linalg
 import tensorflow as tf
 import numpy as np
 try:
-    import GPflow
+    import gpflow
 except ImportError as exception:
-    GPflow = exception
+    gpflow = exception
 
 from .utilities import (concatenate_inputs, make_tf_fun, with_scope,
                         use_parent_scope, get_feed_dict)
@@ -357,8 +357,8 @@ class Saturation(DeterministicFunction):
         return tf.clip_by_value(res, self.lower, self.upper)
 
 
-class GPRCached(GPflow.gpr.GPR):
-    """GPflow.gpr.GPR class that stores cholesky decomposition for efficiency.
+class GPRCached(gpflow.gpr.GPR):
+    """gpflow.gpr.GPR class that stores cholesky decomposition for efficiency.
 
     Parameters
     ----------
@@ -371,26 +371,26 @@ class GPRCached(GPflow.gpr.GPR):
 
     """
 
-    def __init__(self, x, y, kern, mean_function=GPflow.mean_functions.Zero(),
+    def __init__(self, x, y, kern, mean_function=gpflow.mean_functions.Zero(),
                  name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
-        # Make sure GPflow is imported
-        if not isinstance(GPflow, ModuleType):
-            raise GPflow
+        # Make sure gpflow is imported
+        if not isinstance(gpflow, ModuleType):
+            raise gpflow
 
         # self.scope_name = scope.original_name_scope
-        GPflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
+        gpflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
         dtype = config.np_dtype
-        self.cholesky = GPflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
+        self.cholesky = gpflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
                                                 on_shape_change='pass')
-        self.alpha = GPflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
+        self.alpha = gpflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
                                              on_shape_change='pass')
         self.update_cache()
 
     @with_scope('compute_cache')
-    @GPflow.param.AutoFlow()
+    @gpflow.param.AutoFlow()
     def _compute_cache(self):
         """Compute cache."""
         identity = tf.eye(tf.shape(self.X)[0], dtype=config.dtype)
@@ -442,11 +442,11 @@ class GPRCached(GPflow.gpr.GPR):
 
 
 class GaussianProcess(UncertainFunction):
-    """A GaussianProcess model based on GPflow.
+    """A GaussianProcess model based on gpflow.
 
     Parameters
     ----------
-    gaussian_process : instance of GPflow.models.GPModel
+    gaussian_process : instance of gpflow.models.GPModel
         The Gaussian process model.
     beta : float
         The scaling factor for the standard deviation to create
