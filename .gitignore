@@ -8,3 +8,5 @@ safe_learning.egg-info
 __pycache__
 docs/safe_learning.*
 docs/_build
+*.swp
+

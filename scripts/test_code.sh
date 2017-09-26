@@ -22,16 +22,16 @@ NC='\033[0m'
 
 # Run style tests
 echo -e "${GREEN}Running style tests.${NC}"
-flake8 $module --exclude test*.py,__init__.py --ignore=E402,E731,W503 --show-source
+flake8 $module --exclude test*.py,__init__.py --ignore=E402,E731,W503 --show-source || { exit 1; }
 
 # Ignore import errors for __init__ and tests
-flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source
+flake8 $module --filename=__init__.py,test*.py --ignore=F,E402,W503 --show-source || { exit 1; }
 
 echo -e "${GREEN}Testing docstring conventions.${NC}"
 # Test docstring conventions
-pydocstyle $module --convention=numpy
+pydocstyle $module --convention=numpy || { exit 1; }
 
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"
-pytest --doctest-modules --cov --cov-fail-under=80 $module
+pytest --doctest-modules --cov --cov-fail-under=80 $module || { exit 1; }
 
