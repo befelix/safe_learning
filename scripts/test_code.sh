@@ -16,7 +16,7 @@ get_script_dir () {
 }
 
 # Change to script root
-cd $(get_script_dir)
+cd $(get_script_dir)/..
 GREEN='\033[0;32m'
 NC='\033[0m'
 
@@ -34,7 +34,4 @@ pydocstyle $module --convention=numpy
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"
 pytest --doctest-modules --cov --cov-fail-under=80 $module
-
-# Export html
-coverage html
 

@@ -752,7 +752,7 @@ class TestTriangulation(object):
         for i, test in enumerate(test_points):
             gradient = sess.run(grad_tf, feed_dict={x: test[None, :]})
             dense_gradient[:] = 0.
-            dense_gradient[gradient.indices] = gradient.values
+            dense_gradient[gradient.indices] = gradient.values[:, 0]
             assert_allclose(dense_gradient, true_gradient[i])
 
 
