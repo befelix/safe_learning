@@ -18,7 +18,7 @@ COPY requirements.txt requirements_dev.txt /reqs/
 # Install requirements and clean up
 RUN pip --no-cache-dir install -r /reqs/requirements.txt \
   && pip --no-cache-dir install -r /reqs/requirements_dev.txt \
-  && pip install jupyter jupyterlab \
+  && pip install jupyter jupyterlab dumb-init \
   && rm -rf /root/.cache \
   && rm -rf /reqs
 
@@ -36,6 +36,9 @@ RUN jupyter notebook --generate-config \
   && rm /jupyter_output.py
 
 WORKDIR /code
+
+# Make sure Ctrl+C commands can be forwarded
+ENTRYPOINT ["dumb-init", "--"]
 
 CMD python setup.py develop \
   && jupyter lab --ip="0.0.0.0" --no-browser --allow-root
