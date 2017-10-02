@@ -136,7 +136,7 @@ class InvertedPendulum(DeterministicFunction):
         return sysd.A, sysd.B
 
     @concatenate_inputs(start=1)
-    def evaluate(self, state_action):
+    def build_evaluation(self, state_action):
         """Evaluate the dynamics"""
         # Denormalize
         state, action = tf.split(state_action, [2, 1], axis=1)

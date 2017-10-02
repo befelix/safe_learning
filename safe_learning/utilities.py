@@ -105,7 +105,7 @@ def with_scope(name):
     def wrap(function):
         @wraps(function)
         def wrapped_function(*args, **kwargs):
-            with tf.variable_scope(name):
+            with tf.name_scope(name):
                 return function(*args, **kwargs)
         return wrapped_function
     return wrap

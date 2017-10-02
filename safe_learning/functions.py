@@ -277,7 +277,6 @@ class FunctionStack(UncertainFunction):
         """Return the parameters."""
         return sum(fun.parameters for fun in self.functions)
 
-    @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def build_evaluation(self, points):
@@ -285,7 +284,7 @@ class FunctionStack(UncertainFunction):
         means = []
         errors = []
         for fun in self.functions:
-            mean, error = fun.evaluate(points)
+            mean, error = fun(points)
             means.append(mean)
             errors.append(error)
 
@@ -339,14 +338,9 @@ class Saturation(DeterministicFunction):
             setattr(self, par, eval('self.fun.' + par))
 
     @property
-    def parameters(self):
-        """Return the parameters of the saturated function."""
-        return self.fun.parameters
-
-    @parameters.setter
-    def parameters(self, value):
-        """Set the parameters of the saturated function."""
-        self.fun.parameters = value
+    def scope_name(self):
+        """Return the scope name of the wrapped function."""
+        return self.fun.scope_name
 
     def copy_parameters(self, other_instance):
         """Return a copy of the function (copies parameters)."""
@@ -356,7 +350,7 @@ class Saturation(DeterministicFunction):
     @with_scope('evaluate')
     def build_evaluation(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
-        res = self.fun(points)
+        res = self.fun.build_evaluation(points)
         return tf.clip_by_value(res, self.lower, self.upper)
 
 
