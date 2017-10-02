@@ -30,13 +30,13 @@ class TestFunction(object):
         class A(DeterministicFunction):
             def __init__(self, value, name='a'):
                 super(A, self).__init__()
-                with tf.variable_scope(name):
-                    self.parameters = [tf.Variable(value)]
+                with tf.variable_scope(self.scope_name):
+                    self.variable = tf.Variable(value)
                     sess = tf.get_default_session()
-                    sess.run(tf.variables_initializer(self.parameters))
+                    sess.run(tf.variables_initializer([self.variable]))
 
-            def evaluate(self, point):
-                return self.parameters[0] * point
+            def build_evaluation(self, point):
+                return self.variable * point
 
         with tf.Session() as sess:
             return A, sess
@@ -47,9 +47,13 @@ class TestFunction(object):
         with sess.as_default():
             a = A(2.)
             input = np.array(1.)
-            output = a(input)
 
+            output = a(input)
             assert_allclose(2. * input, output.eval())
+
+            # Test double output
+            output2 = a(input)
+            assert_allclose(2. * input, output2.eval())
 
     def test_add(self, testing_class):
         """Test adding functions."""
@@ -109,7 +113,8 @@ class TestFunction(object):
         A, sess = testing_class
         with sess.as_default():
             a = A(2.)
-            b = a.copy()
+            b = A(3.)
+            b.copy_parameters(a)
 
             p1 = a.parameters[0]
             p2 = b.parameters[0]
@@ -124,7 +129,7 @@ class TestDeterministicFuction(object):
     def test_errors(self):
         """Check notImplemented error."""
         f = DeterministicFunction()
-        pytest.raises(NotImplementedError, f.evaluate, None)
+        pytest.raises(NotImplementedError, f.build_evaluation, None)
 
 
 class TestUncertainFunction(object):
@@ -133,12 +138,12 @@ class TestUncertainFunction(object):
     def test_errors(self):
         """Check notImplemented error."""
         f = UncertainFunction()
-        pytest.raises(NotImplementedError, f.evaluate, None)
+        pytest.raises(NotImplementedError, f.build_evaluation, None)
 
     def test_mean_function(self):
         """Test the conversion to a deterministic function."""
         f = UncertainFunction()
-        f.evaluate = lambda x: (1, 2)
+        f.build_evaluation = lambda x: (1, 2)
         fd = f.to_mean_function()
         assert(fd(None) == 1)
 
@@ -218,12 +223,12 @@ class Testgpflow(object):
         ufun = GaussianProcess(gp, beta=beta)
 
         # Evaluate GP
-        mean_1, error_1 = ufun.evaluate(test_points)
+        mean_1, error_1 = ufun(test_points)
         mean_1, error_1 = sess.run([mean_1, error_1],
                                    feed_dict=ufun.feed_dict)
 
         # Test multiple inputs
-        mean_2, error_2 = ufun.evaluate(test_points[:, [0]],
+        mean_2, error_2 = ufun(test_points[:, [0]],
                                test_points[:, [1]])
         mean_2, error_2 = sess.run([mean_2, error_2], feed_dict=ufun.feed_dict)
 
@@ -248,7 +253,7 @@ class Testgpflow(object):
         assert_allclose(ufun.Y, np.array([[0], [1], [2.4]]))
 
         # Check prediction is correct after adding data (cholesky update)
-        a1, b1 = ufun.evaluate(test_points)
+        a1, b1 = ufun(test_points)
         a1, b1 = sess.run([a1, b1], feed_dict=ufun.feed_dict)
 
         a1_true = np.array([[0.16371139], [0.22048311]])
@@ -272,9 +277,10 @@ class TestQuadraticFunction(object):
         true_fval = np.array([[0., 2., 1., 3.3]]).T
 
         with tf.Session():
-            tf_res = quad.evaluate(points).eval()
+            tf_res = quad(points)
+            res = tf_res.eval()
 
-        assert_allclose(true_fval, tf_res)
+        assert_allclose(true_fval, res)
 
 
 def test_scipy_delaunay():
@@ -423,11 +429,11 @@ class TestPiecewiseConstant(object):
         vertex_values = np.sum(vertex_points, axis=1, keepdims=True)
         pwc.parameters = vertex_values
 
-        test = pwc.evaluate(vertex_points)
+        test = pwc(vertex_points)
         assert_allclose(test, vertex_values)
 
         outside_point = np.array([[-1.5, -1.5]])
-        test1 = pwc.evaluate(outside_point)
+        test1 = pwc(outside_point)
         assert_allclose(test1, np.array([[-2]]))
 
         # Test constraint evaluation
@@ -527,15 +533,15 @@ class TestTriangulationNumpy(object):
         values = np.random.rand(delaunay.nindex)
         delaunay.parameters = values
         v1 = H.dot(values)[:, None]
-        v2 = delaunay.evaluate(test_points)
+        v2 = delaunay(test_points)
         assert_allclose(v1, v2)
 
         # Test the projections
         test_point = np.array([[-0.5, -0.5]])
         delaunay.parameters = np.array([0, 1, 1, 1])
-        unprojected = delaunay.evaluate(test_point)
+        unprojected = delaunay(test_point)
         delaunay.project = True
-        projected = delaunay.evaluate(test_point)
+        projected = delaunay(test_point)
 
         assert_allclose(projected, np.array([[0]]))
         assert_allclose(unprojected, np.array([[-1]]))
@@ -571,7 +577,7 @@ class TestTriangulationNumpy(object):
                                  np.array([1 / 6, 1 / 6, 1 / 6, 1 / 2])))
 
         delaunay.parameters = values
-        result = delaunay.evaluate(test_points)
+        result = delaunay(test_points)
         assert_allclose(result, true_values[:, None], atol=1e-5)
 
     def test_gradient(self):
@@ -633,7 +639,7 @@ class TestTriangulationNumpy(object):
         assert_allclose(delaunay.find_simplex(test_point),
                         true_simplices[[0]])
 
-        values = delaunay.evaluate(test_points)
+        values = delaunay(test_points)
         true_values = np.array([0, 0.2, 0.5, 0.4, 0.1, 0])[:, None]
         assert_allclose(values, true_values)
 
@@ -761,10 +767,12 @@ def test_neural_network():
     relu = tf.nn.relu
 
     with tf.Session() as sess:
-        nn = NeuralNetwork(layers=[2, 4, 3, 1],
+        nn = NeuralNetwork(layers=[2, 3, 1],
                            nonlinearities=[relu, relu, None])
 
+        # x = tf.placeholder()
         res = nn(np.random.rand(4, 2))
+        sess.run(tf.global_variables_initializer())
         res, lipschitz = sess.run([res, nn.lipschitz()])
 
     assert lipschitz > 0.

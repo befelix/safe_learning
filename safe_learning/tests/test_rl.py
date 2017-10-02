@@ -26,7 +26,6 @@ except ImportError:
 
 class TestPolicyIteration(object):
     """Test the policy iteration."""
-
     def test_integration(self):
         """Test the values."""
         with tf.Session(graph=tf.Graph()) as sess:
@@ -117,11 +116,12 @@ class TestPolicyIteration(object):
                                       rewards.return_value)[:, None]
 
         with tf.Session() as sess:
+            sess.run(tf.variables_initializer(value_function.parameters))
             sess.run(rl.optimize_value_function())
+            values = rl.value_function.parameters[0].eval()
 
-            # Confirm result
-            assert_allclose(rl.value_function.parameters[0].eval(),
-                            true_values)
+        # Confirm result
+        assert_allclose(values, true_values)
 
         dynamics.assert_called_with(rl.state_space, 'actions')
         rewards.assert_called_with(rl.state_space, 'actions')

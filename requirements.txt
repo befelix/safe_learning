@@ -1,6 +1,6 @@
 numpy
 scipy
 matplotlib
-cvxpy
+cvxpy<=1
 tensorflow>=1.0.0
 future

@@ -3,7 +3,6 @@
 from __future__ import absolute_import, print_function, division
 
 from types import ModuleType
-from copy import copy
 from itertools import product as cartesian
 from functools import partial
 
@@ -30,25 +29,91 @@ _EPS = np.finfo(config.np_dtype).eps
 
 
 class Function(object):
-    """A generic function class."""
+    """Tensorflow function baseclass.
 
-    def __init__(self):
+    It makes sure that variables are reused if the function is called
+    multiple times.
+
+    Parameters
+    ----------
+    input_dim : tuple
+    output_dim : tuple
+    """
+
+    def __init__(self, name='function'):
         super(Function, self).__init__()
+
+        with tf.variable_scope(name) as scope:
+            self._scope = scope
+
+        self._initialized = False
         self.feed_dict = get_feed_dict(tf.get_default_graph())
 
-    def __call__(self, *points):
-        """Equivalent to `self.evaluate()`.
+    @property
+    def scope_name(self):
+        return self._scope.original_name_scope
+
+    @property
+    def parameters(self):
+        """Return the variables within the current scope."""
+        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                 scope=self.scope_name)
+
+    def __call__(self, *args, **kwargs):
+        """Evaluate the function.
+
+        This call makes sure that the function is only initialized once.
 
         Parameters
         ----------
-        points : ndarray
+        args : list
+            The input arguments to the function.
+        kwargs : dict, optional
+            The keyword arguments to the function.
 
         Returns
         -------
-        array : ndarray
-            The values of the evaluated function.
+        outputs : list
+            The output arguments of the function as given by evaluate.
         """
-        return self.evaluate(*points)
+        # Reuse variables in variable scope if called before.
+        if self._initialized:
+            reuse = self._initialized
+        else:
+            reuse = None
+            self._initialized = True
+
+        with tf.variable_scope(self.scope_name, reuse=reuse):
+            result = self.build_evaluation(*args, **kwargs)
+
+        return result
+
+    def build_evaluation(self, *args, **kwargs):
+        """Buld the function evaluation tree.
+
+        Parameters
+        ----------
+        args : list
+        kwrags : dict, optional
+
+        Returns
+        -------
+        outputs : list
+        """
+        raise NotImplementedError('This function has to be implemented by the'
+                                  'child class.')
+
+    def copy_parameters(self, other_instance):
+        """Copy over the parameters of another instance."""
+        assign_ops = []
+        for param, other_param in zip(self.parameters,
+                                      other_instance.parameters):
+            op = tf.assign(param, other_param, validate_shape=True,
+                           name='copy_op')
+            assign_ops.append(op)
+
+        sess = tf.get_default_session()
+        sess.run(assign_ops)
 
     def __add__(self, other):
         """Add this function to another."""
@@ -61,51 +126,6 @@ class Function(object):
     def __neg__(self):
         """Negate the function."""
         return MultipliedFunction(self, -1)
-
-    def copy(self):
-        """Return a copy of the current function (with new variables).
-
-        Returns
-        -------
-        new_instance : Function
-            A new instance of the current function with new tensorflow
-            variables (if they exist).
-        """
-        new_instance = copy(self)
-        if hasattr(self, 'parameters') and self.parameters:
-            session = tf.get_default_session()
-
-            def new_variables():
-                """Copy over variables."""
-                # Create new variables
-                new_par = [tf.Variable(par, name=par.name.split(':')[0])
-                           for par in self.parameters]
-                # Initialize (copy over values)
-                session.run(tf.variables_initializer(new_par))
-                # Assign to new instance
-                new_instance.parameters = new_par
-
-            if hasattr(self, 'scope_name'):
-                with tf.variable_scope(self.scope_name):
-                    new_variables()
-            else:
-                new_variables()
-
-        return new_instance
-
-
-class ConstantFunction(Function):
-    """A function with a constant value."""
-
-    def __init__(self, constant):
-        """Initialize, see `ConstantFunction`."""
-        super(ConstantFunction, self).__init__()
-        self.constant = constant
-        self.parameters = []
-
-    @concatenate_inputs(start=1)
-    def evaluate(self, points):
-        return self.constant
 
 
 class AddedFunction(Function):
@@ -134,14 +154,15 @@ class AddedFunction(Function):
         """Return the parameters."""
         return self.fun1.parameters + self.fun2.parameters
 
-    def copy(self):
+    def copy_parameters(self, other_instance):
         """Return a copy of the function (new tf variables with same values."""
-        return AddedFunction(self.fun1.copy(), self.fun2.copy())
+        return AddedFunction(self.fun1.copy_parameters(other_instance.fun1),
+                             self.fun2.copy_parameters(other_instance.fun1))
 
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Evaluate the function."""
-        return self.fun1.evaluate(points) + self.fun2.evaluate(points)
+        return self.fun1(points) + self.fun2(points)
 
 
 class MultipliedFunction(Function):
@@ -170,22 +191,24 @@ class MultipliedFunction(Function):
         """Return the parameters."""
         return self.fun1.parameters + self.fun2.parameters
 
-    def copy(self):
+    def copy_parameters(self, other_instance):
         """Return a copy of the function (copies parameters)."""
-        return MultipliedFunction(self.fun1.copy(), self.fun2.copy())
+        copied_fun1 = self.fun1.copy_parameters(other_instance.fun1)
+        copied_fun2 = self.fun2.copy_parameters(other_instance.fun2)
+        return MultipliedFunction(copied_fun1, copied_fun2)
 
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Evaluate the function."""
-        return self.fun1.evaluate(points) * self.fun2.evaluate(points)
+        return self.fun1(points) * self.fun2(points)
 
 
 class UncertainFunction(Function):
     """Base class for function approximators."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         """Initialization, see `UncertainFunction`."""
-        super(UncertainFunction, self).__init__()
+        super(UncertainFunction, self).__init__(**kwargs)
 
     def to_mean_function(self):
         """Turn the uncertain function into a deterministic 'mean' function."""
@@ -205,51 +228,30 @@ class UncertainFunction(Function):
                 return function(*points)[0]
             return new_function
 
-        new_evaluate = _only_first_output(self.evaluate)
+        new_evaluate = _only_first_output(self.build_evaluation)
 
         return new_evaluate
-
-    def evaluate(self, *points):
-        """Return the distribution over function values.
-
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
-
-        Returns
-        -------
-        mean : ndarray
-            A 2D array with the expected function values at the points.
-        error_bounds : ndarray
-            Error bounds for each dimension of the estimate.
-        """
-        raise NotImplementedError()
 
 
 class DeterministicFunction(Function):
     """Base class for function approximators."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         """Initialization, see `Function` for details."""
-        super(DeterministicFunction, self).__init__()
+        super(DeterministicFunction, self).__init__(**kwargs)
 
-    def evaluate(self, *points):
-        """Return the function values.
 
-        Parameters
-        ----------
-        points : ndarray
-            The points at which to evaluate the function. One row for each
-            data points.
+class ConstantFunction(DeterministicFunction):
+    """A function with a constant value."""
 
-        Returns
-        -------
-        values : tf.Tensor
-            A 2D array with the function values at the points.
-        """
-        raise NotImplementedError()
+    def __init__(self, constant, name='constant_function'):
+        """Initialize, see `ConstantFunction`."""
+        super(ConstantFunction, self).__init__(name=name)
+        self.constant = constant
+
+    @concatenate_inputs(start=1)
+    def build_evaluation(self, points):
+        return self.constant
 
 
 class FunctionStack(UncertainFunction):
@@ -263,8 +265,7 @@ class FunctionStack(UncertainFunction):
 
     def __init__(self, functions, name='function_stack'):
         """Initialization, see `FunctionStack`."""
-        super(FunctionStack, self).__init__()
-        self.scope_name = name
+        super(FunctionStack, self).__init__(name=name)
         self.functions = functions
         self.num_fun = len(self.functions)
 
@@ -279,7 +280,7 @@ class FunctionStack(UncertainFunction):
     @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Evaluation, see `UncertainFunction.evaluate`."""
         means = []
         errors = []
@@ -321,9 +322,9 @@ class Saturation(DeterministicFunction):
         Upper bound. Passed to `tf.clip_by_value`.
     """
 
-    def __init__(self, fun, lower, upper):
+    def __init__(self, fun, lower, upper, name='saturation'):
         """Initialization. See `Saturation`."""
-        super(Saturation, self).__init__()
+        super(Saturation, self).__init__(name=name)
         self.fun = fun
         self.lower = lower
         self.upper = upper
@@ -347,11 +348,13 @@ class Saturation(DeterministicFunction):
         """Set the parameters of the saturated function."""
         self.fun.parameters = value
 
-    def copy(self):
+    def copy_parameters(self, other_instance):
         """Return a copy of the function (copies parameters)."""
-        return Saturation(self.fun.copy(), self.lower, self.upper)
+        return Saturation(self.fun.copy_parameters(other_instance.fun),
+                          self.lower, self.upper)
 
-    def evaluate(self, points):
+    @with_scope('evaluate')
+    def build_evaluation(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
         res = self.fun(points)
         return tf.clip_by_value(res, self.lower, self.upper)
@@ -461,10 +464,9 @@ class GaussianProcess(UncertainFunction):
 
     def __init__(self, gaussian_process, beta=2., name='gaussian_process'):
         """Initialization."""
-        super(GaussianProcess, self).__init__()
+        super(GaussianProcess, self).__init__(name=name)
 
-        with tf.variable_scope(name) as scope:
-            self.scope_name = scope.original_name_scope
+        with tf.variable_scope(self.scope_name):
             self.n_dim = gaussian_process.X.shape[-1]
             self.gaussian_process = gaussian_process
             self.beta = float(beta)
@@ -472,8 +474,8 @@ class GaussianProcess(UncertainFunction):
             self.input_dim = gaussian_process.X.shape[1]
             self.output_dim = gaussian_process.Y.shape[1]
 
-            self.parameters = [tf.placeholder(config.dtype, [None])]
-            self.gaussian_process.make_tf_array(self.parameters[0])
+            self.hyperparameters = [tf.placeholder(config.dtype, [None])]
+            self.gaussian_process.make_tf_array(self.hyperparameters[0])
 
             self.update_feed_dict()
 
@@ -487,10 +489,9 @@ class GaussianProcess(UncertainFunction):
         """Observed output. One observation per row."""
         return self.gaussian_process.Y.value
 
-    @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Evaluate the model, but return tensorflow tensors."""
         # Build normal prediction
         with self.gaussian_process.tf_mode():
@@ -505,7 +506,7 @@ class GaussianProcess(UncertainFunction):
         feed_dict = self.feed_dict
 
         gp.update_feed_dict(gp.get_feed_dict_keys(), feed_dict)
-        feed_dict[self.parameters[0]] = gp.get_free_state()
+        feed_dict[self.hyperparameters[0]] = gp.get_free_state()
 
     @use_parent_scope
     @with_scope('add_data_point')
@@ -838,7 +839,7 @@ class PiecewiseConstant(DeterministicFunction):
         """Return the number of discretization indices."""
         return self.discretization.nindex
 
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Return the function values.
 
         Parameters
@@ -1161,7 +1162,7 @@ class _Triangulation(DeterministicFunction):
 
         return weights, simplices
 
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Return the function values.
 
         Parameters
@@ -1351,10 +1352,9 @@ class Triangulation(DeterministicFunction):
     def __init__(self, discretization, vertex_values, project=False,
                  name='triangulation'):
         """Initialization."""
-        super(Triangulation, self).__init__()
+        super(Triangulation, self).__init__(name=name)
 
-        with tf.variable_scope(name) as scope:
-            self.scope_name = scope.original_name_scope
+        with tf.variable_scope(self.scope_name):
             self.tri = _Triangulation(discretization,
                                       project=project)
 
@@ -1362,9 +1362,9 @@ class Triangulation(DeterministicFunction):
             if not isinstance(vertex_values, tf.Variable):
                 self.tri.parameters = vertex_values
                 vertex_values = self.tri.parameters.astype(config.np_dtype)
-                vertex_values = tf.Variable(vertex_values,
-                                            name='vertex_values')
-            self.parameters = [vertex_values]
+            vertex_values = tf.Variable(vertex_values,
+                                        name='vertex_values')
+
             # Initialize parameters
             sess = tf.get_default_session()
             if sess is not None:
@@ -1424,9 +1424,8 @@ class Triangulation(DeterministicFunction):
         # Pre-multiply each hyperplane by (point - origin)
         return origins, hyperplanes, simplices
 
-    @use_parent_scope
     @with_scope('evaluate')
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Evaluate using tensorflow."""
         # Get the appropriate hyperplane
         origins, hyperplanes, simplices = self._get_hyperplanes(points)
@@ -1476,16 +1475,16 @@ class QuadraticFunction(DeterministicFunction):
 
     def __init__(self, matrix, name='quadratic'):
         """Initialization, see `QuadraticLyapunovFunction`."""
-        super(QuadraticFunction, self).__init__()
-        self.scope_name = name
+        super(QuadraticFunction, self).__init__(name=name)
+
         self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
         self.ndim = self.matrix.shape[0]
-        self.parameters = []
+        # with tf.variable_scope(self.scope_name):
+        #     self.matrix = tf.Variable(self.matrix)
 
-    @use_parent_scope
     @with_scope('evaluate')
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
@@ -1511,17 +1510,14 @@ class LinearSystem(DeterministicFunction):
     def __init__(self, matrices, name='linear_system'):
         """Initialize."""
         super(LinearSystem, self).__init__()
-        self.scope_name = name
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
         self.matrix = np.hstack(map(fun, matrices))
-        self.parameters = []
 
         self.output_dim, self.input_dim = self.matrix.shape
 
-    @use_parent_scope
-    @with_scope('linsys_evaluate')
+    @with_scope('evaluate')
     @concatenate_inputs(start=1)
-    def evaluate(self, points):
+    def build_evaluation(self, points):
         """Return the function values.
 
         Parameters
@@ -1629,46 +1625,55 @@ class NeuralNetwork(DeterministicFunction):
         input dimension of the neural network, while ln is the output
         dimension.
     nonlinearities : list
-        A list of nonlinearities applied after each layer. Should typically be
-        equal to None for the last layer.
+        A list of nonlinearities applied after each layer. Can be None if no
+        nonlinearity should be applied.
     name : string, optional
     """
 
-    def __init__(self, layers, nonlinearities, name='neural_network'):
+    def __init__(self, layers, nonlinearities, scaling=None,
+                 name='neural_network'):
         """Initialization, see `NeuralNetwork`."""
-        super(NeuralNetwork, self).__init__()
+        super(NeuralNetwork, self).__init__(name=name)
 
-        self.scope_name = name
         self.layers = layers
         self.nonlinearities = nonlinearities
+        if scaling is None:
+            self.output_scaling = 1.
+        else:
+            self.output_scaling = scaling
 
         self.input_dim = layers[0]
         self.output_dim = layers[-1]
 
-        self.parameters = []
-        self._initialize_parameters()
+    @with_scope('evaluate')
+    def build_evaluation(self, points):
+        """Build the evaluation graph."""
+        net = points
+        if isinstance(net, np.ndarray):
+            net = tf.constant(net)
 
-    @use_parent_scope
-    @with_scope('initialization')
-    def _initialize_parameters(self):
-        """Initialize the parameters of the neural network."""
-        for i, (input_dim, output_dim) in enumerate(zip(self.layers[:-1],
-                                                        self.layers[1:])):
-            W_init = np.random.randn(input_dim, output_dim)
-            W_init = W_init.astype(config.np_dtype)
-            W_init /= np.sqrt(input_dim)
-            W = tf.Variable(W_init, name='W{}'.format(i))
+        initializer = tf.contrib.layers.xavier_initializer()
 
-            b = tf.Variable(tf.zeros([output_dim], dtype=config.dtype),
-                            name='b{}'.format(i))
+        for i, (layer, activation) in enumerate(zip(self.layers[:-1],
+                                                    self.nonlinearities[:-1])):
+            net = tf.layers.dense(net,
+                                  units=layer,
+                                  activation=activation,
+                                  kernel_initializer=initializer,
+                                  name='layer_{}'.format(i))
 
-            self.parameters.append(W)
-            self.parameters.append(b)
+        # Output layer
+        # initializer = tf.constant_initializer()
+        net = tf.layers.dense(net,
+                              units=self.layers[-1],
+                              activation=self.nonlinearities[-1],
+                              use_bias=False,
+                              kernel_initializer=initializer,
+                              name='output')
 
-        # Initialize variables
-        sess = tf.get_default_session()
-        if sess is not None:
-            sess.run(tf.variables_initializer(self.parameters))
+        # Scale output range from (-1, 1)
+        out = tf.multiply(net, self.output_scaling, name='scaling')
+        return out
 
     def _parameter_iter(self):
         """Iterate over parameters in (W, b) tuples."""
@@ -1677,6 +1682,9 @@ class NeuralNetwork(DeterministicFunction):
         parameters = iter(self.parameters)
         for W, b in zip(parameters, parameters):
             yield W, b
+
+        # Yield parameters of the output layer
+        yield self.parameters[-1], None
 
     @use_parent_scope
     @with_scope('lipschitz_constant')
@@ -1721,18 +1729,3 @@ class NeuralNetwork(DeterministicFunction):
         S = tf.matmul(U0, tf.matmul(A, V0),
                       transpose_a=True)
         return tf.matrix_diag_part(S)
-
-    @use_parent_scope
-    @with_scope('evaluate')
-    def evaluate(self, points):
-        """Evaluate the neural network at given input points."""
-        out = points
-
-        for (W, b), fun in zip(self._parameter_iter(), self.nonlinearities):
-            # Affine transform
-            out = tf.matmul(out, W) + b
-            # Apply nonlinearity
-            if fun is not None:
-                out = fun(out)
-
-        return out
