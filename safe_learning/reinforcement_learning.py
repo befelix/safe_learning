@@ -153,8 +153,10 @@ class PolicyIteration(object):
         values : ndarray
             The optimal values at the states.
         """
-        # Define random variables
-        values = cvxpy.Variable(self.value_function.nindex)
+        # Define random variables; convert index from np.int64 to regular
+        # python int to avoid strange cvxpy error; see:
+        # https://github.com/cvxgrp/cvxpy/issues/380
+        values = cvxpy.Variable(int(self.value_function.nindex))
 
         value_matrix = self.value_function.tri.parameter_derivative(
             next_states)
