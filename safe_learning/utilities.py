@@ -500,7 +500,7 @@ def unique_rows(array):
     ----------
     array : ndarray
         A 2D numpy array.
-    
+
     Returns
     -------
     unique_array : ndarray
