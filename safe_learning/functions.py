@@ -29,25 +29,24 @@ _EPS = np.finfo(config.np_dtype).eps
 
 
 class Function(object):
-    """Tensorflow function baseclass.
+    """TensorFlow function baseclass.
 
     It makes sure that variables are reused if the function is called
-    multiple times.
-
-    Parameters
-    ----------
-    input_dim : tuple
-    output_dim : tuple
+    multiple times with a TensorFlow template.
     """
 
     def __init__(self, name='function'):
         super(Function, self).__init__()
+        self.feed_dict = get_feed_dict(tf.get_default_graph())
 
+        # Reserve the TensorFlow scope immediately to avoid problems with
+        # Function instances with the same `name`
         with tf.variable_scope(name) as scope:
             self._scope = scope
 
-        self._initialized = False
-        self.feed_dict = get_feed_dict(tf.get_default_graph())
+        self._template = tf.make_template(self.scope_name,
+                                          self.build_evaluation,
+                                          create_scope_now_=True)
 
     @property
     def scope_name(self):
@@ -59,10 +58,9 @@ class Function(object):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                  scope=self.scope_name)
 
+    @use_parent_scope
     def __call__(self, *args, **kwargs):
-        """Evaluate the function.
-
-        This call makes sure that the function is only initialized once.
+        """Evaluate the function using the template to ensure variable sharing.
 
         Parameters
         ----------
@@ -76,25 +74,17 @@ class Function(object):
         outputs : list
             The output arguments of the function as given by evaluate.
         """
-        # Reuse variables in variable scope if called before.
-        if self._initialized:
-            reuse = self._initialized
-        else:
-            reuse = None
-            self._initialized = True
-
-        with tf.variable_scope(self.scope_name, reuse=reuse):
-            result = self.build_evaluation(*args, **kwargs)
-
-        return result
+        with tf.name_scope('evaluate'):
+            outputs = self._template(*args, **kwargs)
+        return outputs
 
     def build_evaluation(self, *args, **kwargs):
-        """Buld the function evaluation tree.
+        """Build the function evaluation tree.
 
         Parameters
         ----------
         args : list
-        kwrags : dict, optional
+        kwargs : dict, optional
 
         Returns
         -------
@@ -277,7 +267,6 @@ class FunctionStack(UncertainFunction):
         """Return the parameters."""
         return sum(fun.parameters for fun in self.functions)
 
-    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def build_evaluation(self, points):
         """Evaluation, see `UncertainFunction.evaluate`."""
@@ -347,7 +336,6 @@ class Saturation(DeterministicFunction):
         return Saturation(self.fun.copy_parameters(other_instance.fun),
                           self.lower, self.upper)
 
-    @with_scope('evaluate')
     def build_evaluation(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
         res = self.fun.build_evaluation(points)
@@ -483,7 +471,6 @@ class GaussianProcess(UncertainFunction):
         """Observed output. One observation per row."""
         return self.gaussian_process.Y.value
 
-    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def build_evaluation(self, points):
         """Evaluate the model, but return tensorflow tensors."""
@@ -1418,7 +1405,6 @@ class Triangulation(DeterministicFunction):
         # Pre-multiply each hyperplane by (point - origin)
         return origins, hyperplanes, simplices
 
-    @with_scope('evaluate')
     def build_evaluation(self, points):
         """Evaluate using tensorflow."""
         # Get the appropriate hyperplane
@@ -1476,7 +1462,6 @@ class QuadraticFunction(DeterministicFunction):
         # with tf.variable_scope(self.scope_name):
         #     self.matrix = tf.Variable(self.matrix)
 
-    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def build_evaluation(self, points):
         """Like evaluate, but returns a tensorflow tensor instead."""
@@ -1509,7 +1494,6 @@ class LinearSystem(DeterministicFunction):
 
         self.output_dim, self.input_dim = self.matrix.shape
 
-    @with_scope('evaluate')
     @concatenate_inputs(start=1)
     def build_evaluation(self, points):
         """Return the function values.
@@ -1639,7 +1623,6 @@ class NeuralNetwork(DeterministicFunction):
         self.input_dim = layers[0]
         self.output_dim = layers[-1]
 
-    @with_scope('evaluate')
     def build_evaluation(self, points):
         """Build the evaluation graph."""
         net = points
