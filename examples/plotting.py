@@ -159,6 +159,7 @@ def show_graph(graph_def, max_const_size=32):
         graph_def = graph_def.as_graph_def()
     strip_def = strip_consts(graph_def, max_const_size=max_const_size)
     code = """
+        <script src="//cdnjs.cloudflare.com/ajax/libs/polymer/0.3.3/platform.js"></script>
         <script>
           function load() {{
             document.getElementById("{id}").pbtxt = {data};
@@ -175,3 +176,4 @@ def show_graph(graph_def, max_const_size=32):
         <iframe seamless style="width:100%;height:620px;border:0" srcdoc="{}"></iframe>
     """.format(code.replace('"', '&quot;'))
     display(HTML(iframe))
+
