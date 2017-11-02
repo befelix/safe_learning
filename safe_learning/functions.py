@@ -1488,7 +1488,7 @@ class LinearSystem(DeterministicFunction):
 
     def __init__(self, matrices, name='linear_system'):
         """Initialize."""
-        super(LinearSystem, self).__init__()
+        super(LinearSystem, self).__init__(name=name)
         fun = lambda x: np.atleast_2d(x).astype(config.np_dtype)
         self.matrix = np.hstack(map(fun, matrices))
 
