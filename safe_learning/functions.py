@@ -44,7 +44,9 @@ class Function(object):
         with tf.variable_scope(name) as scope:
             self._scope = scope
 
-        self._template = tf.make_template(self.scope_name,
+        # Use `original_name_scope` explicitly in case `scope_name` method is
+        # overridden in a child class
+        self._template = tf.make_template(self._scope.original_name_scope,
                                           self.build_evaluation,
                                           create_scope_now_=True)
 
