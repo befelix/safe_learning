@@ -2,13 +2,13 @@
 Safe Reinforcement Learning with Stability Guarantees
 =====================================================
 
-.. image:: https://travis-ci.com/befelix/lyapunov-learning-private.svg?token=jhZwW5XAmNDthi4dmvkf&branch=master
-    :target: https://travis-ci.com/befelix/lyapunov-learning-private
+.. image:: https://travis-ci.org/befelix/safe_learning.svg?branch=master
+    :target: https://travis-ci.org/befelix/safe_learning
     :alt: Build status
 .. image:: https://readthedocs.org/projects/safe-learning/badge/?version=latest
     :target: http://safe-learning.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
-  
+
 This code accompanies the paper [1]_ and implements the code for estimating the region of attraction for a policy and optimizing the policy subject to stability constraints. For the old numpy-based code to estimate the region of attraction in [2]_ see the `lyapunov-learning <https://github.com/befelix/lyapunov-learning>`_ repository.
 
 .. [1] F. Berkenkamp, M. Turchetta, A. P. Schoellig, A. Krause,
