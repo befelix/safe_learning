@@ -2,9 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from IPython.display import display, HTML
+from mpl_toolkits.mplot3d import Axes3D
 
 from safe_learning.utilities import (with_scope, get_storage, set_storage,
                                      get_feed_dict)
+
+
+__all__ = ['plot_lyapunov_1d', 'plot_triangulation', 'show_graph']
 
 
 # An object to store graph elements
@@ -127,6 +131,62 @@ def plot_lyapunov_1d(lyapunov, true_dynamics, legend=False):
 
     # Show plot
     plt.show()
+
+
+def plot_triangulation(triangulation, axis=None, three_dimensional=False,
+                       xlabel=None, ylabel=None, zlabel=None, **kwargs):
+    """Plot a triangulation.
+    
+    Parameters
+    ----------
+    values: ndarray
+    axis: optional
+    three_dimensional: bool, optional
+        Whether to plot 3D
+        
+    Returns
+    -------
+    axis:
+        The axis on which we plotted.
+    """
+    values = triangulation.parameters[0].eval()
+
+    if three_dimensional:
+        if axis is None:
+            axis = Axes3D(plt.figure())
+
+        # Get the simplices and plot
+        delaunay = triangulation.tri
+        state_space = triangulation.discretization.all_points
+        
+        simplices = delaunay.simplices(np.arange(delaunay.nsimplex))
+        c = axis.plot_trisurf(state_space[:, 0], state_space[:, 1], values[:, 0],
+                            triangles=simplices.copy(),
+                            cmap='viridis', lw=0.1, **kwargs)
+        cbar = plt.colorbar(c)
+    else:
+        if axis is None:
+            axis = plt.figure().gca()
+            
+        domain = triangulation.discretization.limits.tolist()
+        num_points = triangulation.discretization.num_points
+            
+        # Some magic reshaping to go to physical coordinates
+        vals = values.reshape(num_points[0], num_points[1]).T[::-1]
+        axis = plt.imshow(vals, origin='upper',
+                          extent=domain[0] + domain[1],
+                          aspect='auto', cmap='viridis', interpolation='bilinear', **kwargs)
+        cbar = plt.colorbar(axis)
+        axis = axis.axes
+        
+    if xlabel is not None:
+        axis.set_xlabel(xlabel)
+    if ylabel is not None:
+        axis.set_ylabel(ylabel)
+    if zlabel is not None:
+        cbar.set_label(zlabel)
+        
+    return axis
 
 
 def strip_consts(graph_def, max_const_size=32):
