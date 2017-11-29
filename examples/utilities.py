@@ -21,27 +21,45 @@ np_dtype = config.np_dtype
 tf_dtype = config.dtype
 
 
-def uniform_state_sampler(n_samples, state_space):
+def sample_ellipsoid(covariance, level, num_samples):
+    # Sample from unit sphere
+    dim = covariance.shape[0]
+    N = int(num_samples)
+    mean = np.zeros(dim)
+    Y = np.random.multivariate_normal(mean, covariance, N)
+    Y = Y / np.linalg.norm(Y, ord=2, axis=1, keepdims=True)
+
+    # Scale to spheres of different radii
+    r = np.random.uniform(0., level, N).reshape((-1, 1))
+    Y = Y*r
+
+    # Transform to ellipsoid samples
+    U = np.linalg.cholesky(covariance).T   # P = L.dot(L.T), U = L.T
+    X = scipy.linalg.solve_triangular(U, Y.T, lower=False).T
+
+    return X
+
+
+def sample_box(limits, num_samples):
     """Sample uniformly from a box in the state space.
 
     Parameters
     ----------
-    n_samples : int
-        The number of samples to collect.
-    state_space : list
+    limits : list
         The rectangular domain from which to collect samples, given as a list
         of 2-D lists
+    num_samples : int
+        The number of samples to collect.
 
     Returns
     -------
     samples : ndarray
         State space samples, where each row is a sample
     """
-    dim_state = len(state_space)
-    for i in range(dim_state):
-        delta = state_space[i][1] - state_space[i][0]
-        offset = state_space[i][0]
-        single_dim = delta * np.random.rand(int(n_samples), 1) + offset
+    dim = len(limits)
+    N = int(num_samples)
+    for i in range(dim):
+        single_dim = np.random.uniform(limits[i][0], limits[i][1], N).reshape((-1, 1))
         if i == 0:
             samples = single_dim
         else:
@@ -75,29 +93,46 @@ def get_max_parameter_change(old_params, new_params):
     return max_change
 
 
-def compute_closedloop_response(dynamics, policy, initial_condition, steps,
-                                ref_level=0):
+def compute_closedloop_response(dynamics, policy, steps, dt, reference='zero', const=1.0, ic=None):
     """
     """
-    state_dim = len(initial_condition)
-    ref = ref_level * np.ones((1, policy.output_dim))
-    session = tf.get_default_session()
+    state_dim = policy.input_dim
+    action_dim = policy.output_dim
+    
+    state_dim = 4
+    action_dim = 1
+    
+    if reference=='impulse':
+        r = np.zeros((steps + 1, action_dim))
+        r[0, :] = (1 / dt) * np.ones((1, action_dim))
+    elif reference=='step':
+        r = const*np.ones((steps + 1, action_dim))
+    elif reference=='zero':
+        r = np.zeros((steps + 1, action_dim))
 
+    times = dt*np.arange(steps + 1, dtype=np_dtype).reshape((-1, 1))
+    states = np.zeros((steps + 1, state_dim), dtype=np_dtype)
+    actions = np.zeros((steps + 1, action_dim), dtype=np_dtype)
+    if ic is not None:
+        states[0, :] = np.asarray(ic, dtype=np_dtype).reshape((1, state_dim))
+
+    session = tf.get_default_session()    
     with tf.name_scope('compute_closedloop_response'):
-        states = np.zeros((steps + 1, state_dim), dtype=np_dtype)
-        actions = np.zeros((steps + 1, policy.output_dim), dtype=np_dtype)
-        states[0, :] = initial_condition
-
+        current_ref = tf.placeholder(tf_dtype, shape=[1, action_dim])
         current_state = tf.placeholder(tf_dtype, shape=[1, state_dim])
-        action = policy(current_state)
-        next_data = [dynamics(current_state, action + ref), action]
+        current_action = policy(current_state)
+        next_state = dynamics(current_state, current_action + current_ref)
+        data = [current_action, next_state]
 
-        for i in range(steps):
-            feed_dict = {current_state: states[[i], :]}
-            states[i + 1, :], actions[i, :] = session.run(next_data, feed_dict)
-        _, actions[-1, :] = session.run(next_data, feed_dict)
+    for i in range(steps):
+        feed_dict = {current_ref: r[[i], :], current_state: states[[i], :]}
+        actions[i, :], states[i + 1, :] = session.run(data, feed_dict)
 
-    return states, actions
+    # Get the last action for completeness
+    feed_dict = {current_ref: r[[-1], :], current_state: states[[-1], :]}
+    actions[-1, :], _ = session.run(data, feed_dict)
+        
+    return states, actions, times, r
 
 
 def import_from_directory(library, path):
@@ -146,10 +181,11 @@ class CartPole(DeterministicFunction):
         self.pendulum_mass = pendulum_mass
         self.cart_mass = cart_mass
         self.length = length
+        self.friction = 0.0  # TODO
         self.dt = dt
         self.gravity = 9.81
         self.state_dim = 4
-        self.input_dim = 1
+        self.action_dim = 1
         self.norm = normalization
         if normalization is not None:
             self.normalization = [np.array(norm, dtype=config.np_dtype)
@@ -203,7 +239,7 @@ class CartPole(DeterministicFunction):
                       [0, g * (m + M) / (L * M), 0, 0]],
                      dtype=config.np_dtype)
 
-        B = np.array([0, 0, 1 / M, 1 / (M * L)]).reshape((-1, self.input_dim))
+        B = np.array([0, 0, 1 / M, 1 / (M * L)]).reshape((-1, self.action_dim))
 
         if self.normalization is not None:
             Tx, Tu = map(np.diag, self.normalization)
