@@ -4,6 +4,7 @@ import sys
 import os
 import importlib
 import numpy as np
+import scipy
 import tensorflow as tf
 from scipy import signal
 from safe_learning import DeterministicFunction
@@ -13,12 +14,32 @@ if sys.version_info.major == 2:
     import imp
 
 
-__all__ = ['uniform_state_sampler', 'compute_closedloop_response',
-           'import_from_directory', 'InvertedPendulum']
+__all__ = ['constrained_batch_sampler', 'compute_closedloop_response',
+           'import_from_directory', 'InvertedPendulum', 'CartPole']
 
 
 np_dtype = config.np_dtype
 tf_dtype = config.dtype
+
+
+def constrained_batch_sampler(dynamics, policy, state_dim, batch_size, action_limit=None, zero_pad=0):
+    batch = tf.random_uniform([int(batch_size), state_dim], -1, 1, dtype=tf_dtype, name='batch_sample')
+    actions = policy(batch)
+    future_batch = dynamics(batch, actions)
+    maps_inside = tf.reduce_all(tf.logical_and(future_batch >= -1, future_batch <= 1), axis=1)
+    maps_inside_idx = tf.squeeze(tf.where(maps_inside))
+    constrained_batch = tf.gather(batch, maps_inside_idx)
+    if action_limit is not None:
+        c = np.abs(action_limit)
+        undersaturated = tf.reduce_all(tf.logical_and(actions >= -c, actions <= c), axis=1)
+        undersaturated_idx = tf.squeeze(tf.where(undersaturated))
+        constrained_batch = tf.gather(batch, undersaturated_idx)
+    if constrained_batch.get_shape()[0] == 0:
+        constrained_batch = tf.zeros([1, state_dim], dtype=tf_dtype)
+    if zero_pad > 0:
+        zero_padding = tf.constant([[0, int(zero_pad)], [0, 0]])
+        constrained_batch = tf.pad(constrained_batch, zero_padding)
+    return constrained_batch
 
 
 def sample_ellipsoid(covariance, level, num_samples):
@@ -31,13 +52,67 @@ def sample_ellipsoid(covariance, level, num_samples):
 
     # Scale to spheres of different radii
     r = np.random.uniform(0., level, N).reshape((-1, 1))
-    Y = Y*r
+    Y = Y*np.sqrt(r)
 
     # Transform to ellipsoid samples
     U = np.linalg.cholesky(covariance).T   # P = L.dot(L.T), U = L.T
     X = scipy.linalg.solve_triangular(U, Y.T, lower=False).T
 
     return X
+
+
+def approx_local_lipschitz(func, query_point, epsilon, num_samples):
+    """
+    Only works for a single query point! See approx_local_lipschitz_grid() otherwise.
+    """
+    # Sample deviations from an epsilon-ball centred at the query point
+    d = query_point.shape[1]
+    dX = sample_ellipsoid(np.identity(d), epsilon, num_samples)
+    X = dX + query_point
+
+    # Compute the function deviations for each sample
+    dF = func(X) - func(query_point)
+
+    # Compute the 1-norm change for each sample from the query point
+    nF = tf.norm(dF, ord=1, axis=1)
+    nX = tf.norm(dX, ord=1, axis=1)
+
+    # Compute Lipschitz constant as the maximum of the ratios
+    L = tf.reduce_max(nF / nX)
+
+    return L
+
+
+def apply_2dfunc_along_last(func2d, arr3d):
+    M, N, P = arr3d.shape
+    arr2d = np.reshape(arr3d, (M, N*P), order='F')
+
+    def func1d(arr1d):
+        # Assume func2d maps PxN arrays to PxH arrays
+        return func2d(arr1d.reshape((P, N)))
+
+    # Apply along rows; result is MxPxH
+    return np.apply_along_axis(func1d, 1, arr2d)
+
+
+def approx_local_lipschitz_grid(func, query_points, epsilon, num_samples):
+    # Sample deviations from an epsilon-ball centred at the query point
+    d = query_points.shape[1]
+    dX = sample_ellipsoid(np.identity(d), epsilon, num_samples)
+    X = dX.T[None, :, :] + query_points[:, :, None]
+
+    # Compute the function deviations for each sample, for each query point
+    F = apply_2dfunc_along_last(func, X)
+    dF = F - func(query_points)[:, :, None]
+
+    # Compute the 1-norm change for each sample from each query point
+    nF = np.linalg.norm(dF, ord=1, axis=2)
+    nX = np.linalg.norm(dX, ord=1, axis=1).reshape((1, -1))
+
+    # Compute Lipschitz constant as the maximum of the ratios
+    L = np.amax(nF / nX, axis=1, keepdims=True)
+
+    return L
 
 
 def sample_box(limits, num_samples):
@@ -67,6 +142,20 @@ def sample_box(limits, num_samples):
     return samples
 
 
+def sample_box_boundary(limits, num_samples):
+    # First sample from the entire box
+    N = int(num_samples)
+    samples = sample_box(limits, N)
+    
+    # Uniformly choose which dimension to fix, and at which end point
+    dim = len(limits)
+    fixed_dims = np.random.choice(dim, N)
+    end_points = [limits[d][i] for (d, i) in zip(fixed_dims, np.random.choice(2, N))]
+    samples[np.arange(N), fixed_dims] = end_points
+    
+    return samples
+    
+
 def get_max_parameter_change(old_params, new_params):
     """Get the maximum absolute parameter change value.
 
@@ -87,20 +176,16 @@ def get_max_parameter_change(old_params, new_params):
     """
     max_change = 0.0
     for old, new in zip(old_params, new_params):
-        candidate = np.max(np.abs(new - old))
+        candidate = np.amax(np.abs(new - old))
         if candidate > max_change:
             max_change = candidate
     return max_change
 
 
-def compute_closedloop_response(dynamics, policy, steps, dt, reference='zero', const=1.0, ic=None):
+def compute_closedloop_response(dynamics, policy, state_dim, steps, dt, reference='zero', const=1.0, ic=None):
     """
     """
-    state_dim = policy.input_dim
     action_dim = policy.output_dim
-    
-    state_dim = 4
-    action_dim = 1
     
     if reference=='impulse':
         r = np.zeros((steps + 1, action_dim))
@@ -131,7 +216,7 @@ def compute_closedloop_response(dynamics, policy, steps, dt, reference='zero', c
     # Get the last action for completeness
     feed_dict = {current_ref: r[[-1], :], current_state: states[[-1], :]}
     actions[-1, :], _ = session.run(data, feed_dict)
-        
+
     return states, actions, times, r
 
 
@@ -175,18 +260,18 @@ class CartPole(DeterministicFunction):
         action, such that x = diag(Tx) * x_norm and u = diag(Tu) * u_norm.
     """
 
-    def __init__(self, pendulum_mass, cart_mass, length,
+    def __init__(self, pendulum_mass, cart_mass, length, rot_friction=0.0,
                  dt=0.01, normalization=None):
         super(CartPole, self).__init__(name='CartPole')
         self.pendulum_mass = pendulum_mass
         self.cart_mass = cart_mass
         self.length = length
-        self.friction = 0.0  # TODO
+        self.rot_friction = rot_friction
         self.dt = dt
         self.gravity = 9.81
         self.state_dim = 4
         self.action_dim = 1
-        self.norm = normalization
+        self.normalization = normalization
         if normalization is not None:
             self.normalization = [np.array(norm, dtype=config.np_dtype)
                                   for norm in normalization]
@@ -231,12 +316,13 @@ class CartPole(DeterministicFunction):
         m = self.pendulum_mass
         M = self.cart_mass
         L = self.length
+        b = self.rot_friction
         g = self.gravity
 
-        A = np.array([[0, 0,                     1, 0],
-                      [0, 0,                     0, 1],
-                      [0, g * m / M,             0, 0],
-                      [0, g * (m + M) / (L * M), 0, 0]],
+        A = np.array([[0, 0,                     1, 0                            ],
+                      [0, 0,                     0, 1                            ],
+                      [0, g * m / M,             0, -b / (M * L)                 ],
+                      [0, g * (m + M) / (L * M), 0, -b * (m + M) / (m * M * L**2)]],
                      dtype=config.np_dtype)
 
         B = np.array([0, 0, 1 / M, 1 / (M * L)]).reshape((-1, self.action_dim))
