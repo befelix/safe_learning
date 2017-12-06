@@ -278,7 +278,25 @@ class Lyapunov(object):
     def update_values(self):
         """Update the discretized values when the Lyapunov function changes."""
         points = self.discretization.all_points
-        self.values = self.lyapunov_function(points).eval().squeeze()
+        # self.values = self.lyapunov_function(points).eval().squeeze()
+
+        # Use storage mechanism and placeholder to avoid loading a possibly
+        # very large discretization into the TensorFlow graph
+        storage = get_storage(self._storage)
+        if storage is None:
+            tf_points = tf.placeholder(config.dtype,
+                                       shape=[None, self.discretization.ndim],
+                                       name='discretization_points')
+            tf_values = self.lyapunov_function(tf_points)
+            storage = [('tf_points', tf_points), ('tf_values', tf_values)]
+            set_storage(self._storage, storage)
+        else:
+            tf_points, tf_values = storage.values()
+
+        feed_dict = self.feed_dict
+        feed_dict[tf_points] = points
+
+        self.values = tf_values.eval(feed_dict=feed_dict).squeeze()
 
     def v_decrease_confidence(self, states, next_states):
         """
