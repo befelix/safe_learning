@@ -563,10 +563,8 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
         mean, var = lyapunov.dynamics(tf_state_actions)
         bound = tf.reduce_sum(var, axis=1, keep_dims=True)
         # Account for deviations of the next value due to uncertainty
-        lf = lyapunov.lipschitz_dynamics(tf_safe_states)
         lv = lyapunov.lipschitz_lyapunov(mean)
         error = lv * bound
-        # error = lv * lf * bound
         values = lyapunov.lyapunov_function(mean) + error
 
         # Check whether the value is below c_max
