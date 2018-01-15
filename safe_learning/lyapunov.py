@@ -6,6 +6,7 @@ from collections import Sequence
 from heapq import heappush, heappop
 import itertools
 from future.builtins import zip, range
+import warnings
 
 import numpy as np
 import tensorflow as tf
@@ -564,7 +565,8 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
         # Account for deviations of the next value due to uncertainty
         lf = lyapunov.lipschitz_dynamics(tf_safe_states)
         lv = lyapunov.lipschitz_lyapunov(mean)
-        error = lv * lf * bound
+        error = lv * bound
+        # error = lv * lf * bound
         values = lyapunov.lyapunov_function(mean) + error
 
         # Check whether the value is below c_max
@@ -626,5 +628,21 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
 
     # Return only state-actions pairs that are safe
     var_safe = var[maps_inside]
-    max_id = np.argmax(var_safe)
-    return state_actions[maps_inside, :][[max_id]], var_safe[max_id].squeeze()
+    if len(var_safe) == 0:
+        # Nothing is safe, so revert to backup policy
+        msg = "No safe state-action pairs found! Using backup policy ..."
+        warnings.warn(msg, RuntimeWarning)
+        zero_perturbation = np.array([[0.]], dtype=config.np_dtype)
+        state_actions = perturb_actions(safe_states,
+                                        safe_actions,
+                                        perturbations=zero_perturbation,
+                                        limits=action_limits)
+        lyapunov.feed_dict[tf_state_actions] = state_actions
+        var = session.run(bound, feed_dict=lyapunov.feed_dict)
+        max_id = np.argmax(var)
+        max_var = var[max_id].squeeze()
+        return state_actions[[max_id]], max_var
+    else:
+        max_id = np.argmax(var_safe)
+        max_var = var_safe[max_id].squeeze()
+        return state_actions[maps_inside, :][[max_id]], max_var

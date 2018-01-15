@@ -236,7 +236,7 @@ def batchify(arrays, batch_size):
     if not isinstance(arrays, (list, tuple)):
         arrays = (arrays,)
 
-    # Iterate over array in batche
+    # Iterate over array in batches
     for i, i_next in zip(itertools.count(start=0, step=batch_size),
                          itertools.count(start=batch_size, step=batch_size)):
 
