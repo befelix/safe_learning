@@ -22,6 +22,22 @@ np_dtype = config.np_dtype
 tf_dtype = config.dtype
 
 
+def get_unique_subfolder(data_dir, prefix):
+    """
+    Return directory string consisting of prefix appended by an underscore and
+    then an integer. Ensures string is unique from other similarly prefixed
+    folder names.
+    """
+    subfolders = [f for f in os.listdir(data_dir) if f[:len(prefix)] == prefix]
+    if len(subfolders) == 0:
+        unique_name = prefix + '_0'
+    else:
+        indices = [int(sf[len(prefix)+1:]) for sf in subfolders]
+        max_index = np.max(indices)
+        unique_name = prefix + '_' + str(max_index + 1)
+    return unique_name
+
+
 def constrained_batch_sampler(dynamics, policy, state_dim, batch_size, action_limit=None, zero_pad=0):
     batch = tf.random_uniform([int(batch_size), state_dim], -1, 1, dtype=tf_dtype, name='batch_sample')
     actions = policy(batch)
@@ -146,15 +162,15 @@ def sample_box_boundary(limits, num_samples):
     # First sample from the entire box
     N = int(num_samples)
     samples = sample_box(limits, N)
-    
+
     # Uniformly choose which dimension to fix, and at which end point
     dim = len(limits)
     fixed_dims = np.random.choice(dim, N)
     end_points = [limits[d][i] for (d, i) in zip(fixed_dims, np.random.choice(2, N))]
     samples[np.arange(N), fixed_dims] = end_points
-    
+
     return samples
-    
+
 
 def get_max_parameter_change(old_params, new_params):
     """Get the maximum absolute parameter change value.
@@ -186,7 +202,7 @@ def compute_closedloop_response(dynamics, policy, state_dim, steps, dt, referenc
     """
     """
     action_dim = policy.output_dim
-    
+
     if reference=='impulse':
         r = np.zeros((steps + 1, action_dim))
         r[0, :] = (1 / dt) * np.ones((1, action_dim))
@@ -201,7 +217,7 @@ def compute_closedloop_response(dynamics, policy, state_dim, steps, dt, referenc
     if ic is not None:
         states[0, :] = np.asarray(ic, dtype=np_dtype).reshape((1, state_dim))
 
-    session = tf.get_default_session()    
+    session = tf.get_default_session()
     with tf.name_scope('compute_closedloop_response'):
         current_ref = tf.placeholder(tf_dtype, shape=[1, action_dim])
         current_state = tf.placeholder(tf_dtype, shape=[1, state_dim])
@@ -340,8 +356,53 @@ class CartPole(DeterministicFunction):
     @concatenate_inputs(start=1)
     def build_evaluation(self, state_action):
         """Evaluate the dynamics."""
-        # TODO
-        raise NotImplementedError('TODO.')
+        # Denormalize
+        state, action = tf.split(state_action, [4, 1], axis=1)
+        state, action = self.denormalize(state, action)
+
+        inner_euler_steps=10
+        dt = self.dt / inner_euler_steps
+        for _ in range(inner_euler_steps):
+            state_derivative = self.ode(state, action)
+            state = state + dt * state_derivative
+
+        return self.normalize(state, None)[0]
+
+    def ode(self, state, action):
+        """Compute the state time-derivative.
+
+        Parameters
+        ----------
+        state: ndarray or Tensor
+            States.
+        action: ndarray or Tensor
+            Actions.
+
+        Returns
+        -------
+        state_derivative: Tensor
+            The state derivative according to the dynamics.
+        """
+        # Physical dynamics
+        m = self.pendulum_mass
+        M = self.cart_mass
+        L = self.length
+        b = self.rot_friction
+        g = self.gravity
+
+        x, theta, v, omega = tf.split(state, [1, 1, 1, 1], axis=1)
+
+        x_dot = v
+        theta_dot = omega
+
+        det = L*(M + m*tf.square(tf.sin(theta)))
+        v_dot = (action - m*L*tf.square(omega)*tf.sin(theta) - b*omega*tf.cos(theta) + 0.5*m*g*L*tf.sin(2*theta)) * L/det
+        omega_dot = (action*tf.cos(theta) - 0.5*m*L*tf.square(omega)*tf.sin(2*theta) - b*(m + M)*omega/(m*L)
+                     + (m + M)*g*tf.sin(theta)) / det
+
+        state_derivative = tf.concat((x_dot, theta_dot, v_dot, omega_dot), axis=1)
+
+        return state_derivative
 
 
 class InvertedPendulum(DeterministicFunction):
@@ -370,9 +431,9 @@ class InvertedPendulum(DeterministicFunction):
 
         self.normalization = normalization
         if normalization is not None:
-            self.normalization = [arr.astype(config.np_dtype) for
-                                  arr in normalization]
-            self.inv_norm = [arr ** -1 for arr in self.normalization]
+            self.normalization = [np.array(norm, dtype=config.np_dtype)
+                                  for norm in normalization]
+            self.inv_norm = [norm ** -1 for norm in self.normalization]
 
     @property
     def inertia(self):
