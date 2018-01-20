@@ -259,6 +259,8 @@ class Lyapunov(object):
             whether lipschitz_lyapunov and lipschitz_dynamics are local or not.
         """
         lv = self.lipschitz_lyapunov(states)
+        if hasattr(self._lipschitz_dynamics, '__call__') and lv.shape[1] > 1:
+            lv = tf.norm(lv, ord=1, axis=1, keep_dims=True)
         lf = self.lipschitz_dynamics(states)
         return -lv * (1. + lf) * self.epsilon
 
@@ -322,7 +324,7 @@ class Lyapunov(object):
         if isinstance(next_states, Sequence):
             next_states, error_bounds = next_states
             lv = self.lipschitz_lyapunov(next_states)
-            bound = lv * tf.reduce_sum(error_bounds, axis=1, keep_dims=True)
+            bound = tf.reduce_sum(lv * error_bounds, axis=1, keep_dims=True)
         else:
             bound = tf.constant(0., dtype=config.dtype)
 
@@ -561,10 +563,10 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
                                           shape=[None, state_dim + action_dim])
 
         mean, var = lyapunov.dynamics(tf_state_actions)
-        bound = tf.reduce_sum(var, axis=1, keep_dims=True)
         # Account for deviations of the next value due to uncertainty
         lv = lyapunov.lipschitz_lyapunov(mean)
-        error = lv * bound
+        bound = tf.reduce_sum(var, axis=1, keep_dims=True)
+        error = tf.reduce_sum(lv * var, axis=1, keep_dims=True)
         values = lyapunov.lyapunov_function(mean) + error
 
         # Check whether the value is below c_max

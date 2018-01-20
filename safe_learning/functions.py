@@ -359,7 +359,7 @@ class GPRCached(gpflow.gpr.GPR):
     """
 
     def __init__(self, x, y, kern, mean_function=gpflow.mean_functions.Zero(),
-                 name='GPRCached'):
+                 scaling=1., name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
         # Make sure gpflow is imported
         if not isinstance(gpflow, ModuleType):
@@ -374,6 +374,7 @@ class GPRCached(gpflow.gpr.GPR):
                                                 on_shape_change='pass')
         self.alpha = gpflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
                                              on_shape_change='pass')
+        self._scaling = scaling
         self.update_cache()
 
     @with_scope('compute_cache')
@@ -383,9 +384,10 @@ class GPRCached(gpflow.gpr.GPR):
         identity = tf.eye(tf.shape(self.X)[0], dtype=config.dtype)
         kernel = self.kern.K(self.X) + identity * self.likelihood.variance
 
-        cholesky = tf.cholesky(kernel, name='gp_cholesky')
+        cholesky = tf.cholesky((self._scaling ** 2) * kernel,
+                               name='gp_cholesky')
 
-        target = self.Y - self.mean_function(self.X)
+        target = self._scaling * (self.Y - self.mean_function(self.X))
         alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
         return cholesky, alpha
 
@@ -413,19 +415,21 @@ class GPRCached(gpflow.gpr.GPR):
             Diagonal of the covariance matrix (or full matrix).
 
         """
-        Kx = self.kern.K(self.X, Xnew)
+        Kx = (self._scaling ** 2) * self.kern.K(self.X, Xnew)
         a = tf.matrix_triangular_solve(self.cholesky, Kx, lower=True)
         fmean = (tf.matmul(a, self.alpha, transpose_a=True)
-                 + self.mean_function(Xnew))
+                 + self._scaling * self.mean_function(Xnew))
         if full_cov:
-            fvar = self.kern.K(Xnew) - tf.matmul(a, a, transpose_a=True)
+            fvar = ((self._scaling ** 2) * self.kern.K(Xnew)
+                    - tf.matmul(a, a, transpose_a=True))
             shape = tf.stack([1, 1, tf.shape(self.Y)[1]])
             fvar = tf.tile(tf.expand_dims(fvar, 2), shape)
         else:
-            fvar = self.kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(a), 0)
+            fvar = ((self._scaling ** 2) * self.kern.Kdiag(Xnew)
+                    - tf.reduce_sum(tf.square(a), 0))
             fvar = tf.tile(tf.reshape(fvar, (-1, 1)),
                            [1, tf.shape(self.Y)[1]])
-        return fmean, fvar
+        return fmean / self._scaling, fvar / (self._scaling ** 2)
 
 
 class GaussianProcess(UncertainFunction):
