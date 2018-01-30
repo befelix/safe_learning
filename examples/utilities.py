@@ -202,10 +202,15 @@ def visuals(lyapunov, tf_states, state_norm, plot=None, old_safe_set=None, fixed
             fixed_state[i] = lyapunov.discretization.discrete_points[i][idx]
         x_fix, theta_fix, v_fix, omega_fix = fixed_state
      
-        pos_set = np.logical_and(lyapunov.discretization.all_points[:, 2] == v_fix, 
+        # pos_set = np.logical_and(lyapunov.discretization.all_points[:, 2] == v_fix, 
+        #                          lyapunov.discretization.all_points[:, 3] == omega_fix)
+        # vel_set = np.logical_and(lyapunov.discretization.all_points[:, 0] == x_fix,
+        #                          lyapunov.discretization.all_points[:, 1] == theta_fix)
+        
+        pos_set = np.logical_and(lyapunov.discretization.all_points[:, 1] == theta_fix, 
                                  lyapunov.discretization.all_points[:, 3] == omega_fix)
         vel_set = np.logical_and(lyapunov.discretization.all_points[:, 0] == x_fix,
-                                 lyapunov.discretization.all_points[:, 1] == theta_fix)
+                                 lyapunov.discretization.all_points[:, 2] == v_fix)
         
         lyapunov.feed_dict.update({tf_states: lyapunov.discretization.all_points[pos_set, :]})
         dv_pos, error_pos, bound_pos = session.run([tf_dv, tf_error, tf_bound], lyapunov.feed_dict)
@@ -233,7 +238,7 @@ def visuals(lyapunov, tf_states, state_norm, plot=None, old_safe_set=None, fixed
             true_limits = lyapunov.discretization.limits
             
         # Figure
-        fig, ax = plt.subplots(2, 3, figsize=(15, 10), dpi=100)
+        fig, ax = plt.subplots(2, 3, figsize=(17, 10), dpi=100)
         fig.subplots_adjust(wspace=0.6, hspace=0.05)
         
         # Colormap
@@ -242,35 +247,34 @@ def visuals(lyapunov, tf_states, state_norm, plot=None, old_safe_set=None, fixed
         norm = colors.BoundaryNorm(bounds, cmap.N)
 
         # Safe positions set, with fixed velocities
-        z = 2*(dec_pos < 0) + safe_pos
-        ax[0, 0].set_title(r'$v = %.3g$ m/s, $\omega = %.3g$ deg/s' % (v_fix, omega_fix))
+        z = (dec_pos < 0) + 2 * safe_pos
+        ax[0, 0].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
         ax[0, 0].set_xlabel(r'$x$ [m]')
-        ax[0, 0].set_ylabel(r'$\theta$ [deg]')
+        ax[0, 0].set_ylabel(r'$v$ [m/s]')
         im = ax[0, 0].imshow(z.T,
                              origin='lower',
-                             extent=true_limits[:2, :].ravel(), 
-                             aspect=true_limits[0, 0] / true_limits[1, 0], 
+                             extent=true_limits[(0, 2), :].ravel(), 
+                             aspect=true_limits[0, 0] / true_limits[2, 0], 
                              cmap=cmap,
                              norm=norm)
         cbar = fig.colorbar(im, ax=ax[0, 0], boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
-        cbar.ax.set_yticklabels(['unsafe\n$\Delta v > 0$', 'safe\n$\Delta v > 0$', 
-                                 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v < 0$'])
+        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 
+                                 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
 
         # Safe velocities set, with fixed positions
-        z = 2*(dec_vel < 0) + safe_vel
-        ax[1, 0].set_title(r'$x = %.3g$ m, $\theta = %.3g$ deg' % (x_fix, theta_fix))
-        ax[1, 0].set_xlabel(r'$v$ [m/s]')
+        z = (dec_vel < 0) + 2 * safe_vel
+        ax[1, 0].set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax[1, 0].set_xlabel(r'$\theta$ [deg]')
         ax[1, 0].set_ylabel(r'$\omega$ [deg/s]')
-        aspect = true_limits[2, 0] / true_limits[3, 0]
         im = ax[1, 0].imshow(z.T, 
                              origin='lower', 
-                             extent=true_limits[2:, :].ravel(), 
-                             aspect=true_limits[2, 0] / true_limits[3, 0], 
+                             extent=true_limits[(1, 3), :].ravel(), 
+                             aspect=true_limits[1, 0] / true_limits[3, 0], 
                              cmap=cmap,
                              norm=norm)
         cbar = fig.colorbar(im, ax=ax[1, 0], boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5]) 
-        cbar.ax.set_yticklabels(['unsafe\n$\Delta v > 0$', 'safe\n$\Delta v > 0$', 
-                                 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v < 0$'])
+        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 
+                                 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
         
         #####
         cmap = plt.get_cmap('viridis')
@@ -278,35 +282,34 @@ def visuals(lyapunov, tf_states, state_norm, plot=None, old_safe_set=None, fixed
         cmap.set_over('gold')
         
         # Safe positions set, with fixed velocities
-        z = -dv_pos / error_pos
-        ax[0, 1].set_title(r'$v = %.3g$ m/s, $\omega = %.3g$ deg/s' % (v_fix, omega_fix))
+        # z = - dv_pos / error_pos
+        z = - dv_pos
+        ax[0, 1].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
         ax[0, 1].set_xlabel(r'$x$ [m]')
-        ax[0, 1].set_ylabel(r'$\theta$ [deg]')
+        ax[0, 1].set_ylabel(r'$v$ [m/s]')
         im = ax[0, 1].imshow(z.T,
                              origin='lower',
-                             extent=true_limits[:2, :].ravel(), 
-                             aspect=true_limits[0, 0] / true_limits[1, 0], 
-                             cmap=cmap,
-                             vmin=0,
-                             vmax=5)
+                             extent=true_limits[(0, 2), :].ravel(), 
+                             aspect=true_limits[0, 0] / true_limits[2, 0], 
+                             cmap=cmap)
         cbar = fig.colorbar(im, ax=ax[0, 1])
-        cbar.ax.set_ylabel(r'$-(v(\mu) - v(x)) / error$')
+        # cbar.ax.set_ylabel(r'$-(v(\mu) - v(x)) / error$')
+        cbar.ax.set_ylabel(r'$-(v(\mu) - v(x))$')
 
         # Safe velocities set, with fixed positions
-        z = -dv_vel / error_vel
-        ax[1, 1].set_title(r'$x = %.3g$ m, $\theta = %.3g$ deg' % (x_fix, theta_fix))
-        ax[1, 1].set_xlabel(r'$v$ [m/s]')
+        # z = - dv_vel / error_vel
+        z = - dv_vel
+        ax[1, 1].set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax[1, 1].set_xlabel(r'$\theta$ [deg]')
         ax[1, 1].set_ylabel(r'$\omega$ [deg/s]')
-        aspect = true_limits[2, 0] / true_limits[3, 0]
         im = ax[1, 1].imshow(z.T, 
                              origin='lower', 
-                             extent=true_limits[2:, :].ravel(), 
-                             aspect=true_limits[2, 0] / true_limits[3, 0], 
-                             cmap=cmap,
-                             vmin=0,
-                             vmax=5)
+                             extent=true_limits[(1, 3), :].ravel(), 
+                             aspect=true_limits[1, 0] / true_limits[3, 0], 
+                             cmap=cmap)
         cbar = fig.colorbar(im, ax=ax[1, 1])
-        cbar.ax.set_ylabel(r'$-(v(\mu) - v(x)) / error$')
+        # cbar.ax.set_ylabel(r'$-(v(\mu) - v(x)) / error$')
+        cbar.ax.set_ylabel(r'$-(v(\mu) - v(x))$')
         
         #####
         cmap = plt.get_cmap('viridis')
@@ -314,33 +317,65 @@ def visuals(lyapunov, tf_states, state_norm, plot=None, old_safe_set=None, fixed
         cmap.set_over('gold')
         
         # Safe positions set, with fixed velocities
-        z = 1 / bound_pos
-        ax[0, 2].set_title(r'$v = %.3g$ m/s, $\omega = %.3g$ deg/s' % (v_fix, omega_fix))
+        z = error_pos
+        ax[0, 2].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
         ax[0, 2].set_xlabel(r'$x$ [m]')
-        ax[0, 2].set_ylabel(r'$\theta$ [deg]')
+        ax[0, 2].set_ylabel(r'$v$ [m/s]')
         im = ax[0, 2].imshow(z.T,
                              origin='lower',
-                             extent=true_limits[:2, :].ravel(), 
-                             aspect=true_limits[0, 0] / true_limits[1, 0], 
-                             cmap=cmap,
-                             vmax=300)
+                             extent=true_limits[(0, 2), :].ravel(), 
+                             aspect=true_limits[0, 0] / true_limits[2, 0], 
+                             cmap=cmap)
         cbar = fig.colorbar(im, ax=ax[0, 2])
-        cbar.ax.set_ylabel(r'$1 / (\beta \sigma_n(x, \pi(x)))$')
-
+        # cbar.ax.set_ylabel(r'$1 / (\beta \sigma_n(x, \pi(x)))$')
+        cbar.ax.set_ylabel(r'$error$')
+        
         # Safe velocities set, with fixed positions
-        z = 1 / bound_vel
-        ax[1, 2].set_title(r'$x = %.3g$ m, $\theta = %.3g$ deg' % (x_fix, theta_fix))
-        ax[1, 2].set_xlabel(r'$v$ [m/s]')
-        ax[1, 2].set_ylabel(r'$\omega$ [deg/s]')
-        aspect = true_limits[2, 0] / true_limits[3, 0]
+        z = error_vel
+        ax[1, 2].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+        ax[1, 2].set_xlabel(r'$x$ [m]')
+        ax[1, 2].set_ylabel(r'$v$ [m/s]')
         im = ax[1, 2].imshow(z.T, 
                              origin='lower', 
-                             extent=true_limits[2:, :].ravel(), 
-                             aspect=true_limits[2, 0] / true_limits[3, 0], 
-                             cmap=cmap,
-                             vmax=300)
+                             extent=true_limits[(1, 3), :].ravel(), 
+                             aspect=true_limits[1, 0] / true_limits[3, 0], 
+                             cmap=cmap)
         cbar = fig.colorbar(im, ax=ax[1, 2])
-        cbar.ax.set_ylabel(r'$1 / (\beta \sigma_n(x, \pi(x)))$')
+        # cbar.ax.set_ylabel(r'$1 / (\beta \sigma_n(x, \pi(x)))$')
+        cbar.ax.set_ylabel(r'$error$')
+        
+        #####
+#         cmap = plt.get_cmap('viridis')
+#         cmap.set_under('indigo')
+#         cmap.set_over('gold')
+        
+#         # Safe positions set, with fixed velocities
+#         z = bound_pos
+#         ax[0, 3].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+#         ax[0, 3].set_xlabel(r'$x$ [m]')
+#         ax[0, 3].set_ylabel(r'$v$ [m/s]')
+#         im = ax[0, 3].imshow(z.T,
+#                              origin='lower',
+#                              extent=true_limits[(0, 2), :].ravel(), 
+#                              aspect=true_limits[0, 0] / true_limits[2, 0], 
+#                              cmap=cmap)
+#         cbar = fig.colorbar(im, ax=ax[0, 3])
+#         cbar.ax.set_ylabel(r'$\beta \sigma_n(x, \pi(x))$')
+#         # cbar.ax.set_ylabel(r'$error$')
+        
+#         # Safe velocities set, with fixed positions
+#         z = bound_vel
+#         ax[1, 3].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+#         ax[1, 3].set_xlabel(r'$x$ [m]')
+#         ax[1, 3].set_ylabel(r'$v$ [m/s]')
+#         im = ax[1, 3].imshow(z.T, 
+#                              origin='lower', 
+#                              extent=true_limits[(1, 3), :].ravel(), 
+#                              aspect=true_limits[1, 0] / true_limits[3, 0], 
+#                              cmap=cmap)
+#         cbar = fig.colorbar(im, ax=ax[1, 3])
+#         cbar.ax.set_ylabel(r'$\beta \sigma_n(x, \pi(x))$')
+#         # cbar.ax.set_ylabel(r'$error$')
         
         plt.show()
         
