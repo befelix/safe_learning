@@ -137,6 +137,37 @@ def get_lyapunov_region(lyapunov, discretization, init_node):
     return visited
 
 
+def local_discretization(center, lengths, N):
+    """Create a local discretization around a given point.
+
+    Parameters
+    ----------
+    center : ndarray
+        TODO.
+    tau : float or ndarray
+        TODO.
+    N : int or ndarray
+        TODO.
+
+    Returns
+    -------
+    local_points : ndarray
+        TODO.
+    """
+    # N = np.asarray(N, dtype=np.int).ravel()
+    # center = np.asarray(center, dtype=config.np_dtype).ravel()
+    dim = len(center)
+    lengths = np.asarray(lengths, dtype=config.np_dtype).reshape((-1, 1))
+
+    spacing = np.linspace(-1, 1, N)
+    discrete_points = 0.5 * (1 - 1 / N) * lengths * np.tile(spacing, (dim, 1))
+    mesh = np.meshgrid(*discrete_points, indexing='ij')
+    points = np.column_stack(col.ravel() for col in mesh)
+    local_points = points.astype(config.np_dtype) + center
+
+    return local_points
+
+
 class Lyapunov(object):
     """A class for general Lyapunov functions.
 
@@ -209,6 +240,10 @@ class Lyapunov(object):
         self._lipschitz_dynamics = lipschitz_dynamics
         self._lipschitz_lyapunov = lipschitz_lyapunov
 
+        # TODO
+        self._N = np.zeros(np.prod(discretization.num_points),
+                           dtype=np.int)
+
     def lipschitz_dynamics(self, states):
         """Return the Lipschitz constant for given states and actions.
 
@@ -245,12 +280,15 @@ class Lyapunov(object):
         else:
             return self._lipschitz_lyapunov
 
-    def threshold(self, states):
+    def threshold(self, states, tau):
         """Return the safety threshold for the Lyapunov condition.
 
         Parameters
         ----------
         states : ndarray or Tensor
+
+        tau : float or Tensor
+            Discretization constant to consider.
 
         Returns
         -------
@@ -262,7 +300,7 @@ class Lyapunov(object):
         if hasattr(self._lipschitz_dynamics, '__call__') and lv.shape[1] > 1:
             lv = tf.norm(lv, ord=1, axis=1, keep_dims=True)
         lf = self.lipschitz_dynamics(states)
-        return -lv * (1. + lf) * self.tau
+        return -lv * (1. + lf) * tau
 
     def is_safe(self, state):
         """Return a boolean array that indicates whether the state is safe.
@@ -384,7 +422,7 @@ class Lyapunov(object):
         return v_dot_negative
 
     @with_scope('update_safe_set')
-    def update_safe_set(self):
+    def update_safe_set(self, batch_size=10000, adaptive=False, Nmax=4):
         """Compute and update the safe set."""
         storage = get_storage(self._storage)
 
@@ -393,21 +431,38 @@ class Lyapunov(object):
             tf_states = tf.placeholder(config.dtype,
                                        shape=[None, self.discretization.ndim],
                                        name='verification_states')
+            tf_tau = tf.placeholder(config.dtype,
+                                    shape=[None, 1],
+                                    name='discretization_constant')
             tf_actions = self.policy(tf_states)
             next_states = self.dynamics(tf_states, tf_actions)
 
             decrease = self.v_decrease_bound(tf_states, next_states)
-            threshold = self.threshold(tf_states)
+            threshold = self.threshold(tf_states, tf_tau)
             tf_negative = tf.squeeze(tf.less(decrease, threshold), axis=1)
 
-            storage = [('tf_states', tf_states), ('negative', tf_negative)]
+            # Compute an integer N required to divide tau down to a
+            # value that allows the decrease condition to be satisfied
+
+            # TODO division by zero?
+            # Negative values correspond to non-negative changes in value
+            # that cannot be dealt with by discretizing further - these are
+            # clipped to N = 0
+            tf_Nreq = tf.nn.relu(tf.ceil(threshold / decrease))
+
+            storage = [('tf_states', tf_states),
+                       ('tf_tau', tf_tau),
+                       ('negative', tf_negative),
+                       ('tf_Nreq', tf_Nreq)]
             set_storage(self._storage, storage)
         else:
-            tf_states, tf_negative = storage.values()
+            tf_states, tf_tau, tf_negative, tf_Nreq = storage.values()
 
         # Get relevant properties
         feed_dict = self.feed_dict
-        batch_size = config.gp_batch_size
+
+        # TODO
+        # batch_size = config.gp_batch_size
 
         # reset the safe set
         safe_set = np.zeros_like(self.safe_set)
@@ -424,25 +479,108 @@ class Lyapunov(object):
         index_to_state = self.discretization.index_to_state
 
         for i, (indices, safe_batch) in batch_generator:
-
-            feed_dict[tf_states] = index_to_state(indices)
+            states = index_to_state(indices)
+            feed_dict[tf_states] = states
+            feed_dict[tf_tau] = np.array([[self.tau]], dtype=config.np_dtype)
 
             # Update the safety with the safe_batch result
-            safe_batch |= tf_negative.eval(feed_dict=feed_dict)
-            # TODO: Make the discretization adaptive?
+            negative = tf_negative.eval(feed_dict=feed_dict)
+            safe_batch |= negative
+
+            # TODO
+            Nreq = np.nan_to_num(tf_Nreq.eval(feed_dict=feed_dict).ravel())
+
+            # If previously classified as safe with some N, choose the
+            # maximum of the old N and the new one
+            Nreq = np.maximum(Nreq, self._N[indices] * self.safe_set[indices])
+
+            # Always set N = 1 if a state satisfies the decrease condition
+            # without discretization refinement
+            Nreq[negative] = 1
+            self._N[indices] = Nreq
 
             # Boolean array: argmin returns first element that is False
             # If all are safe then it returns 0
             bound = np.argmin(safe_batch)
+            refined_bound = 0
 
             # Check if there are unsafe elements in the batch
             if bound > 0 or not safe_batch[0]:
                 # Make sure all following points are labeled as unsafe
                 safe_batch[bound:] = False
-                break
+
+                # *************** ADAPTIVE DISCRETIZATION CHECK ***************
+                if adaptive:
+                    feed_dict[tf_states] = states[bound:, :]
+                    states_to_check = np.logical_and(Nreq[bound:] >= 1,
+                                                     Nreq[bound:] <= Nmax)
+
+                    if np.prod(states_to_check) == 1:
+                        stop = len(states_to_check)
+                    else:
+                        stop = np.argmin(states_to_check)
+
+                    if stop > 0:
+                        dim = int(self.discretization.ndim)
+                        lengths = self.discretization.unit_maxes
+                        centers = states[bound:bound + stop, :]
+                        N = int(Nreq[bound:bound + stop].max())
+
+                        # TODO Replace with functools.partial
+                        gridify = lambda point: local_discretization(point,
+                                                                     lengths,
+                                                                     N)
+                        local_grids = np.apply_along_axis(gridify, 1, centers)
+                        points = local_grids.reshape((-1, dim))
+                        tau = self.tau
+
+                        # N = Nreq[bound:bound + stop].astype(np.int)
+                        # points = np.empty((np.sum(N**dim), dim))
+                        # idx = 0
+                        # for n, c in zip(N, centers):
+                        #     grid = local_discretization(c, lengths, n)
+                        #     offset = n**dim
+                        #     points[idx:idx + offset, :] = grid
+                        #     idx = idx + offset
+                        # div = np.concatenate([n*np.ones(n**d) for n in N])
+                        # negative = np.sum(new_points, axis=1) < tau / div
+
+                        # Lmax = lengths.max()
+                        # spacing = 0.5 * (1 - 1 / N)
+                        #           * Lmax * np.linspace(-1, 1, N)
+                        # discrete_points = np.tile(spacing, (dim, 1))
+                        # mesh = np.meshgrid(*discrete_points, indexing='ij')
+                        # points = np.column_stack(col.ravel() for col in mesh)
+                        # points = np.tile(centers, (1, N**dim))
+                        #           + points.ravel()
+                        # points = points.reshape((-1, dim))
+                        # tau = 0.5 * dim * Lmax
+
+                        feed_dict[tf_states] = points
+                        feed_dict[tf_tau] = np.array([[tau / N]],
+                                                     dtype=config.np_dtype)
+                        safe_points = tf_negative.eval(feed_dict=feed_dict)
+                        safe_points = safe_points.reshape((-1, N**dim))
+                        safe_points = np.prod(safe_points, axis=1)
+
+                        # Determine which states are safe under the finer
+                        # discretization
+                        if np.prod(safe_points) == 1:
+                            refined_bound = len(safe_points)
+                        else:
+                            refined_bound = np.argmin(safe_points)
+                        safe_batch[bound:bound + refined_bound] = True
+
+                    # Break if the refined discretization does not work for all
+                    # states after "bound"
+                    if stop < len(states_to_check) or refined_bound < stop:
+                        break
+                # ************* END ADAPTIVE DISCRETIZATION CHECK *************
+                else:
+                    break
 
         # The largest index of a safe value
-        max_index = i + bound - 1
+        max_index = i + bound + refined_bound - 1
         # Set placeholder for c_max to the corresponding value
         feed_dict[self.c_max] = self.values[value_order[max_index]]
 
@@ -562,27 +700,15 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
         tf_state_actions = tf.placeholder(config.dtype,
                                           shape=[None, state_dim + action_dim])
 
-        tf_mean, tf_std = lyapunov.dynamics(tf_state_actions)
-
-        # TODO
-        tf_next_states = lyapunov.dynamics(tf_safe_states, tf_actions)
-        tf_decrease = lyapunov.v_decrease_bound(tf_safe_states, tf_next_states)
-        tf_threshold = lyapunov.threshold(tf_safe_states)
-        tf_negative = tf.squeeze(tf.less(tf_decrease, tf_threshold), axis=1)
-
         # Account for deviations of the next value due to uncertainty
+        tf_mean, tf_std = lyapunov.dynamics(tf_state_actions)
         tf_bound = tf.reduce_sum(tf_std, axis=1, keep_dims=True)
-
         tf_lv = lyapunov.lipschitz_lyapunov(tf_mean)
         tf_error = tf.reduce_sum(tf_lv * tf_std, axis=1, keep_dims=True)
-        tf_states = tf.slice(tf_state_actions, [0, 0], [-1, state_dim])
-        tf_values = lyapunov.lyapunov_function(tf_states)
-
-        tf_mean_future_vals = lyapunov.lyapunov_function(tf_mean)
-        tf_relative_error = tf_error / tf.abs(tf_mean_future_vals - tf_values)
+        tf_mean_future_values = lyapunov.lyapunov_function(tf_mean)
 
         # Check whether the value is below c_max
-        tf_future_values = tf_mean_future_vals + tf_error
+        tf_future_values = tf_mean_future_values + tf_error
         tf_maps_inside = tf.less(tf_future_values, lyapunov.c_max,
                                  name='maps_inside_levelset')
 
@@ -592,31 +718,14 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
                    ('tf_state_actions', tf_state_actions),
                    ('tf_mean', tf_mean),
                    ('tf_bound', tf_bound),
-                   ('tf_maps_inside', tf_maps_inside),
-                   ('tf_relative_error', tf_relative_error),
-                   ('tf_negative', tf_negative)]
+                   ('tf_maps_inside', tf_maps_inside)]
         set_storage(_STORAGE, storage, index=lyapunov)
     else:
         (tf_safe_states, tf_actions, tf_state_actions,
-         tf_mean, tf_bound, tf_maps_inside,
-         tf_relative_error, tf_negative) = storage.values()
+         tf_mean, tf_bound, tf_maps_inside) = storage.values()
 
     # All the safe states within the discretization
     safe_states = state_disc.index_to_state(np.where(lyapunov.safe_set))
-
-    # # TODO make sure all initial safe states satisfy decrease condition first
-    # initial_mask = np.where(lyapunov.initial_safe_set)
-    # initial_safe_states = state_disc.index_to_state(initial_mask)
-    # # Remove zero-state
-    # mask = np.all(np.abs(initial_safe_states) > 1e-6, axis=1).ravel()
-    # initial_safe_states = initial_safe_states[mask, :]
-    # session = tf.get_default_session()
-    # feed_dict = lyapunov.feed_dict
-    # feed_dict[tf_safe_states] = initial_safe_states
-    # negative = session.run(tf_negative, feed_dict=feed_dict).ravel()
-    # initial_all_decrease = np.all(negative)
-    # if not initial_all_decrease:
-    #     safe_states = initial_safe_states[np.logical_not(negative), :]
 
     # Subsample safe states
     if num_samples is not None and len(safe_states) > num_samples:
@@ -627,17 +736,6 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
     feed_dict = lyapunov.feed_dict
     feed_dict[tf_safe_states] = safe_states
 
-    # TODO
-    # if not initial_all_decrease:
-    #     # Ensuring initial safe states satisfy decrease condition
-    #     safe_actions = tf_actions.eval(feed_dict=feed_dict)
-    #     msg = "Ensuring initial safe states satisfy decrease condition ..."
-    #     warnings.warn(msg, RuntimeWarning)
-    #     zero_perturbation = np.array([[0.]], dtype=config.np_dtype)
-    #     state_actions = perturb_actions(safe_states,
-    #                                     safe_actions,
-    #                                     perturbations=zero_perturbation,
-    #                                     limits=action_limits)
     if perturbations is None:
         # Generate all state-action pairs
         arrays = [arr.ravel() for arr in np.meshgrid(safe_states,
@@ -657,10 +755,9 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
 
     # Evaluate the safety of the proposed state-action pairs
     session = tf.get_default_session()
-    (maps_inside, mean, bound,
-     relative_error) = session.run([tf_maps_inside, tf_mean, tf_bound,
-                                    tf_relative_error],
-                                   feed_dict=lyapunov.feed_dict)
+    (maps_inside, mean, bound) = session.run([tf_maps_inside, tf_mean,
+                                              tf_bound],
+                                             feed_dict=lyapunov.feed_dict)
     maps_inside = maps_inside.squeeze(axis=1)
 
     # Check whether states map back to the safe set in expectation
@@ -671,7 +768,6 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
 
     # Return only state-actions pairs that are safe
     bound_safe = bound[maps_inside]
-    error_safe = relative_error[maps_inside]
     if len(bound_safe) == 0:
         # Nothing is safe, so revert to backup policy
         msg = "No safe state-action pairs found! Using backup policy ..."
@@ -687,10 +783,6 @@ def get_safe_sample(lyapunov, perturbations=None, limits=None, positive=False,
         max_bound = bound[max_id].squeeze()
         return state_actions[[max_id]], max_bound
     else:
-        # max_id = np.argmax(bound_safe)
-        # max_bound = bound_safe[max_id].squeeze()
-        # return state_actions[maps_inside, :][[max_id]], max_bound
-        gamma = 1e-4
-        max_id = np.argmax(bound_safe + gamma * error_safe)
+        max_id = np.argmax(bound_safe)
         max_bound = bound_safe[max_id].squeeze()
         return state_actions[maps_inside, :][[max_id]], max_bound

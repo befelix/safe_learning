@@ -418,7 +418,7 @@ def get_storage(dictionary, index=None):
     index : hashable
         An index under which to store the element. Needs to be hashable.
         This is useful for functions which might be accessed with multiple
-        different arguements.
+        different arguments.
 
     Returns
     -------
