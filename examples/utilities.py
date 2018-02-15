@@ -102,6 +102,9 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
                                                                       tf_error, 
                                                                       tf_true_decrease],
                                                                      feed_dict)
+        if not isinstance(error, np.ndarray):
+            error = np.zeros_like(mean_decrease)
+        
         threshold = threshold.reshape(lyapunov.discretization.num_points)
         mean_decrease = mean_decrease.reshape(lyapunov.discretization.num_points)
         error = error.reshape(lyapunov.discretization.num_points)
@@ -121,8 +124,8 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
             limits = lyapunov.discretization.limits
 
         # Figure
-        fig, ax = plt.subplots(2, 3, figsize=(17, 12), dpi=100)
-        fig.subplots_adjust(wspace=0.5, hspace=0.1)
+        fig, ax = plt.subplots(3, 2, figsize=(12, 18), dpi=100)
+        fig.subplots_adjust(wspace=0.4, hspace=0.1)
         
         cmap = colors.ListedColormap(['indigo', 'yellow', 'orange', 'red'])
         bounds = [0, 1, 2, 3, 4]
@@ -153,31 +156,6 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         cmap.set_under('indigo')
 
         z = - decrease
-        ax[0, 1].set_xlabel(r'$\theta$ [deg]')
-        ax[0, 1].set_ylabel(r'$\omega$ [deg/s]')
-        im = ax[0, 1].imshow(z.T,
-                          origin='lower',
-                          extent=limits.ravel(),
-                          aspect=limits[0, 0] / limits[1, 0],
-                          cmap=cmap,
-                          vmin=0.0,
-                          vmax=1.0)
-        fig.colorbar(im, ax=ax[0, 1], label=r'$-(v(\mu_\pi(x)) - v(x) + error)$')
-        
-        z = - (mean_decrease - threshold)
-        ax[0, 2].set_xlabel(r'$\theta$ [deg]')
-        ax[0, 2].set_ylabel(r'$\omega$ [deg/s]')
-        im = ax[0, 2].imshow(z.T,
-                          origin='lower',
-                          extent=limits.ravel(),
-                          aspect=limits[0, 0] / limits[1, 0],
-                          cmap=cmap,
-                          vmin=0.0,
-                          vmax=1.0)
-        fig.colorbar(im, ax=ax[0, 2], label=r'$-(v(\mu_\pi(x)) - v(x) + L_{\Delta v}\tau)$')
-        
-        z = lyapunov._N.reshape(lyapunov.discretization.num_points) * safe_set
-        Nmax = 10
         ax[1, 0].set_xlabel(r'$\theta$ [deg]')
         ax[1, 0].set_ylabel(r'$\omega$ [deg/s]')
         im = ax[1, 0].imshow(z.T,
@@ -185,9 +163,34 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
                           extent=limits.ravel(),
                           aspect=limits[0, 0] / limits[1, 0],
                           cmap=cmap,
+                          vmin=0.0,
+                          vmax=1.0)
+        fig.colorbar(im, ax=ax[1, 0], label=r'$-(v(\mu_\pi(x)) - v(x) + error)$')
+        
+        z = - (mean_decrease - threshold)
+        ax[2, 0].set_xlabel(r'$\theta$ [deg]')
+        ax[2, 0].set_ylabel(r'$\omega$ [deg/s]')
+        im = ax[2, 0].imshow(z.T,
+                          origin='lower',
+                          extent=limits.ravel(),
+                          aspect=limits[0, 0] / limits[1, 0],
+                          cmap=cmap,
+                          vmin=0.0,
+                          vmax=1.0)
+        fig.colorbar(im, ax=ax[2, 0], label=r'$-(v(\mu_\pi(x)) - v(x) + L_{\Delta v}\tau)$')
+        
+        z = lyapunov._N.reshape(lyapunov.discretization.num_points) * safe_set
+        Nmax = 8
+        ax[0, 1].set_xlabel(r'$\theta$ [deg]')
+        ax[0, 1].set_ylabel(r'$\omega$ [deg/s]')
+        im = ax[0, 1].imshow(z.T,
+                          origin='lower',
+                          extent=limits.ravel(),
+                          aspect=limits[0, 0] / limits[1, 0],
+                          cmap=cmap,
                           vmin=1,
                           vmax=Nmax)
-        fig.colorbar(im, ax=ax[1, 0], label=r'$N$', ticks=np.arange(1, Nmax + 1))
+        fig.colorbar(im, ax=ax[0, 1], label=r'$N$', ticks=np.arange(1, Nmax + 1))
         
         z = - true_decrease
         ax[1, 1].set_xlabel(r'$\theta$ [deg]')
@@ -202,16 +205,16 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         fig.colorbar(im, ax=ax[1, 1], label=r'$-(v(f(x)) - v(x))$')
         
         z = - (true_decrease - threshold)
-        ax[1, 2].set_xlabel(r'$\theta$ [deg]')
-        ax[1, 2].set_ylabel(r'$\omega$ [deg/s]')
-        im = ax[1, 2].imshow(z.T,
+        ax[2, 1].set_xlabel(r'$\theta$ [deg]')
+        ax[2, 1].set_ylabel(r'$\omega$ [deg/s]')
+        im = ax[2, 1].imshow(z.T,
                           origin='lower',
                           extent=limits.ravel(),
                           aspect=limits[0, 0] / limits[1, 0],
                           cmap=cmap,
                           vmin=0.0,
                           vmax=1.0)
-        fig.colorbar(im, ax=ax[1, 2], label=r'$-(v(f(x)) - v(x) + L_{\Delta v}\tau)$')
+        fig.colorbar(im, ax=ax[2, 1], label=r'$-(v(f(x)) - v(x) + L_{\Delta v}\tau)$')
         
         plt.show()
 
