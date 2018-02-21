@@ -30,7 +30,7 @@ tf_dtype = config.dtype
 _STORAGE = {}
             
 
-def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=True, plot=None, 
+def debug(lyapunov, true_dynamics, state_norm, Nmax=4, do_print=False, newly_safe_only=True, plot=None, 
           old_safe_set=None, fixed_state=(0., 0., 0., 0.)):
     
     storage = get_storage(_STORAGE, index=lyapunov)
@@ -180,7 +180,6 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         fig.colorbar(im, ax=ax[2, 0], label=r'$-(v(\mu_\pi(x)) - v(x) + L_{\Delta v}\tau)$')
         
         z = lyapunov._N.reshape(lyapunov.discretization.num_points) * safe_set
-        Nmax = 8
         ax[0, 1].set_xlabel(r'$\theta$ [deg]')
         ax[0, 1].set_ylabel(r'$\omega$ [deg/s]')
         im = ax[0, 1].imshow(z.T,
@@ -264,7 +263,7 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
             
         # Figure
         fig, ax = plt.subplots(4, 2, figsize=(12, 20), dpi=100)
-        fig.subplots_adjust(wspace=0.4, hspace=0.1)
+        fig.subplots_adjust(wspace=0.4, hspace=0.2)
         
         ###################################################################################################
         
@@ -340,8 +339,8 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         ###################################################################################################
         
         # Safe positions set, with fixed velocities
-        # z = - true_dec_pos
-        z = - (true_dec_pos - threshold_vel)
+        z = - true_dec_pos
+        # z = - (true_dec_pos - threshold_vel)
         ax[2, 0].set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
         ax[2, 0].set_xlabel(r'$x$ [m]')
         ax[2, 0].set_ylabel(r'$v$ [m/s]')
@@ -355,8 +354,8 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         cbar = fig.colorbar(im, ax=ax[2, 0], label=r'$-(v(f(x)) - v(x) + L_{\Delta v}\tau)$')
         
         # Safe velocities set, with fixed positions
-        # z = - true_dec_vel
-        z = - (true_dec_vel - threshold_vel)
+        z = - true_dec_vel
+        # z = - (true_dec_vel - threshold_vel)
         ax[2, 1].set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
         ax[2, 1].set_xlabel(r'$\theta$ [deg]')
         ax[2, 1].set_ylabel(r'$\omega$ [deg/s]')
@@ -370,8 +369,6 @@ def debug(lyapunov, true_dynamics, state_norm, do_print=False, newly_safe_only=T
         cbar = fig.colorbar(im, ax=ax[2, 1], label=r'$-(v(f(x)) - v(x) + L_{\Delta v}\tau)$')
         
         ###################################################################################################
-    
-        Nmax = 5000
         
         # Safe positions set, with fixed velocities
         # z = lyapunov._N[pos_set].reshape(lyapunov.discretization.num_points[:2])
