@@ -137,36 +137,6 @@ def get_lyapunov_region(lyapunov, discretization, init_node):
     return visited
 
 
-def local_grid(center, lengths, N):
-    """Create a local discretization around a given point.
-
-    Parameters
-    ----------
-    center : ndarray
-        TODO.
-    tau : float or ndarray
-        TODO.
-    N : int or ndarray
-        TODO.
-
-    Returns
-    -------
-    local_points : ndarray
-        TODO.
-    """
-    # N = np.asarray(N, dtype=np.int).ravel()
-    # center = np.asarray(center, dtype=config.np_dtype).ravel()
-    dim = len(center)
-    lengths = np.asarray(lengths, dtype=config.np_dtype).reshape((-1, 1))
-
-    spacing = np.linspace(-1, 1, N)
-    discrete_points = 0.5 * (1 - 1 / N) * lengths * np.tile(spacing, (dim, 1))
-    mesh = np.meshgrid(*discrete_points, indexing='ij')
-    points = np.column_stack(col.ravel() for col in mesh) + center
-
-    return points
-
-
 class Lyapunov(object):
     """A class for general Lyapunov functions.
 
@@ -196,11 +166,14 @@ class Lyapunov(object):
         discretization).
     initial_set : ndarray, optional
         A boolean array of states that are known to be safe a priori.
+    adaptive : bool, optional
+        A boolean determining whether an adaptive discretization is used for
+        stability verification.
     """
 
     def __init__(self, discretization, lyapunov_function, dynamics,
                  lipschitz_dynamics, lipschitz_lyapunov,
-                 tau, policy, initial_set=None):
+                 tau, policy, initial_set=None, adaptive=False):
         """Initialization, see `Lyapunov` for details."""
         super(Lyapunov, self).__init__()
 
@@ -240,6 +213,7 @@ class Lyapunov(object):
         self._lipschitz_lyapunov = lipschitz_lyapunov
 
         # TODO
+        self.adaptive = adaptive
         self._N = np.zeros(np.prod(discretization.num_points),
                            dtype=np.int)
         self._N[initial_set] = 1
@@ -422,7 +396,7 @@ class Lyapunov(object):
         return v_dot_negative
 
     @with_scope('update_safe_set')
-    def update_safe_set(self, batch_size=10000, adaptive=False, Nmax=4):
+    def update_safe_set(self, batch_size=10000, Nmax=1, buffer=1., threads=1):
         """Compute and update the safe set."""
         storage = get_storage(self._storage)
 
@@ -431,37 +405,76 @@ class Lyapunov(object):
             tf_states = tf.placeholder(config.dtype,
                                        shape=[None, self.discretization.ndim],
                                        name='verification_states')
-            tf_tau = tf.placeholder(config.dtype,
-                                    shape=[None, 1],
-                                    name='discretization_constant')
             tf_actions = self.policy(tf_states)
             next_states = self.dynamics(tf_states, tf_actions)
 
             decrease = self.v_decrease_bound(tf_states, next_states)
-            threshold = self.threshold(tf_states, tf_tau)
+            threshold = self.threshold(tf_states, self.tau)
             tf_negative = tf.squeeze(tf.less(decrease, threshold), axis=1)
 
-            # Compute an integer N required to divide tau down to a
-            # value that allows the decrease condition to be satisfied
+            if self.adaptive:
+                # Adaptive discretization
+                dim = int(self.discretization.ndim)
+                lengths = self.discretization.unit_maxes.reshape((-1, 1))
 
-            # TODO division by zero?
-            # Negative values correspond to non-negative changes in value
-            # that cannot be dealt with by discretizing further - these are
-            # clipped to N = 0
-            tf_Nreq = tf.nn.relu(tf.ceil(1.1 * threshold / decrease))
+                # Compute an integer N such that decrease condition is
+                # satisfied for tau / N
 
-            storage = [('tf_states', tf_states),
-                       ('tf_tau', tf_tau),
-                       ('negative', tf_negative),
-                       ('tf_Nreq', tf_Nreq)]
+                # Non-positive N corresponds to a non-negative change in value
+                # that cannot be dealt with by discretizing further - these are
+                # clipped to N = 0
+
+                tf_Nreq = tf.nn.relu(tf.ceil(buffer * threshold / decrease))
+                tf_refinement = tf.placeholder(tf.int32, [None, 1],
+                                               'refinement')
+
+                def refined_safety_check(data):
+                    """TODO."""
+                    center = tf.reshape(data[:-1], [1, dim])
+                    N = tf.cast(data[-1], tf.int32)
+
+                    start = tf.constant(-1., dtype=config.dtype)
+                    spacing = tf.reshape(tf.linspace(start, 1., N), [1, -1])
+                    border = 0.5 * (1 - 1 / N) * lengths * tf.tile(spacing,
+                                                                   [dim, 1])
+                    mesh = tf.meshgrid(*tf.unstack(border), indexing='ij')
+                    points = tf.stack([tf.reshape(col, [-1]) for col in mesh],
+                                      axis=1)
+                    points += center
+
+                    refined_threshold = self.threshold(center, self.tau / N)
+                    negative = tf.less(decrease, refined_threshold)
+                    refined_negative = tf.reduce_all(negative)
+                    return refined_negative
+
+                data_list = [tf_states, tf.cast(tf_refinement, config.dtype)]
+                data = tf.concat(data_list, axis=1)
+                tf_refined_negative = tf.map_fn(refined_safety_check,
+                                                data,
+                                                dtype=tf.bool,
+                                                parallel_iterations=threads)
+
+                storage = [('tf_states', tf_states),
+                           ('tf_negative', tf_negative),
+                           ('tf_Nreq', tf_Nreq),
+                           ('tf_refinement', tf_refinement),
+                           ('tf_refined_negative', tf_refined_negative)]
+            else:
+                storage = [('tf_states', tf_states),
+                           ('tf_negative', tf_negative)]
+
             set_storage(self._storage, storage)
         else:
-            tf_states, tf_tau, tf_negative, tf_Nreq = storage.values()
+            if self.adaptive:
+                (tf_states, tf_negative, tf_Nreq, tf_refinement,
+                 tf_refined_negative) = storage.values()
+            else:
+                tf_states, tf_negative = storage.values()
 
         # Get relevant properties
         feed_dict = self.feed_dict
 
-        # reset the safe set
+        # Reset the safe set
         safe_set = np.zeros_like(self.safe_set)
         value_order = np.argsort(self.values)
 
@@ -477,14 +490,17 @@ class Lyapunov(object):
         batch_generator = batchify((value_order, safe_set), batch_size)
         index_to_state = self.discretization.index_to_state
 
+        #######################################################################
+
+        # TODO clean up logic
+
         for i, (indices, safe_batch) in batch_generator:
             self._N[indices] = 1
             states = index_to_state(indices)
             feed_dict[tf_states] = states
-            feed_dict[tf_tau] = np.array([[self.tau]], dtype=config.np_dtype)
 
             # Update the safety with the safe_batch result
-            negative = tf_negative.eval(feed_dict=feed_dict)
+            negative = tf_negative.eval(feed_dict)
             safe_batch |= negative
 
             # Boolean array: argmin returns first element that is False
@@ -498,77 +514,48 @@ class Lyapunov(object):
                 safe_batch[bound:] = False
                 self._N[indices[bound:]] = 0
 
-                # *************** ADAPTIVE DISCRETIZATION CHECK ***************
-                if adaptive:
+                if self.adaptive:
                     feed_dict[tf_states] = states[bound:, :]
-                    Nreq = np.nan_to_num(tf_Nreq.eval(feed_dict=feed_dict))
-                    states_to_check = np.logical_and(Nreq >= 1, Nreq <= Nmax)
+                    Nreq = tf_Nreq.eval(feed_dict).astype(np.int)
 
+                    # Set NaN values from divisions by decrease = 0 as N = 0
+                    np.nan_to_num(Nreq, copy=False)
+
+                    states_to_check = np.logical_and(Nreq >= 1, Nreq <= Nmax)
                     if np.prod(states_to_check) == 1:
                         stop = len(states_to_check)
                     else:
                         stop = np.argmin(states_to_check)
 
                     if stop > 0:
-                        dim = int(self.discretization.ndim)
-                        lengths = self.discretization.unit_maxes
-                        tau = self.tau
-                        centers = states[bound:bound + stop, :]
-
-                        # 'Vectorized' method
-                        # N = int(Nreq[:stop].max())
-                        # # TODO Replace with functools.partial
-                        # gridify = lambda p: local_grid(p, lengths, N)
-                        # local_grids = np.apply_along_axis(gridify, 1,
-                        #                                   centers)
-                        # points = local_grids.reshape((-1, dim))
-                        # feed_dict[tf_states] = points
-                        # feed_dict[tf_tau] = np.array([[tau / N]],
-                        #                              dtype=config.np_dtype)
-                        # safe_points = tf_negative.eval(feed_dict=feed_dict)
-                        # safe_points = safe_points.reshape((-1, N**dim))
-                        # safe_points = np.prod(safe_points, axis=1)
-
-                        # 'Looping' method
-                        # TODO parallelize this
-                        N = Nreq[:stop].astype(np.int).ravel()
-                        splits = np.cumsum(N)
-                        points = np.empty((np.sum(N**dim), dim))
-                        idx = 0
-                        for n, c in zip(N, centers):
-                            grid = local_grid(c, lengths, n)
-                            offset = n**dim
-                            points[idx:idx + offset, :] = grid
-                            idx += offset
-                        div = np.concatenate([n * np.ones(n**dim) for n in N])
-                        tau = (self.tau / div).reshape((-1, 1))
-                        feed_dict[tf_states] = points
-                        feed_dict[tf_tau] = tau.astype(config.np_dtype)
-                        safe_points = tf_negative.eval(feed_dict=feed_dict)
-                        safe_points = [np.prod(safe_points[i:i + splits[i]])
-                                       for i in range(stop)]
+                        N = Nreq[:stop]
+                        feed_dict[tf_states] = states[bound:bound + stop, :]
+                        feed_dict[tf_refinement] = N
+                        refined_safety = tf_refined_negative.eval(feed_dict)
 
                         # Determine which states are safe under the finer
                         # discretization
-                        if np.prod(safe_points) == 1:
-                            refined_bound = len(safe_points)
+                        if np.prod(refined_safety) == 1:
+                            refined_bound = len(refined_safety)
                         else:
-                            refined_bound = np.argmin(safe_points)
+                            refined_bound = np.argmin(refined_safety)
                         safe_batch[bound:bound + refined_bound] = True
 
                         idx = indices[bound:bound + refined_bound]
-                        self._N[idx] = N[:refined_bound]
+                        self._N[idx] = N[:refined_bound].ravel()
 
                     # Break if the refined discretization does not work for all
                     # states after "bound"
                     if stop < len(states_to_check) or refined_bound < stop:
                         break
-                # ************* END ADAPTIVE DISCRETIZATION CHECK *************
                 else:
                     break
 
         # The largest index of a safe value
         max_index = i + bound + refined_bound - 1
+
+        #######################################################################
+
         # Set placeholder for c_max to the corresponding value
         feed_dict[self.c_max] = self.values[value_order[max_index]]
 
