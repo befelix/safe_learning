@@ -75,6 +75,7 @@ class Function(object):
         -------
         outputs : list
             The output arguments of the function as given by evaluate.
+
         """
         with tf.name_scope('evaluate'):
             outputs = self._template(*args, **kwargs)
@@ -91,6 +92,7 @@ class Function(object):
         Returns
         -------
         outputs : list
+
         """
         raise NotImplementedError('This function has to be implemented by the'
                                   'child class.')
@@ -127,6 +129,7 @@ class AddedFunction(Function):
     ----------
     fun1 : instance of Function or scalar
     fun2 : instance of Function or scalar
+
     """
 
     def __init__(self, fun1, fun2):
@@ -164,6 +167,7 @@ class MultipliedFunction(Function):
     ----------
     fun1 : instance of Function or scalar
     fun2 : instance of Function or scalar
+
     """
 
     def __init__(self, fun1, fun2):
@@ -215,6 +219,7 @@ class UncertainFunction(Function):
             -------
             function : callable
                 The modified function.
+
             """
             def new_function(*points):
                 return function(*points)[0]
@@ -253,6 +258,7 @@ class FunctionStack(UncertainFunction):
     ----------
     functions : list
         The functions. There should be one for each dimension of the output.
+
     """
 
     def __init__(self, functions, name='function_stack'):
@@ -295,6 +301,7 @@ class FunctionStack(UncertainFunction):
         y : ndarray
             A 2d array with the new measurements to add to the GP model.
             Each measurements is on a new row.
+
         """
         for fun, yi in zip(self.functions, y.squeeze()):
             fun.add_data_point(x, yi)
@@ -310,6 +317,7 @@ class Saturation(DeterministicFunction):
         Lower bound. Passed to `tf.clip_by_value`.
     upper : float or arraylike
         Upper bound. Passed to `tf.clip_by_value`.
+
     """
 
     def __init__(self, fun, lower, upper, name='saturation'):
@@ -355,11 +363,14 @@ class GPRCached(gpflow.gpr.GPR):
     y : ndarray
         A 2d array with measurements to initialize the GP model. Each
         measurement is on a row.
+    scale : float, optional
+        An internal scaling factor used during GP prediction for improved
+        numerical stability.
 
     """
 
     def __init__(self, x, y, kern, mean_function=gpflow.mean_functions.Zero(),
-                 scaling=1., name='GPRCached'):
+                 scale=1., name='GPRCached'):
         """Initialize GP and cholesky decomposition."""
         # Make sure gpflow is imported
         if not isinstance(gpflow, ModuleType):
@@ -369,26 +380,32 @@ class GPRCached(gpflow.gpr.GPR):
         gpflow.gpr.GPR.__init__(self, x, y, kern, mean_function, name)
 
         # Create new dataholders for the cached data
+        # TODO zero-dim dataholders cause strange allocator errors in
+        # tensorflow with MKL
         dtype = config.np_dtype
         self.cholesky = gpflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
                                                 on_shape_change='pass')
         self.alpha = gpflow.param.DataHolder(np.empty((0, 0), dtype=dtype),
                                              on_shape_change='pass')
-        self._scaling = scaling
+        self._scale = scale
         self.update_cache()
 
     @with_scope('compute_cache')
     @gpflow.param.AutoFlow()
     def _compute_cache(self):
         """Compute cache."""
+        # Scaled kernel
         identity = tf.eye(tf.shape(self.X)[0], dtype=config.dtype)
         kernel = self.kern.K(self.X) + identity * self.likelihood.variance
+        kernel *= (self._scale ** 2)
 
-        cholesky = tf.cholesky((self._scaling ** 2) * kernel,
-                               name='gp_cholesky')
+        # Scaled target
+        target = self._scale * (self.Y - self.mean_function(self.X))
 
-        target = self._scaling * (self.Y - self.mean_function(self.X))
+        # Cholesky decomposition
+        cholesky = tf.cholesky(kernel, name='gp_cholesky')
         alpha = tf.matrix_triangular_solve(cholesky, target, name='gp_alpha')
+
         return cholesky, alpha
 
     def update_cache(self):
@@ -415,21 +432,28 @@ class GPRCached(gpflow.gpr.GPR):
             Diagonal of the covariance matrix (or full matrix).
 
         """
-        Kx = (self._scaling ** 2) * self.kern.K(self.X, Xnew)
+        # Scaled kernel and mean
+        Kx = (self._scale ** 2) * self.kern.K(self.X, Xnew)
+        mx = self._scale * self.mean_function(Xnew)
+
         a = tf.matrix_triangular_solve(self.cholesky, Kx, lower=True)
-        fmean = (tf.matmul(a, self.alpha, transpose_a=True)
-                 + self._scaling * self.mean_function(Xnew))
+        fmean = (tf.matmul(a, self.alpha, transpose_a=True) + mx)
+
         if full_cov:
-            fvar = ((self._scaling ** 2) * self.kern.K(Xnew)
-                    - tf.matmul(a, a, transpose_a=True))
+            Knew = (self._scale ** 2) * self.kern.K(Xnew)
+            fvar = Knew - tf.matmul(a, a, transpose_a=True)
             shape = tf.stack([1, 1, tf.shape(self.Y)[1]])
             fvar = tf.tile(tf.expand_dims(fvar, 2), shape)
         else:
-            fvar = ((self._scaling ** 2) * self.kern.Kdiag(Xnew)
-                    - tf.reduce_sum(tf.square(a), 0))
-            fvar = tf.tile(tf.reshape(fvar, (-1, 1)),
-                           [1, tf.shape(self.Y)[1]])
-        return fmean / self._scaling, fvar / (self._scaling ** 2)
+            Knew = (self._scale ** 2) * self.kern.Kdiag(Xnew)
+            fvar = Knew - tf.reduce_sum(tf.square(a), 0)
+            fvar = tf.tile(tf.reshape(fvar, (-1, 1)), [1, tf.shape(self.Y)[1]])
+
+        # Apply inverse-scaling to mean and variance before returning
+        fmean /= self._scale
+        fvar /= (self._scale ** 2)
+
+        return fmean, fvar
 
 
 class GaussianProcess(UncertainFunction):
@@ -448,6 +472,7 @@ class GaussianProcess(UncertainFunction):
     The evaluate and gradient functions can be called with multiple
     arguments, in which case they are concatenated before being
     passed to the GP.
+
     """
 
     def __init__(self, gaussian_process, beta=2., name='gaussian_process'):
@@ -508,6 +533,7 @@ class GaussianProcess(UncertainFunction):
         y : ndarray
             A 2d array with the new measurements to add to the GP model.
             Each measurements is on a new row.
+
         """
         gp = self.gaussian_process
         gp.X = np.vstack((self.X, np.atleast_2d(x)))
@@ -531,6 +557,7 @@ class ScipyDelaunay(spatial.Delaunay):
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
     num_points: 1d array-like
         The number of points with which to grid each dimension.
+
     """
 
     def __init__(self, limits, num_points):
@@ -556,6 +583,7 @@ class GridWorld(object):
         A list of limits. For example, [(x_min, x_max), (y_min, y_max)]
     num_points: 1d array-like
         The number of points with which to grid each dimension.
+
     """
 
     def __init__(self, limits, num_points):
@@ -598,11 +626,13 @@ class GridWorld(object):
         points : ndarray
             An array with all the discrete points with size
             (self.nindex, self.ndim).
+
         """
         if self._all_points is None:
             mesh = np.meshgrid(*self.discrete_points, indexing='ij')
             points = np.column_stack(col.ravel() for col in mesh)
             self._all_points = points.astype(config.np_dtype)
+
         return self._all_points
 
     def __len__(self):
@@ -620,6 +650,7 @@ class GridWorld(object):
         -------
         points : ndarray
             Random points on the continuous rectangle.
+
         """
         limits = self.limits
         rand = np.random.uniform(0, 1, size=(num_samples, self.ndim))
@@ -638,6 +669,7 @@ class GridWorld(object):
         -------
         points : ndarray
             Random points on the continuous rectangle.
+
         """
         idx = np.random.choice(self.nindex, size=num_samples, replace=replace)
         return self.index_to_state(idx)
@@ -648,6 +680,7 @@ class GridWorld(object):
         Parameters
         ----------
         states : ndarray
+
         """
         if not states.shape[1] == self.ndim:
             raise DimensionError('the input argument has the wrong '
@@ -665,6 +698,7 @@ class GridWorld(object):
         Returns
         -------
         offset_states : ndarray
+
         """
         states = np.atleast_2d(states).astype(config.np_dtype)
         states = states - self.offset[None, :]
@@ -687,6 +721,7 @@ class GridWorld(object):
         -------
         states : ndarray
             The states with physical units that correspond to the indices.
+
         """
         indices = np.atleast_1d(indices)
         ijk_index = np.vstack(np.unravel_index(indices, self.num_points)).T
@@ -705,6 +740,7 @@ class GridWorld(object):
         -------
         indices: ndarray (int)
             The indices that correspond to the physical states.
+
         """
         states = np.atleast_2d(states)
         self._check_dimensions(states)
@@ -725,6 +761,7 @@ class GridWorld(object):
         -------
         rectangles : ndarray (int)
             The indices that correspond to rectangles of the physical states.
+
         """
         ind = []
         for i, (discrete, num_points) in enumerate(zip(self.discrete_points,
@@ -750,6 +787,7 @@ class GridWorld(object):
         states : ndarray
             The states that correspond to the bottom-left corners of the
             corresponding rectangles.
+
         """
         rectangles = np.atleast_1d(rectangles)
         ijk_index = np.vstack(np.unravel_index(rectangles,
@@ -769,6 +807,7 @@ class GridWorld(object):
         -------
         corners : ndarray (int)
             The indices of the bottom-left corners of the rectangles.
+
         """
         ijk_index = np.vstack(np.unravel_index(rectangles,
                                                self.num_points - 1))
@@ -785,6 +824,7 @@ class PiecewiseConstant(DeterministicFunction):
         For example, an instance of `GridWorld`.
     vertex_values: arraylike, optional
         A 2D array with the values at the vertices of the grid on each row.
+
     """
 
     def __init__(self, discretization, vertex_values=None):
@@ -839,6 +879,7 @@ class PiecewiseConstant(DeterministicFunction):
         -------
         values : ndarray
             The function values at the points.
+
         """
         nodes = self.discretization.state_to_index(points)
         return self.parameters[nodes]
@@ -860,6 +901,7 @@ class PiecewiseConstant(DeterministicFunction):
         -------
         values
             A sparse matrix B so that evaluate(points) = B.dot(parameters).
+
         """
         npoints = len(points)
         weights = np.ones(npoints, dtype=np.int)
@@ -883,6 +925,7 @@ class PiecewiseConstant(DeterministicFunction):
         -------
         gradient : ndarray
             The function gradient at the points.
+
         """
         return np.broadcast_to(0, (len(points), self.input_dim))
 
@@ -894,6 +937,7 @@ class _Delaunay1D(object):
     ----------
     points : ndarray
         Coordinates of points to triangulate, shape (2, 1).
+
     """
 
     def __init__(self, points):
@@ -924,6 +968,7 @@ class _Delaunay1D(object):
         indices : ndarray
             Indices of simplices containing each point. Points outside the
             triangulation get the value -1.
+
         """
         points = points.squeeze()
         out_of_bounds = points > self._max
@@ -949,6 +994,7 @@ class _Triangulation(DeterministicFunction):
         A 2D array with the values at the vertices of the grid on each row.
     project: bool, optional
         Whether to project points onto the limits.
+
     """
 
     def __init__(self, discretization, vertex_values=None, project=False):
@@ -1024,6 +1070,7 @@ class _Triangulation(DeterministicFunction):
         Notes
         -----
         This is only used once in the initialization.
+
         """
         disc = self.discretization
         simplices = self.triangulation.simplices
@@ -1062,6 +1109,7 @@ class _Triangulation(DeterministicFunction):
         -------
         simplices : np.array (int)
             The indices of the simplices
+
         """
         disc = self.discretization
         rectangles = disc.state_to_rectangle(points)
@@ -1091,6 +1139,7 @@ class _Triangulation(DeterministicFunction):
         -------
         simplices : ndarray
             Each row consists of the indices of the simplex corners.
+
         """
         # Get the indices inside the unit rectangle
         unit_indices = np.remainder(indices, self.triangulation.nsimplex)
@@ -1119,7 +1168,8 @@ class _Triangulation(DeterministicFunction):
         weights : ndarray
             An array that contains the linear weights for each point.
         simplices : ndarray
-            The indeces of the simplices associated with each points
+            The indices of the simplices associated with each points
+
         """
         disc = self.discretization
         simplex_ids = self.find_simplex(points)
@@ -1162,6 +1212,7 @@ class _Triangulation(DeterministicFunction):
         -------
         values : ndarray
             The function values at the points.
+
         """
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
@@ -1189,6 +1240,7 @@ class _Triangulation(DeterministicFunction):
         -------
         values
             A sparse matrix B so that evaluate(points) = B.dot(parameters).
+
         """
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights(points)
@@ -1197,7 +1249,7 @@ class _Triangulation(DeterministicFunction):
         nsimp = self.input_dim + 1
         npoints = len(simplices)
         # Indices of constraints (nsimp points per simplex, so we have nsimp
-        #  values in each row; one for each simplex)
+        # values in each row; one for each simplex)
         rows = np.repeat(np.arange(len(points)), nsimp)
         cols = simplices.ravel()
 
@@ -1219,7 +1271,8 @@ class _Triangulation(DeterministicFunction):
         weights : ndarray
             An array that contains the linear weights for each point.
         simplices : ndarray
-            The indeces of the simplices associated with each points
+            The indices of the simplices associated with each points
+
         """
         if points is None:
             simplex_ids = np.atleast_1d(indices)
@@ -1257,9 +1310,10 @@ class _Triangulation(DeterministicFunction):
         -------
         gradient : ndarray
             The function gradient at the points. A 3D array with the gradient
-            at the ith data points for the jth output with regard to the kth
-            dimension stored at (i, j, k). The jth dimension is squeezed out
+            at the i-th data points for the j-th output with regard to the k-th
+            dimension stored at (i, j, k). The j-th dimension is squeezed out
             for 1D functions.
+
         """
         points = np.atleast_2d(points)
         weights, simplices = self._get_weights_gradient(points)
@@ -1292,6 +1346,7 @@ class _Triangulation(DeterministicFunction):
             A sparse matrix so that
             `grad(points) = B.dot(vertex_val).reshape(ndim, -1)` corresponds
             to the true gradients
+
         """
         weights, simplices = self._get_weights_gradient(points=points,
                                                         indices=indices)
@@ -1334,6 +1389,7 @@ class Triangulation(DeterministicFunction):
         Whether to project points onto the limits.
     name : string
         The tensorflow scope for all methods.
+
     """
 
     def __init__(self, discretization, vertex_values, project=False,
@@ -1397,7 +1453,8 @@ class Triangulation(DeterministicFunction):
         hyperplanes : ndarray
             The corresponding hyperplane objects.
         simplices : ndarray
-            The indeces of the simplices associated with each points
+            The indices of the simplices associated with each points
+
         """
         simplex_ids = self.tri.find_simplex(points)
 
@@ -1425,7 +1482,7 @@ class Triangulation(DeterministicFunction):
         # Compute weights (barycentric coordinates)
         offset = points - origins
         w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
-        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
+        w0 = 1 - tf.reduce_sum(w1, axis=1, keepdims=True)
         weights = tf.concat((w0, w1), axis=1)
 
         # Collect the value on the vertices
@@ -1457,6 +1514,7 @@ class QuadraticFunction(DeterministicFunction):
     ----------
     matrix : np.array
         2d cost matrix for lyapunov function.
+
     """
 
     def __init__(self, matrix, name='quadratic'):
@@ -1473,7 +1531,7 @@ class QuadraticFunction(DeterministicFunction):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
-        return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
+        return tf.reduce_sum(quadratic, axis=1, keepdims=True)
 
     def gradient(self, points):
         """Return the gradient of the function."""
@@ -1490,6 +1548,7 @@ class LinearSystem(DeterministicFunction):
     *matrices : list
         Can specify an arbitrary amount of matrices for the linear system. Each
         is multiplied by the corresponding state that is passed to evaluate.
+
     """
 
     def __init__(self, matrices, name='linear_system'):
@@ -1514,6 +1573,7 @@ class LinearSystem(DeterministicFunction):
         -------
         values : tf.Tensor
             A 2D array with the function values at the points.
+
         """
         return tf.matmul(points, self.matrix.T, transpose_b=False)
 
@@ -1543,6 +1603,7 @@ def sample_gp_function(discretization, gpfun, number=1, return_function=True):
         returns the corresponding noisy function values as a tensor. If
         noise=False is set the true function values are returned (useful for
         plotting).
+
     """
     if isinstance(discretization, GridWorld):
         discretization = discretization.all_points
@@ -1611,20 +1672,24 @@ class NeuralNetwork(DeterministicFunction):
     nonlinearities : list
         A list of nonlinearities applied after each layer. Can be None if no
         nonlinearity should be applied.
+    output_scale : float, optional
+        A constant scaling factor applied to the neural network output.
+    use_bias : bool, optional
+        A boolean determining whether bias terms are included in each hidden
+        layer; bias terms are never used in the output layer.
     name : string, optional
+
     """
 
-    def __init__(self, layers, nonlinearities, scaling=None,
+    def __init__(self, layers, nonlinearities, output_scale=1., use_bias=True,
                  name='neural_network'):
         """Initialization, see `NeuralNetwork`."""
         super(NeuralNetwork, self).__init__(name=name)
 
         self.layers = layers
         self.nonlinearities = nonlinearities
-        if scaling is None:
-            self.output_scaling = 1.
-        else:
-            self.output_scaling = scaling
+        self.output_scale = output_scale
+        self.use_bias = use_bias
 
         self.input_dim = layers[0]
         self.output_dim = layers[-1]
@@ -1642,11 +1707,11 @@ class NeuralNetwork(DeterministicFunction):
             net = tf.layers.dense(net,
                                   units=layer,
                                   activation=activation,
+                                  use_bias=self.use_bias,
                                   kernel_initializer=initializer,
                                   name='layer_{}'.format(i))
 
         # Output layer
-        # initializer = tf.constant_initializer()
         net = tf.layers.dense(net,
                               units=self.layers[-1],
                               activation=self.nonlinearities[-1],
@@ -1654,8 +1719,8 @@ class NeuralNetwork(DeterministicFunction):
                               kernel_initializer=initializer,
                               name='output')
 
-        # Scale output range from (-1, 1)
-        out = tf.multiply(net, self.output_scaling, name='scaling')
+        # Scale output range
+        out = tf.multiply(net, self.output_scale, name='output_scale')
         return out
 
     def _parameter_iter(self):
@@ -1681,6 +1746,7 @@ class NeuralNetwork(DeterministicFunction):
         -------
         lipschitz : Tensor
             The Lipschitz constant of the neural network.
+
         """
         lipschitz = tf.constant(1, config.dtype)
 
@@ -1704,6 +1770,7 @@ class NeuralNetwork(DeterministicFunction):
         -------
         s : Tensor
             The singular values of A.
+
         """
         S0, U0, V0 = map(tf.stop_gradient,
                          tf.svd(A, full_matrices=True, name=name))
