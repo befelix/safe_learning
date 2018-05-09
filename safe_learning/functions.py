@@ -1475,14 +1475,22 @@ class Triangulation(DeterministicFunction):
 
         # Project points onto the grid of triangles.
         if self.project:
-            points = tf.clip_by_value(points,
-                                      self.tri.limits[:, 0],
-                                      self.tri.limits[:, 1])
+            clip_value_min = self.tri.limits[:, 0]
+            clip_value_max = self.tri.limits[:, 1]
+
+            # TODO broadcasting prevented in TensorFlow >= 1.6.0
+            # clip_value_min = self.tri.limits[:, 0].reshape([1, -1])
+            # clip_value_max = self.tri.limits[:, 1].reshape([1, -1])
+            # if self.input_dim == 1:
+            #     clip_value_min = clip_value_min[0]
+            #     clip_value_max = clip_value_max[0]
+
+            points = tf.clip_by_value(points, clip_value_min, clip_value_max)
 
         # Compute weights (barycentric coordinates)
         offset = points - origins
         w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
-        w0 = 1 - tf.reduce_sum(w1, axis=1, keepdims=True)
+        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
         weights = tf.concat((w0, w1), axis=1)
 
         # Collect the value on the vertices
@@ -1531,7 +1539,7 @@ class QuadraticFunction(DeterministicFunction):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
-        return tf.reduce_sum(quadratic, axis=1, keepdims=True)
+        return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
 
     def gradient(self, points):
         """Return the gradient of the function."""
