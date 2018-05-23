@@ -349,7 +349,11 @@ class Saturation(DeterministicFunction):
     def build_evaluation(self, points):
         """Evaluation, see `DeterministicFunction.evaluate`."""
         res = self.fun.build_evaluation(points)
-        return tf.clip_by_value(res, self.lower, self.upper)
+
+        # TODO broadcasting in tf.clip_by_value not available
+        # in TensorFlow >= 1.6.0
+        # return tf.clip_by_value(res, self.lower, self.upper)
+        return tf.minimum(tf.maximum(res, self.lower), self.upper)
 
 
 class GPRCached(gpflow.gpr.GPR):
@@ -1475,17 +1479,13 @@ class Triangulation(DeterministicFunction):
 
         # Project points onto the grid of triangles.
         if self.project:
-            clip_value_min = self.tri.limits[:, 0]
-            clip_value_max = self.tri.limits[:, 1]
+            clip_min = self.tri.limits[:, 0]
+            clip_max = self.tri.limits[:, 1]
 
-            # TODO broadcasting prevented in TensorFlow >= 1.6.0
-            # clip_value_min = self.tri.limits[:, 0].reshape([1, -1])
-            # clip_value_max = self.tri.limits[:, 1].reshape([1, -1])
-            # if self.input_dim == 1:
-            #     clip_value_min = clip_value_min[0]
-            #     clip_value_max = clip_value_max[0]
-
-            points = tf.clip_by_value(points, clip_value_min, clip_value_max)
+            # TODO broadcasting in tf.clip_by_value not available
+            # in TensorFlow >= 1.6.0
+            # points = tf.clip_by_value(points, clip_min, clip_max)
+            points = tf.minimum(tf.maximum(points, clip_min), clip_max)
 
         # Compute weights (barycentric coordinates)
         offset = points - origins
