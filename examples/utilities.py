@@ -11,8 +11,7 @@ from scipy import signal
 from safe_learning import DeterministicFunction
 from safe_learning import UncertainFunction
 from safe_learning import config
-from safe_learning.utilities import (concatenate_inputs, get_storage,
-                                     set_storage)
+from safe_learning.utilities import (concatenate_inputs, get_storage, set_storage)
 from collections import OrderedDict
 from pandas import DataFrame
 import matplotlib.pyplot as plt
@@ -117,306 +116,6 @@ class LyapunovNetwork(DeterministicFunction):
             kernel = W0.T.dot(W0) + mapping.eps * np.eye(W0.shape[1])
             eigvals, _ = np.linalg.eig(kernel)
             print('Eigenvalues of (W0.T*W0 + eps*I):', eigvals, '\n')
-
-
-def debug(lyapunov, true_dynamics, state_norm, Nmax=None, do_print=False, newly_safe_only=True, plot=None, old_safe_set=None, fixed_state=(0., 0., 0., 0.)):
-
-    storage = get_storage(_STORAGE, index=lyapunov)
-    if storage is None:
-        tf_states = tf.placeholder(TF_DTYPE, shape=[None, lyapunov.discretization.ndim], name='states')
-        tf_actions = lyapunov.policy(tf_states)
-        tf_values = lyapunov.lyapunov_function(tf_states)
-
-        tf_future_states = lyapunov.dynamics(tf_states, tf_actions)
-        tf_mean_decrease, tf_error = lyapunov.v_decrease_confidence(tf_states, tf_future_states)
-        tf_threshold = lyapunov.threshold(tf_states, lyapunov.tau)
-
-        tf_true_future_states = true_dynamics(tf_states, tf_actions)
-        tf_true_decrease = lyapunov.lyapunov_function(tf_true_future_states) - tf_values
-
-        storage = [('tf_states', tf_states),
-                   ('tf_values', tf_values),
-                   ('tf_threshold', tf_threshold),
-                   ('tf_mean_decrease', tf_mean_decrease),
-                   ('tf_error', tf_error),
-                   ('tf_true_decrease', tf_true_decrease)]
-        set_storage(_STORAGE, storage, index=lyapunov)
-    else:
-        tf_states, tf_values, tf_threshold, tf_mean_decrease, tf_error, tf_true_decrease = storage.values()
-
-    session = tf.get_default_session()
-    feed_dict = lyapunov.feed_dict
-
-    if do_print:
-        # print('Dynamics Lipschitz constant (L_f*(L_pi + 1)): {}'.format(lyapunov.lipschitz_dynamics(0).eval()))
-        print('beta: {}'.format(lyapunov.dynamics.functions[0].beta))
-        print('tau: {}'.format(lyapunov.tau))
-        print('c_n: {}\n'.format(lyapunov.feed_dict[lyapunov.c_max]))
-
-        # Only consider those states that became safe from updating the model
-        if newly_safe_only:
-            safe_set = np.logical_xor(lyapunov.safe_set, lyapunov.initial_safe_set)
-        else:
-            safe_set = lyapunov.safe_set
-        safe_states = lyapunov.discretization.all_points[safe_set, :]
-
-        if len(safe_states) == 0:
-            print('\nNo new safe states! Try collecting more data to improve model.')
-        else:
-            feed_dict[tf_states] = safe_states
-            values, mean_decrease, error, threshold = session.run([tf_values, tf_mean_decrease, tf_error, tf_threshold], feed_dict)
-
-            # Use pandas frame for nice printing
-            decrease = mean_decrease + error
-            N = np.clip(np.ceil(threshold / decrease).astype(np.int), 0, None)
-            tau = lyapunov.tau / N
-
-            data = OrderedDict()
-            order = np.argsort(values.ravel())
-
-            data['v(x)'] = values[order].ravel()
-            data['v(mu) - v(x)'] = mean_decrease[order].ravel()
-            data['error'] = error[order].ravel()
-            data['N'] = N[order].ravel()
-            data['tau req.'] = tau[order].ravel()
-
-            frame = DataFrame(data)
-            print(frame, '\n')
-
-    if plot=='pendulum':
-        plt.rc('font', size=5)
-        plt.rc('lines', markersize=3)
-
-        feed_dict[tf_states] = lyapunov.discretization.all_points
-        threshold, mean_decrease, error, true_decrease = session.run([tf_threshold, tf_mean_decrease, tf_error, tf_true_decrease], feed_dict)
-        if not isinstance(error, np.ndarray):
-            error = np.zeros_like(mean_decrease)
-
-        if isinstance(threshold, np.ndarray) and threshold.shape[0] > 1:
-            threshold = threshold.reshape(lyapunov.discretization.num_points)
-        mean_decrease = mean_decrease.reshape(lyapunov.discretization.num_points)
-        error = error.reshape(lyapunov.discretization.num_points)
-        true_decrease = true_decrease.reshape(lyapunov.discretization.num_points)
-        decrease = mean_decrease + error
-
-        safe_set = lyapunov.safe_set
-        # if old_safe_set is not None:
-        #     safe_set = safe_set.astype(NP_DTYPE) + old_safe_set.astype(NP_DTYPE)
-        safe_set = safe_set.reshape(lyapunov.discretization.num_points).astype(int)
-
-        if state_norm is not None:
-            theta_max, omega_max = state_norm
-            scale = np.array([np.rad2deg(theta_max), np.rad2deg(omega_max)]).reshape((-1, 1))
-            limits = scale * lyapunov.discretization.limits
-        else:
-            limits = lyapunov.discretization.limits
-
-        # Figure
-        fig, axes = plt.subplots(2, 3, figsize=(8, 4), dpi=DPI)
-        fig.subplots_adjust(wspace=0.6, hspace=0.15)
-        for ax in axes.ravel():
-            ax.set_xlabel(r'$\theta$ [deg]')
-            ax.set_ylabel(r'$\omega$ [deg/s]')
-
-        cmap = colors.ListedColormap(['indigo', 'yellow', 'orange', 'red'])
-        bounds = [0, 1, 2, 3, 4]
-        norm = colors.BoundaryNorm(bounds, cmap.N)
-
-        #
-        z = (decrease < threshold).astype(int) + 2 * safe_set
-        ax = axes[0, 0]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=cmap, norm=norm)
-        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
-        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
-        if isinstance(lyapunov.dynamics, UncertainFunction):
-            if state_norm is not None:
-                theta_max, omega_max = state_norm
-                scale = np.array([np.rad2deg(theta_max), np.rad2deg(omega_max)]).ravel()
-                X = scale * lyapunov.dynamics.functions[0].X[:, :2]
-            else:
-                X = lyapunov.dynamics.functions[0].X[:, :2]
-            ax.plot(X[:, 0], X[:, 1], 'kx')
-
-        #
-        cmap = plt.get_cmap('viridis', lut=None)
-        cmap.set_over('gold')
-        cmap.set_under('indigo')
-        z = lyapunov._n.reshape(lyapunov.discretization.num_points)
-        ax = axes[1, 0]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=cmap, vmin=1)
-        fig.colorbar(im, ax=ax, label=r'$N$')
-
-        #
-        z = decrease
-        ax = axes[0, 1]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
-        fig.colorbar(im, ax=ax, label=r'$v(\mu_\pi(x)) - v(x) + error$')
-
-        #
-        z = true_decrease
-        ax = axes[1, 1]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
-        fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
-
-        #
-        z = mean_decrease - threshold
-        ax = axes[0, 2]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
-        fig.colorbar(im, ax=ax, label=r'$v(\mu_\pi(x)) - v(x) + L_{\Delta v}\tau$')
-
-        #
-        z = true_decrease - threshold
-        ax = axes[1, 2]
-        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
-        fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
-
-        plt.show()
-
-    elif plot=='cartpole':
-        safe_set = lyapunov.safe_set
-        fixed_state = np.asarray(fixed_state, dtype=NP_DTYPE)
-        for i in range(4):
-            dist = np.square(lyapunov.discretization.discrete_points[i] - fixed_state[i])
-            idx = np.argmin(dist)
-            fixed_state[i] = lyapunov.discretization.discrete_points[i][idx]
-        x_fix, theta_fix, v_fix, omega_fix = fixed_state
-
-        pos_set = np.logical_and(lyapunov.discretization.all_points[:, 1] == theta_fix, lyapunov.discretization.all_points[:, 3] == omega_fix)
-        vel_set = np.logical_and(lyapunov.discretization.all_points[:, 0] == x_fix, lyapunov.discretization.all_points[:, 2] == v_fix)
-
-        feed_dict[tf_states] = lyapunov.discretization.all_points[pos_set, :]
-        threshold_pos, dec_pos, true_dec_pos = session.run([tf_threshold, tf_mean_decrease + tf_error, tf_true_decrease], feed_dict)
-        if np.prod(threshold_pos.shape) > 1:
-            threshold_pos = threshold_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
-        dec_pos = dec_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
-        true_dec_pos = true_dec_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
-        safe_pos = safe_set[pos_set].reshape(lyapunov.discretization.num_points[(0, 2), ]).astype(NP_DTYPE)
-
-        feed_dict[tf_states] = lyapunov.discretization.all_points[vel_set, :]
-        threshold_vel, dec_vel, true_dec_vel = session.run([tf_threshold, tf_mean_decrease + tf_error, tf_true_decrease], feed_dict)
-        if np.prod(threshold_vel.shape) > 1:
-            threshold_vel = threshold_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
-        dec_vel = dec_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
-        true_dec_vel = true_dec_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
-        safe_vel = safe_set[vel_set].reshape(lyapunov.discretization.num_points[(1, 3), ]).astype(NP_DTYPE)
-
-        if state_norm is not None:
-            x_max, theta_max, v_max, omega_max = state_norm
-            scale = np.array([x_max, np.rad2deg(theta_max), v_max, np.rad2deg(omega_max)]).reshape((-1, 1))
-            limits = scale * lyapunov.discretization.limits
-            x_fix, theta_fix, v_fix, omega_fix = fixed_state * scale.ravel()
-        else:
-            limits = lyapunov.discretization.limits
-
-        # Figure
-        plt.rc('font', size=6)
-        fig, axes = plt.subplots(2, 4, figsize=(12, 6), dpi=DPI)
-        fig.subplots_adjust(wspace=0.6, hspace=0.1)
-
-        ###################################################################################################
-
-        # Colormap
-        cmap = colors.ListedColormap(['indigo', 'yellow', 'orange', 'red'])
-        bounds = [0, 1, 2, 3, 4]
-        norm = colors.BoundaryNorm(bounds, cmap.N)
-
-        #
-        z = (dec_pos < threshold_pos) + 2 * safe_pos
-        ax = axes[0, 0]
-        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$v$ [m/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=cmap, norm=norm)
-        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
-        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
-
-        #
-        z = (dec_vel < threshold_vel) + 2 * safe_vel
-        ax = axes[1, 0]
-        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
-        ax.set_xlabel(r'$\theta$ [deg]')
-        ax.set_ylabel(r'$\omega$ [deg/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=cmap, norm=norm)
-        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
-        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
-
-        ###################################################################################################
-
-        cmap = plt.get_cmap('viridis')
-        cmap.set_under('indigo')
-        cmap.set_over('gold')
-
-        #
-        z = dec_pos
-        ax = axes[0, 1]
-        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$v$ [m/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=HEAT_MAP, vmax=0.0)
-        cbar = fig.colorbar(im, ax=ax, label=r'$v(\mu(x)) - v(x) + error$')
-
-        #
-        z = dec_vel
-        ax = axes[1, 1]
-        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
-        ax.set_xlabel(r'$\theta$ [deg]')
-        ax.set_ylabel(r'$\omega$ [deg/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=HEAT_MAP, vmax=0.0)
-        cbar = fig.colorbar(im, ax=ax, label=r'$v(\mu(x)) - v(x) + error$')
-
-        ###################################################################################################
-
-        #
-        # z = true_dec_pos
-        z = true_dec_pos - threshold_vel
-        ax = axes[0, 2]
-        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$v$ [m/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=HEAT_MAP, vmax=0.0)
-        # cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
-        cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
-
-        #
-        # z = true_dec_vel
-        z = true_dec_vel - threshold_vel
-        ax = axes[1, 2]
-        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
-        ax.set_xlabel(r'$\theta$ [deg]')
-        ax.set_ylabel(r'$\omega$ [deg/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=HEAT_MAP, vmax=0.0)
-        # cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
-        cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
-
-        ###################################################################################################
-
-        #
-        if Nmax is None:
-            z = lyapunov._n[pos_set].reshape(lyapunov.discretization.num_points[(0, 2), ])
-        else:
-            z = np.clip(np.ceil(np.divide(threshold_pos, dec_pos, out=np.ones_like(dec_pos), where=dec_pos!=0)), 0, None)
-        ax = axes[0, 3]
-        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
-        ax.set_xlabel(r'$x$ [m]')
-        ax.set_ylabel(r'$v$ [m/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=LEVEL_MAP, vmin=1, vmax=Nmax)
-        cbar = fig.colorbar(im, ax=ax, label=r'$N$') #, ticks=np.arange(1, Nmax + 1))
-
-        #
-        if Nmax is None:
-            z = lyapunov._n[vel_set].reshape(lyapunov.discretization.num_points[(1, 3), ])
-        else:
-            z = np.clip(np.ceil(np.divide(threshold_vel, dec_vel, out=np.ones_like(dec_vel), where=dec_vel!=0)), 0, None)
-        ax = axes[1, 3]
-        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
-        ax.set_xlabel(r'$\theta$ [deg]')
-        ax.set_ylabel(r'$\omega$ [deg/s]')
-        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=LEVEL_MAP, vmin=1, vmax=Nmax)
-        cbar = fig.colorbar(im, ax=ax, label=r'$N$') #, ticks=np.arange(1, Nmax + 1))
-
-        ###################################################################################################
-
-        plt.show()
 
 
 class RBFNetwork(DeterministicFunction):
@@ -718,6 +417,101 @@ def import_from_directory(library, path):
             return importlib.import_module(library)
 
 
+class ContinuousTimeDynamicSystem(DeterministicFunction):
+    """TODO."""
+    def __init__(self, dt=0.01, normalization=None, name='Dynamics'):
+        """Initialization; see `ContinuousTimeDynamicSystem`."""
+        super(ContinuousTimeDynamicSystem, self).__init__(name)
+        self.dt = dt
+        # self.state_dim = 4
+        # self.action_dim = 1
+        self.normalization = normalization
+        if normalization is not None:
+            self.normalization = [np.array(norm, dtype=config.np_dtype)
+                                  for norm in normalization]
+            self.inv_norm = [norm ** -1 for norm in self.normalization]
+        
+
+class VanDerPol(DeterministicFunction):
+    """Van der Pol oscillator."""
+    def __init__(self, dt=0.01, normalization=None):
+        """Initialization; see `VanDerPol`."""
+        super(VanDerPol, self).__init__(name='VanDerPol')
+        self.dt = dt
+        self.state_dim = 2
+        self.action_dim = 0
+        self.normalization = normalization
+        if normalization is not None:
+            self.normalization = np.array(normalization, dtype=config.np_dtype)
+            self.inv_norm = self.normalization ** -1
+
+    def normalize(self, state):
+        """Normalize states and actions."""
+        if self.normalization is None:
+            return state
+        Tx_inv = np.diag(self.inv_norm)
+        state = tf.matmul(state, Tx_inv)
+        return state
+
+    def denormalize(self, state):
+        """De-normalize states and actions."""
+        if self.normalization is None:
+            return state
+        Tx = np.diag(self.normalization)
+        state = tf.matmul(state, Tx)
+        return state
+
+    def linearize(self):
+        """Return the discretized, scaled, linearized system.
+
+        Returns
+        -------
+        Ad : ndarray
+            The discrete-time state matrix.
+
+        """
+        A = np.array([[0, -1], [1, -1]], dtype=config.np_dtype)
+        if self.normalization is not None:
+            Tx = np.diag(self.normalization)
+            Tx_inv = np.diag(self.inv_norm)
+            A = np.linalg.multi_dot((Tx_inv, A, Tx))
+        B = np.zeros([2, 1])
+        Ad, _, _, _, _ = signal.cont2discrete((A, B, 0, 0), self.dt, method='zoh')
+        return Ad
+
+    @concatenate_inputs(start=1)
+    def build_evaluation(self, state_action):
+        """Evaluate the dynamics."""
+        state, _ = tf.split(state_action, [2, 1], axis=1)
+        state = self.denormalize(state)
+        inner_euler_steps = 10
+        dt = self.dt / inner_euler_steps
+        for _ in range(inner_euler_steps):
+            state_derivative = self.ode(state)
+            state = state + dt * state_derivative
+        return self.normalize(state)
+
+    def ode(self, state):
+        """Compute the state time-derivative.
+
+        Parameters
+        ----------
+        state: ndarray or Tensor
+            States.
+
+        Returns
+        -------
+        state_derivative: Tensor
+            The state derivative according to the dynamics.
+
+        """
+        x, y = tf.split(state, 2, axis=1)
+        x_dot = - y
+        y_dot = x + (x ** 2 - 1) * y
+        state_derivative = tf.concat((x_dot, y_dot), axis=1)
+        return state_derivative
+
+
 class CartPole(DeterministicFunction):
     """Cart with mounted inverted pendulum.
 
@@ -1011,3 +805,304 @@ class InvertedPendulum(DeterministicFunction):
 
         # Normalize
         return state_derivative
+
+
+
+def debug(lyapunov, true_dynamics, state_norm, Nmax=None, do_print=False, newly_safe_only=True, plot=None, old_safe_set=None, fixed_state=(0., 0., 0., 0.)):
+
+    storage = get_storage(_STORAGE, index=lyapunov)
+    if storage is None:
+        tf_states = tf.placeholder(TF_DTYPE, shape=[None, lyapunov.discretization.ndim], name='states')
+        tf_actions = lyapunov.policy(tf_states)
+        tf_values = lyapunov.lyapunov_function(tf_states)
+
+        tf_future_states = lyapunov.dynamics(tf_states, tf_actions)
+        tf_mean_decrease, tf_error = lyapunov.v_decrease_confidence(tf_states, tf_future_states)
+        tf_threshold = lyapunov.threshold(tf_states, lyapunov.tau)
+
+        tf_true_future_states = true_dynamics(tf_states, tf_actions)
+        tf_true_decrease = lyapunov.lyapunov_function(tf_true_future_states) - tf_values
+
+        storage = [('tf_states', tf_states),
+                   ('tf_values', tf_values),
+                   ('tf_threshold', tf_threshold),
+                   ('tf_mean_decrease', tf_mean_decrease),
+                   ('tf_error', tf_error),
+                   ('tf_true_decrease', tf_true_decrease)]
+        set_storage(_STORAGE, storage, index=lyapunov)
+    else:
+        tf_states, tf_values, tf_threshold, tf_mean_decrease, tf_error, tf_true_decrease = storage.values()
+
+    session = tf.get_default_session()
+    feed_dict = lyapunov.feed_dict
+
+    if do_print:
+        # print('Dynamics Lipschitz constant (L_f*(L_pi + 1)): {}'.format(lyapunov.lipschitz_dynamics(0).eval()))
+        print('beta: {}'.format(lyapunov.dynamics.functions[0].beta))
+        print('tau: {}'.format(lyapunov.tau))
+        print('c_n: {}\n'.format(lyapunov.feed_dict[lyapunov.c_max]))
+
+        # Only consider those states that became safe from updating the model
+        if newly_safe_only:
+            safe_set = np.logical_xor(lyapunov.safe_set, lyapunov.initial_safe_set)
+        else:
+            safe_set = lyapunov.safe_set
+        safe_states = lyapunov.discretization.all_points[safe_set, :]
+
+        if len(safe_states) == 0:
+            print('\nNo new safe states! Try collecting more data to improve model.')
+        else:
+            feed_dict[tf_states] = safe_states
+            values, mean_decrease, error, threshold = session.run([tf_values, tf_mean_decrease, tf_error, tf_threshold], feed_dict)
+
+            # Use pandas frame for nice printing
+            decrease = mean_decrease + error
+            N = np.clip(np.ceil(threshold / decrease).astype(np.int), 0, None)
+            tau = lyapunov.tau / N
+
+            data = OrderedDict()
+            order = np.argsort(values.ravel())
+
+            data['v(x)'] = values[order].ravel()
+            data['v(mu) - v(x)'] = mean_decrease[order].ravel()
+            data['error'] = error[order].ravel()
+            data['N'] = N[order].ravel()
+            data['tau req.'] = tau[order].ravel()
+
+            frame = DataFrame(data)
+            print(frame, '\n')
+
+    if plot=='pendulum':
+        plt.rc('font', size=5)
+        plt.rc('lines', markersize=3)
+
+        feed_dict[tf_states] = lyapunov.discretization.all_points
+        threshold, mean_decrease, error, true_decrease = session.run([tf_threshold, tf_mean_decrease, tf_error, tf_true_decrease], feed_dict)
+        if not isinstance(error, np.ndarray):
+            error = np.zeros_like(mean_decrease)
+
+        if isinstance(threshold, np.ndarray) and threshold.shape[0] > 1:
+            threshold = threshold.reshape(lyapunov.discretization.num_points)
+        mean_decrease = mean_decrease.reshape(lyapunov.discretization.num_points)
+        error = error.reshape(lyapunov.discretization.num_points)
+        true_decrease = true_decrease.reshape(lyapunov.discretization.num_points)
+        decrease = mean_decrease + error
+
+        safe_set = lyapunov.safe_set
+        # if old_safe_set is not None:
+        #     safe_set = safe_set.astype(NP_DTYPE) + old_safe_set.astype(NP_DTYPE)
+        safe_set = safe_set.reshape(lyapunov.discretization.num_points).astype(int)
+
+        if state_norm is not None:
+            theta_max, omega_max = state_norm
+            scale = np.array([np.rad2deg(theta_max), np.rad2deg(omega_max)]).reshape((-1, 1))
+            limits = scale * lyapunov.discretization.limits
+        else:
+            limits = lyapunov.discretization.limits
+
+        # Figure
+        fig, axes = plt.subplots(2, 3, figsize=(8, 4), dpi=DPI)
+        fig.subplots_adjust(wspace=0.6, hspace=0.15)
+        for ax in axes.ravel():
+            ax.set_xlabel(r'$\theta$ [deg]')
+            ax.set_ylabel(r'$\omega$ [deg/s]')
+
+        cmap = colors.ListedColormap(['indigo', 'yellow', 'orange', 'red'])
+        bounds = [0, 1, 2, 3, 4]
+        norm = colors.BoundaryNorm(bounds, cmap.N)
+
+        #
+        z = (decrease < threshold).astype(int) + 2 * safe_set
+        ax = axes[0, 0]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=cmap, norm=norm)
+        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
+        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
+        if isinstance(lyapunov.dynamics, UncertainFunction):
+            if state_norm is not None:
+                theta_max, omega_max = state_norm
+                scale = np.array([np.rad2deg(theta_max), np.rad2deg(omega_max)]).ravel()
+                X = scale * lyapunov.dynamics.functions[0].X[:, :2]
+            else:
+                X = lyapunov.dynamics.functions[0].X[:, :2]
+            ax.plot(X[:, 0], X[:, 1], 'kx')
+
+        #
+        cmap = plt.get_cmap('viridis', lut=None)
+        cmap.set_over('gold')
+        cmap.set_under('indigo')
+        z = lyapunov._n.reshape(lyapunov.discretization.num_points)
+        ax = axes[1, 0]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=cmap, vmin=1)
+        fig.colorbar(im, ax=ax, label=r'$N$')
+
+        #
+        z = decrease
+        ax = axes[0, 1]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
+        fig.colorbar(im, ax=ax, label=r'$v(\mu_\pi(x)) - v(x) + error$')
+
+        #
+        z = true_decrease
+        ax = axes[1, 1]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
+        fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
+
+        #
+        z = mean_decrease - threshold
+        ax = axes[0, 2]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
+        fig.colorbar(im, ax=ax, label=r'$v(\mu_\pi(x)) - v(x) + L_{\Delta v}\tau$')
+
+        #
+        z = true_decrease - threshold
+        ax = axes[1, 2]
+        im = ax.imshow(z.T, origin='lower', extent=limits.ravel(), aspect=limits[0, 0] / limits[1, 0], cmap=HEAT_MAP, vmax=0.)
+        fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
+
+        plt.show()
+
+    elif plot=='cartpole':
+        safe_set = lyapunov.safe_set
+        fixed_state = np.asarray(fixed_state, dtype=NP_DTYPE)
+        for i in range(4):
+            dist = np.square(lyapunov.discretization.discrete_points[i] - fixed_state[i])
+            idx = np.argmin(dist)
+            fixed_state[i] = lyapunov.discretization.discrete_points[i][idx]
+        x_fix, theta_fix, v_fix, omega_fix = fixed_state
+
+        pos_set = np.logical_and(lyapunov.discretization.all_points[:, 1] == theta_fix, lyapunov.discretization.all_points[:, 3] == omega_fix)
+        vel_set = np.logical_and(lyapunov.discretization.all_points[:, 0] == x_fix, lyapunov.discretization.all_points[:, 2] == v_fix)
+
+        feed_dict[tf_states] = lyapunov.discretization.all_points[pos_set, :]
+        threshold_pos, dec_pos, true_dec_pos = session.run([tf_threshold, tf_mean_decrease + tf_error, tf_true_decrease], feed_dict)
+        if np.prod(threshold_pos.shape) > 1:
+            threshold_pos = threshold_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
+        dec_pos = dec_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
+        true_dec_pos = true_dec_pos.reshape(lyapunov.discretization.num_points[(0, 2), ])
+        safe_pos = safe_set[pos_set].reshape(lyapunov.discretization.num_points[(0, 2), ]).astype(NP_DTYPE)
+
+        feed_dict[tf_states] = lyapunov.discretization.all_points[vel_set, :]
+        threshold_vel, dec_vel, true_dec_vel = session.run([tf_threshold, tf_mean_decrease + tf_error, tf_true_decrease], feed_dict)
+        if np.prod(threshold_vel.shape) > 1:
+            threshold_vel = threshold_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
+        dec_vel = dec_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
+        true_dec_vel = true_dec_vel.reshape(lyapunov.discretization.num_points[(1, 3), ])
+        safe_vel = safe_set[vel_set].reshape(lyapunov.discretization.num_points[(1, 3), ]).astype(NP_DTYPE)
+
+        if state_norm is not None:
+            x_max, theta_max, v_max, omega_max = state_norm
+            scale = np.array([x_max, np.rad2deg(theta_max), v_max, np.rad2deg(omega_max)]).reshape((-1, 1))
+            limits = scale * lyapunov.discretization.limits
+            x_fix, theta_fix, v_fix, omega_fix = fixed_state * scale.ravel()
+        else:
+            limits = lyapunov.discretization.limits
+
+        # Figure
+        plt.rc('font', size=6)
+        fig, axes = plt.subplots(2, 4, figsize=(12, 6), dpi=DPI)
+        fig.subplots_adjust(wspace=0.6, hspace=0.1)
+
+        ###################################################################################################
+
+        # Colormap
+        cmap = colors.ListedColormap(['indigo', 'yellow', 'orange', 'red'])
+        bounds = [0, 1, 2, 3, 4]
+        norm = colors.BoundaryNorm(bounds, cmap.N)
+
+        #
+        z = (dec_pos < threshold_pos) + 2 * safe_pos
+        ax = axes[0, 0]
+        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+        ax.set_xlabel(r'$x$ [m]')
+        ax.set_ylabel(r'$v$ [m/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=cmap, norm=norm)
+        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
+        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
+
+        #
+        z = (dec_vel < threshold_vel) + 2 * safe_vel
+        ax = axes[1, 0]
+        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax.set_xlabel(r'$\theta$ [deg]')
+        ax.set_ylabel(r'$\omega$ [deg/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=cmap, norm=norm)
+        cbar = fig.colorbar(im, ax=ax, boundaries=bounds, ticks=[0.5, 1.5, 2.5, 3.5])
+        cbar.ax.set_yticklabels(['unsafe\n$\Delta v \geq 0$', 'unsafe\n$\Delta v < 0$', 'safe\n$\Delta v \geq 0$', 'safe\n$\Delta v < 0$'])
+
+        ###################################################################################################
+
+        cmap = plt.get_cmap('viridis')
+        cmap.set_under('indigo')
+        cmap.set_over('gold')
+
+        #
+        z = dec_pos
+        ax = axes[0, 1]
+        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+        ax.set_xlabel(r'$x$ [m]')
+        ax.set_ylabel(r'$v$ [m/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=HEAT_MAP, vmax=0.0)
+        cbar = fig.colorbar(im, ax=ax, label=r'$v(\mu(x)) - v(x) + error$')
+
+        #
+        z = dec_vel
+        ax = axes[1, 1]
+        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax.set_xlabel(r'$\theta$ [deg]')
+        ax.set_ylabel(r'$\omega$ [deg/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=HEAT_MAP, vmax=0.0)
+        cbar = fig.colorbar(im, ax=ax, label=r'$v(\mu(x)) - v(x) + error$')
+
+        ###################################################################################################
+
+        #
+        # z = true_dec_pos
+        z = true_dec_pos - threshold_vel
+        ax = axes[0, 2]
+        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+        ax.set_xlabel(r'$x$ [m]')
+        ax.set_ylabel(r'$v$ [m/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=HEAT_MAP, vmax=0.0)
+        # cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
+        cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
+
+        #
+        # z = true_dec_vel
+        z = true_dec_vel - threshold_vel
+        ax = axes[1, 2]
+        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax.set_xlabel(r'$\theta$ [deg]')
+        ax.set_ylabel(r'$\omega$ [deg/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=HEAT_MAP, vmax=0.0)
+        # cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x)$')
+        cbar = fig.colorbar(im, ax=ax, label=r'$v(f(x)) - v(x) + L_{\Delta v}\tau$')
+
+        ###################################################################################################
+
+        #
+        if Nmax is None:
+            z = lyapunov._n[pos_set].reshape(lyapunov.discretization.num_points[(0, 2), ])
+        else:
+            z = np.clip(np.ceil(np.divide(threshold_pos, dec_pos, out=np.ones_like(dec_pos), where=dec_pos!=0)), 0, None)
+        ax = axes[0, 3]
+        ax.set_title(r'$\theta = %.3g$ deg, $\omega = %.3g$ deg/s' % (theta_fix, omega_fix))
+        ax.set_xlabel(r'$x$ [m]')
+        ax.set_ylabel(r'$v$ [m/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(0, 2), :].ravel(), aspect=limits[0, 0] / limits[2, 0], cmap=LEVEL_MAP, vmin=1, vmax=Nmax)
+        cbar = fig.colorbar(im, ax=ax, label=r'$N$') #, ticks=np.arange(1, Nmax + 1))
+
+        #
+        if Nmax is None:
+            z = lyapunov._n[vel_set].reshape(lyapunov.discretization.num_points[(1, 3), ])
+        else:
+            z = np.clip(np.ceil(np.divide(threshold_vel, dec_vel, out=np.ones_like(dec_vel), where=dec_vel!=0)), 0, None)
+        ax = axes[1, 3]
+        ax.set_title(r'$x = %.3g$ m, $v = %.3g$ m/s' % (x_fix, v_fix))
+        ax.set_xlabel(r'$\theta$ [deg]')
+        ax.set_ylabel(r'$\omega$ [deg/s]')
+        im = ax.imshow(z.T, origin='lower', extent=limits[(1, 3), :].ravel(), aspect=limits[1, 0] / limits[3, 0], cmap=LEVEL_MAP, vmin=1, vmax=Nmax)
+        cbar = fig.colorbar(im, ax=ax, label=r'$N$') #, ticks=np.arange(1, Nmax + 1))
+
+        ###################################################################################################
+
+        plt.show()
