@@ -434,9 +434,10 @@ class ContinuousTimeDynamicSystem(DeterministicFunction):
 
 class VanDerPol(DeterministicFunction):
     """Van der Pol oscillator."""
-    def __init__(self, dt=0.01, normalization=None):
+    def __init__(self, damping=1, dt=0.01, normalization=None):
         """Initialization; see `VanDerPol`."""
         super(VanDerPol, self).__init__(name='VanDerPol')
+        self.damping = damping
         self.dt = dt
         self.state_dim = 2
         self.action_dim = 0
@@ -507,7 +508,7 @@ class VanDerPol(DeterministicFunction):
         """
         x, y = tf.split(state, 2, axis=1)
         x_dot = - y
-        y_dot = x + (x ** 2 - 1) * y
+        y_dot = x + self.damping * (x ** 2 - 1) * y
         state_derivative = tf.concat((x_dot, y_dot), axis=1)
         return state_derivative
 
