@@ -2,5 +2,5 @@ numpy
 scipy
 matplotlib
 cvxpy<=1
-tensorflow>=1.0.0
+tensorflow>=1.6.0
 future

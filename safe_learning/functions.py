@@ -350,9 +350,7 @@ class Saturation(DeterministicFunction):
         """Evaluation, see `DeterministicFunction.evaluate`."""
         res = self.fun.build_evaluation(points)
 
-        # TODO broadcasting in tf.clip_by_value not available
-        # in TensorFlow >= 1.6.0
-        # return tf.clip_by_value(res, self.lower, self.upper)
+        # Broadcasting in tf.clip_by_value not available in TensorFlow >= 1.6.0
         return tf.minimum(tf.maximum(res, self.lower), self.upper)
 
 
@@ -1482,15 +1480,14 @@ class Triangulation(DeterministicFunction):
             clip_min = self.tri.limits[:, 0]
             clip_max = self.tri.limits[:, 1]
 
-            # TODO broadcasting in tf.clip_by_value not available
-            # in TensorFlow >= 1.6.0
-            # points = tf.clip_by_value(points, clip_min, clip_max)
+            # Broadcasting in tf.clip_by_value not available in
+            # TensorFlow >= 1.6.0
             points = tf.minimum(tf.maximum(points, clip_min), clip_max)
 
         # Compute weights (barycentric coordinates)
         offset = points - origins
         w1 = tf.reduce_sum(offset[:, :, None] * hyperplanes, axis=1)
-        w0 = 1 - tf.reduce_sum(w1, axis=1, keep_dims=True)
+        w0 = 1 - tf.reduce_sum(w1, axis=1, keepdims=True)
         weights = tf.concat((w0, w1), axis=1)
 
         # Collect the value on the vertices
@@ -1539,7 +1536,7 @@ class QuadraticFunction(DeterministicFunction):
         """Like evaluate, but returns a tensorflow tensor instead."""
         linear_form = tf.matmul(points, self.matrix)
         quadratic = linear_form * points
-        return tf.reduce_sum(quadratic, axis=1, keep_dims=True)
+        return tf.reduce_sum(quadratic, axis=1, keepdims=True)
 
     def gradient(self, points):
         """Return the gradient of the function."""
