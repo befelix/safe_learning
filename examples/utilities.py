@@ -15,7 +15,7 @@ from safe_learning.utilities import (concatenate_inputs, get_storage, set_storag
 from collections import OrderedDict
 from pandas import DataFrame
 import matplotlib.pyplot as plt
-from matplotlib import colors
+from matplotlib.colors import ListedColormap
 if sys.version_info.major == 2:
     import imp
 
@@ -34,6 +34,132 @@ HEAT_MAP.set_under('black')
 LEVEL_MAP = plt.get_cmap('viridis', lut=18)
 LEVEL_MAP.set_over('gold')
 LEVEL_MAP.set_under('indigo')
+
+
+def tf_function_compose(tf_input, tf_function, num_compositions, output_name='function_composition', **kwargs):
+    '''Apply a function multiple times to the input.'''
+    
+    def body(intermediate, idx):
+        intermediate = tf_function(intermediate, **kwargs)
+        idx = idx + 1
+        return intermediate, idx
+
+    def condition(rollout, states, idx):
+        return idx < num_compositions
+
+    initial_idx = tf.constant(0, dtype=TF_DTYPE)
+    initial_intermediate = tf_input
+    shape_invariants = [initial_intermediate.get_shape(), initial_idx.get_shape()]
+    tf_output, _ = tf.while_loop(condition, body, [initial_intermediate, initial_idx], shape_invariants, name=output_name)
+    
+    return tf_output
+
+
+def gridify(norms, maxes=None, num_points=25):    
+    norms = np.asarray(norms).ravel()
+    if maxes is None:
+        maxes = norms
+    else:
+        maxes = np.asarray(maxes).ravel()
+    limits = np.column_stack((- maxes / norms, maxes / norms))
+    
+    if isinstance(num_points, int):
+        num_points = [num_points, ] * len(norms)
+    grid = safe_learning.GridWorld(limits, num_points)
+    return grid
+
+
+def compute_roa(grid, closed_loop_dynamics, horizon=100, tol=1e-3, equilibrium=None, no_traj=True):
+    if isinstance(grid, np.ndarray):
+        all_points = grid
+        nindex = grid.shape[0]
+        ndim = grid.shape[1]
+    else: # grid is a GridWorld instance
+        all_points = grid.all_points
+        nindex = grid.nindex
+        ndim = grid.ndim
+    
+    # Forward-simulate all trajectories from initial points in the discretization
+    if no_traj:
+        end_states = all_points
+        for t in range(1, horizon):
+            end_states = closed_loop_dynamics(end_states)
+    else:
+        trajectories = np.empty((nindex, ndim, horizon))
+        trajectories[:, :, 0] = all_points
+        for t in range(1, horizon):
+            trajectories[:, :, t] = closed_loop_dynamics(trajectories[:, :, t - 1])
+        end_states = trajectories[:, :, -1]
+            
+    if equilibrium is None:
+        equilibrium = np.zeros((1, ndim))
+    
+    # Compute an approximate ROA as all states that end up "close" to 0
+    dists = np.linalg.norm(end_states - equilibrium, ord=2, axis=1, keepdims=True).ravel()
+    roa = (dists <= tol)
+    if no_traj:
+        return roa
+    else:
+        return roa, trajectories
+
+
+def binary_cmap(color='red', alpha=1.):
+    if color=='red':
+        color_code = (1., 0., 0., alpha)
+    elif color=='green':
+        color_code = (0., 1., 0., alpha)
+    elif color=='blue':
+        color_code = (0., 0., 1., alpha)
+    else:
+        color_code = color
+    transparent_code = (1., 1., 1., 0.)
+    return ListedColormap([transparent_code, color_code])
+
+
+def find_nearest(array, value, sorted_1d=True):
+    if not sorted_1d:
+        array = np.sort(array)
+    idx = np.searchsorted(array, value, side='left')
+    if idx > 0 and (idx == len(array) or np.abs(value - array[idx - 1]) < np.abs(value - array[idx])):
+        idx -= 1
+    return idx, array[idx]
+
+def balanced_confusion_weights(y, y_true, scale_by_total=True):
+    y = y.astype(np.bool)
+    y_true = y_true.astype(np.bool)
+    
+    # Assuming labels in {0, 1}, count entries from confusion matrix
+    TP = ( y &  y_true).sum()
+    TN = (~y & ~y_true).sum()
+    FP = ( y & ~y_true).sum()
+    FN = (~y &  y_true).sum()
+    confusion_counts = np.array([[TN, FN], [FP, TP]])
+    
+    # Scale up each sample by inverse of confusion weight
+    weights = np.ones_like(y, dtype=float)
+    weights[ y &  y_true] /= TP
+    weights[~y & ~y_true] /= TN
+    weights[ y & ~y_true] /= FP
+    weights[~y &  y_true] /= FN
+    if scale_by_total:
+        weights *= y.size
+    
+    return weights, confusion_counts
+
+
+def balanced_class_weights(y_true, scale_by_total=True):
+    y = y_true.astype(np.bool)
+    nP = y.sum()
+    nN = y.size - y.sum()
+    class_counts = np.array([nN, nP])
+    
+    weights = np.ones_like(y, dtype=float)
+    weights[ y] /= nP
+    weights[~y] /= nN
+    if scale_by_total:
+        weights *= y.size
+    
+    return weights, class_counts
 
 
 class LyapunovNetwork(DeterministicFunction):
