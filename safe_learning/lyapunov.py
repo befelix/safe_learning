@@ -262,14 +262,14 @@ class Lyapunov(object):
         else:
             return self._lipschitz_lyapunov
 
-    def threshold(self, states, tau):
+    def threshold(self, states, tau=None):
         """Return the safety threshold for the Lyapunov condition.
 
         Parameters
         ----------
         states : ndarray or Tensor
 
-        tau : float or Tensor
+        tau : float or Tensor, optional
             Discretization constant to consider.
 
         Returns
@@ -279,6 +279,8 @@ class Lyapunov(object):
             whether lipschitz_lyapunov and lipschitz_dynamics are local or not.
 
         """
+        if tau is None:
+            tau = self.tau
         lv = self.lipschitz_lyapunov(states)
         if hasattr(self._lipschitz_lyapunov, '__call__') and lv.shape[1] > 1:
             lv = tf.norm(lv, ord=1, axis=1, keepdims=True)
@@ -403,8 +405,7 @@ class Lyapunov(object):
         return v_dot_negative
 
     @with_scope('update_safe_set')
-    def update_safe_set(self, can_shrink=True, n_max=1, safety_factor=1.,
-                        parallel_iterations=1):
+    def update_safe_set(self, can_shrink=True, n_max=1, parallel_iterations=1):
         """Compute and update the safe set.
 
         Parameters
@@ -414,9 +415,6 @@ class Lyapunov(object):
             initial safe set must be verified again.
         n_max : int, optional
             The maximum integer divisor used for adaptive discretization.
-        safety_factor : float, optional
-            A multiplicative factor used to conservatively estimate the
-            required adaptive discretization.
         parallel_iterations : int, optional
             The number of parallel iterations to use for safety verification in
             the adaptive case. Passed to `tf.map_fn`.

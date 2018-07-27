@@ -31,9 +31,9 @@ HEAT_MAP = plt.get_cmap('inferno', lut=None)
 HEAT_MAP.set_over('white')
 HEAT_MAP.set_under('black')
 
-LEVEL_MAP = plt.get_cmap('viridis', lut=18)
+LEVEL_MAP = plt.get_cmap('viridis', lut=21)
 LEVEL_MAP.set_over('gold')
-LEVEL_MAP.set_under('indigo')
+LEVEL_MAP.set_under('white')
 
 
 def tf_function_compose(tf_input, tf_function, num_compositions, output_name='function_composition', **kwargs):
