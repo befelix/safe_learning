@@ -18,10 +18,35 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 from __future__ import absolute_import
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../'))
 
+import sys
+import os
+import shlex
+import mock
+
+MOCK_MODULES = ['tensorflow',
+                'gpflow',
+                'future',
+                'future.builtins',
+                'future.backports',
+                'mpl_toolkits',
+                'mpl_toolkits.mplot3d',
+                'matplotlib',
+                'matplotlib.pyplot',
+                'numpy',
+                'scipy',
+                'scipy.interpolate',
+                'scipy.spatial',
+                'scipy.linalg',
+                'scipy.spatial.distance',
+                'scipy.special',
+                'scipy.stats',
+                ]
+
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
+
+sys.path.insert(0, os.path.abspath('../'))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
