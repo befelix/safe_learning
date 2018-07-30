@@ -9,4 +9,5 @@ __pycache__
 docs/safe_learning.*
 docs/_build
 *.swp
-
+*.DS_Store
+.pytest_cache

@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import
 from numpy.testing import assert_equal, assert_allclose
 import pytest
 import numpy as np
-from scipy.optimize import check_grad
 import tensorflow as tf
 
 from safe_learning.functions import (_Triangulation, Triangulation,
@@ -38,11 +37,11 @@ class TestFunction(object):
             def build_evaluation(self, point):
                 return self.variable * point
 
-        with tf.Session() as sess:
-            return A, sess
+        sess = tf.Session()
+        return A, sess
 
     def test_class(self, testing_class):
-        """Test the the class is working."""
+        """Test that the class is working."""
         A, sess = testing_class
         with sess.as_default():
             a = A(2.)
@@ -109,7 +108,7 @@ class TestFunction(object):
             assert a.parameters[0] is b.parameters[0]
 
     def test_copy(self, testing_class):
-        """Test copying"""
+        """Test copying."""
         A, sess = testing_class
         with sess.as_default():
             a = A(2.)
