@@ -236,7 +236,7 @@ def batchify(arrays, batch_size):
     if not isinstance(arrays, (list, tuple)):
         arrays = (arrays,)
 
-    # Iterate over array in batche
+    # Iterate over array in batches
     for i, i_next in zip(itertools.count(start=0, step=batch_size),
                          itertools.count(start=batch_size, step=batch_size)):
 
@@ -418,7 +418,7 @@ def get_storage(dictionary, index=None):
     index : hashable
         An index under which to store the element. Needs to be hashable.
         This is useful for functions which might be accessed with multiple
-        different arguements.
+        different arguments.
 
     Returns
     -------

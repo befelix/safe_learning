@@ -115,7 +115,7 @@ class PolicyIteration(object):
 
     @with_scope('bellmann_error')
     def bellmann_error(self, states):
-        """Compute the squared bellmann erlrror.
+        """Compute the squared bellmann error.
 
         Parameters
         ----------
@@ -156,14 +156,14 @@ class PolicyIteration(object):
         # Define random variables; convert index from np.int64 to regular
         # python int to avoid strange cvxpy error; see:
         # https://github.com/cvxgrp/cvxpy/issues/380
-        values = cvxpy.Variable(int(self.value_function.nindex))
+        values = cvxpy.Variable(rewards.shape)
 
         value_matrix = self.value_function.tri.parameter_derivative(
             next_states)
         # Make cvxpy work with sparse matrices
         value_matrix = cvxpy.Constant(value_matrix)
 
-        objective = cvxpy.Maximize(cvxpy.sum_entries(values))
+        objective = cvxpy.Maximize(cvxpy.sum(values))
         constraints = [values <= rewards + self.gamma * value_matrix * values]
         prob = cvxpy.Problem(objective, constraints)
 

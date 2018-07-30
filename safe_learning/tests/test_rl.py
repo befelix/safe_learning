@@ -86,7 +86,7 @@ class TestPolicyIteration(object):
         dynamics.return_value = np.arange(4, dtype=np.float)[:, None]
 
         rewards = mock.Mock()
-        rewards.return_value = np.arange(4, dtype=np.float)
+        rewards.return_value = np.arange(4, dtype=np.float)[:, None]
 
         # transition probabilities
         trans_probs = np.array([[0, .5, .5, 0],
@@ -113,7 +113,7 @@ class TestPolicyIteration(object):
                              value_function)
 
         true_values = np.linalg.solve(np.eye(4) - rl.gamma * trans_probs,
-                                      rewards.return_value)[:, None]
+                                      rewards.return_value.ravel())[:, None]
 
         with tf.Session() as sess:
             sess.run(tf.variables_initializer(value_function.parameters))
