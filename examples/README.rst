@@ -5,10 +5,12 @@ Introductions
 -------------
 - `1d_region_of_attraction_estimate.ipynb <./1d_region_of_attraction_estimate.ipynb>`_ shows how to estimate and learn the region of attraction for a fixed policy.
 - `basic_dynamic_programming.ipynb <./basic_dynamic_programming.ipynb>`_ does basic dynamic programming with piecewise linear function approximators for the mountain car example.
+- `reinforcement_learning_pendulum.ipynb <./reinforcement_learning_pendulum.ipynb>`_ does approximate policy iteration in an actor-critic framework with neural networks for the inverted pendulum.
+- `reinforcement_learning_pendulum.ipynb <./reinforcement_learning_pendulum.ipynb>`_ does the same as above for the cart-pole (i.e., the inverted pendulum on a cart).
+
 Experiments
 -----------
-
 - `1d_example.ipynb <./1d_example.ipynb>`_ contains a 1D example including plots of the sets.
 - `inverted_pendulum.ipynb <./inverted_pendulum.ipynb>`_ contains a full neural network example with an inverted pendulum.
-
-
+- `adaptive_safety_verification.ipynb <./adaptive_safety_verification.ipynb>`_ investigates the benefits of an adaptive discretization in identifying safe sets for the inverted pendulum.
+- `lyapunov_function_learning.ipynb <./lyapunov_function_learning.ipynb>`_ demonstrates how a parameterized Lyapunov candidate for the inverted pendulum can be trained with a machine learning approach.

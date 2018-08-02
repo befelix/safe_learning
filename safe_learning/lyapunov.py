@@ -185,7 +185,7 @@ class Lyapunov(object):
 
         # Keep track of the safe sets
         self.safe_set = np.zeros(np.prod(discretization.num_points),
-                                 dtype=np.bool)
+                                 dtype=bool)
 
         self.initial_safe_set = initial_set
         if initial_set is not None:
@@ -217,12 +217,12 @@ class Lyapunov(object):
 
         self.adaptive = adaptive
 
-        # Keep track of the integer divisor used for each state in the
-        # adaptive discretization
-        self._n = np.zeros(np.prod(discretization.num_points),
-                           dtype=np.int)
+        # Keep track of the refinement `N(x)` used around each state `x` in
+        # the adaptive discretization; `N(x) = 0` by convention if `x` is
+        # unsafe
+        self._refinement = np.zeros(discretization.nindex, dtype=int)
         if initial_set is not None:
-            self._n[initial_set] = 1
+            self._refinement[initial_set] = 1
 
     def lipschitz_dynamics(self, states):
         """Return the Lipschitz constant for given states and actions.
@@ -405,21 +405,27 @@ class Lyapunov(object):
         return v_dot_negative
 
     @with_scope('update_safe_set')
-    def update_safe_set(self, can_shrink=True, n_max=1, parallel_iterations=1):
+    def update_safe_set(self, can_shrink=True, max_refinement=1,
+                        safety_factor=1., parallel_iterations=1):
         """Compute and update the safe set.
 
         Parameters
         ----------
         can_shrink : bool, optional
             A boolean determining whether previously safe states other than the
-            initial safe set must be verified again.
-        n_max : int, optional
+            initial safe set must be verified again (i.e., can the safe set
+            shrink in volume?)
+        max_refinement : int, optional
             The maximum integer divisor used for adaptive discretization.
+        safety_factor : float, optional
+            A multiplicative factor greater than 1 used to conservatively
+            estimate the required adaptive discretization.
         parallel_iterations : int, optional
             The number of parallel iterations to use for safety verification in
             the adaptive case. Passed to `tf.map_fn`.
 
         """
+        safety_factor = np.maximum(safety_factor, 1.)
         storage = get_storage(self._storage)
 
         if storage is None:
@@ -438,19 +444,20 @@ class Lyapunov(object):
 
             if self.adaptive:
                 # Compute an integer n such that dv < threshold for tau / n
-                # n <= 0 corresponds to dv >= 0, so clip to n = 0
-                tf_n_req = threshold / decrease
-                tf_n_req = tf.where(tf.is_nan(tf_n_req),
-                                    tf.zeros_like(tf_n_req), tf_n_req)
+                ratio = safety_factor * threshold / decrease
+                # If dv = 0, check for nan values, and clip to n = 0
+                tf_n_req = tf.where(tf.is_nan(ratio),
+                                    tf.zeros_like(ratio), ratio)
+                # Edge case: ratio = 1 should correspond to n = 2
+                # TODO
+                # If dv < 0, also clip to n = 0
                 tf_n_req = tf.ceil(tf.maximum(tf_n_req, 0))
-                # TODO what if 0 < threshold / decrease < 1 ? should set N = 1
-                # TODO what if threshold / decrease = 1 ? should set N = 2
 
                 dim = int(self.discretization.ndim)
                 lengths = self.discretization.unit_maxes.reshape((-1, 1))
 
                 def refined_safety_check(data):
-                    """TODO."""
+                    """Verify decrease condition in a locally refined grid."""
                     center = tf.reshape(data[:-1], [1, dim])
                     n_req = tf.cast(data[-1], tf.int32)
 
@@ -491,107 +498,112 @@ class Lyapunov(object):
         feed_dict = self.feed_dict
 
         if can_shrink:
-            # Reset the safe set
-            safe_set = np.zeros_like(self.safe_set)
+            # Reset the safe set and adaptive discretization
+            safe_set = np.zeros_like(self.safe_set, dtype=bool)
+            refinement = np.zeros_like(self._refinement, dtype=int)
             if self.initial_safe_set is not None:
                 safe_set[self.initial_safe_set] = True
+                refinement[self.initial_safe_set] = 1
         else:
             # Assume safe set cannot shrink
             safe_set = self.safe_set
+            refinement = self._refinement
 
         value_order = np.argsort(self.values)
         safe_set = safe_set[value_order]
+        refinement = refinement[value_order]
 
         # Verify safety in batches
         batch_size = config.gp_batch_size
-        batch_generator = batchify((value_order, safe_set), batch_size)
+        batch_generator = batchify((value_order, safe_set, refinement),
+                                   batch_size)
         index_to_state = self.discretization.index_to_state
 
         #######################################################################
 
-        # TODO clean up logic
-
-        for i, (indices, safe_batch) in batch_generator:
+        for i, (indices, safe_batch, refine_batch) in batch_generator:
             states = index_to_state(indices)
             feed_dict[tf_states] = states
 
             # Update the safety with the safe_batch result
             negative = tf_negative.eval(feed_dict)
             safe_batch |= negative
+            refine_batch[negative] = 1
 
             # Boolean array: argmin returns first element that is False
             # If all are safe then it returns 0
             bound = np.argmin(safe_batch)
-            refined_bound = 0
+            refine_bound = 0
 
             # Check if there are unsafe elements in the batch
             if bound > 0 or not safe_batch[0]:
-                if self.adaptive and n_max > 1:
+                if self.adaptive and max_refinement > 1:
+                    # Compute required adaptive refinement
                     feed_dict[tf_states] = states[bound:]
-                    n_req = tf_n_req.eval(feed_dict).astype(np.int)
-                    initial_safe = self.initial_safe_set[indices[bound:]]
-                    n_req[initial_safe] = 1
+                    refine_batch[bound:] = tf_n_req.eval(feed_dict).ravel()
 
-                    # Set NaN values from divisions by decrease = 0 as n = 0
-                    np.nan_to_num(n_req, copy=False)
+                    # We do not need to refine cells that correspond to known
+                    # safe states
+                    idx_safe = np.logical_or(negative,
+                                             self.initial_safe_set[indices])
+                    refine_batch[idx_safe] = 1
 
-                    states_to_check = np.logical_and(n_req >= 1,
-                                                     n_req <= n_max)
-                    if np.prod(states_to_check) == 1:
+                    # Identify cells to refine
+                    states_to_check = np.logical_and(refine_batch >= 1,
+                                                     refine_batch <=
+                                                     max_refinement)
+                    states_to_check = states_to_check[bound:]
+
+                    if np.all(states_to_check):
                         stop = len(states_to_check)
                     else:
                         stop = np.argmin(states_to_check)
 
                     if stop > 0:
                         feed_dict[tf_states] = states[bound:bound + stop]
-                        feed_dict[tf_refinement] = n_req[:stop]
-                        refined_safety = tf_refined_negative.eval(feed_dict)
+                        feed_dict[tf_refinement] = refine_batch[bound:
+                                                                bound + stop,
+                                                                None]
+                        refined_safe = tf_refined_negative.eval(feed_dict)
 
                         # Determine which states are safe under the refined
                         # discretization
-                        if np.prod(refined_safety) == 1:
-                            refined_bound = len(refined_safety)
+                        if np.all(refined_safe):
+                            refine_bound = len(refined_safe)
                         else:
-                            refined_bound = np.argmin(refined_safety)
-                        safe_batch[bound:bound + refined_bound] = True
-
-                    idx_safe = indices[bound:bound + refined_bound]
-                    self._n[idx_safe] = n_req[:refined_bound].ravel()
+                            refine_bound = np.argmin(refined_safe)
+                        safe_batch[bound:bound + refine_bound] = True
 
                     # Break if the refined discretization does not work for all
                     # states after `bound`
-                    if stop < len(states_to_check) or refined_bound < stop:
-                        safe_batch[bound + refined_bound:] = False
-                        idx_unsafe = indices[bound + refined_bound:]
-                        self._n[idx_unsafe] = 0
+                    if stop < len(states_to_check) or refine_bound < stop:
+                        safe_batch[bound + refine_bound:] = False
+                        refine_batch[bound + refine_bound:] = 0
                         break
                 else:
                     # Make sure all following points are labeled as unsafe
                     safe_batch[bound:] = False
-                    self._n[indices[bound:]] = 0
+                    refine_batch[bound:] = 0
                     break
-            else:
-                # So far, no adaptive discretization has been required
-                self._n[indices] = 1
 
         # The largest index of a safe value
-        max_index = i + bound + refined_bound - 1
-        # self._n[value_order[max_index + 1:]] = 0
+        max_index = i + bound + refine_bound - 1
 
         #######################################################################
 
         # Set placeholder for c_max to the corresponding value
         feed_dict[self.c_max] = self.values[value_order[max_index]]
 
-        # Restore the order of the safe set
+        # Restore the order of the safe set and adaptive refinement
         safe_nodes = value_order[safe_set]
         self.safe_set[:] = False
         self.safe_set[safe_nodes] = True
+        self._refinement[value_order] = refinement
 
         # Ensure the initial safe set is kept
         if self.initial_safe_set is not None:
             self.safe_set[self.initial_safe_set] = True
-            self._n[self.initial_safe_set] = 1
+            self._refinement[self.initial_safe_set] = 1
 
 
 def perturb_actions(states, actions, perturbations, limits=None):
