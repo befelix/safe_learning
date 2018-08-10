@@ -8,7 +8,7 @@ RUN apt-get update --quiet \
 
 # Update conda, install packages, and clean up
 RUN conda update conda --yes --quiet \
-  && conda install python=2.7 pip numpy --yes --quiet \
+  && conda install python=2.7 --yes --quiet \
   && conda clean --yes --all \
   && hash -r
 
@@ -16,8 +16,9 @@ RUN conda update conda --yes --quiet \
 COPY requirements.txt requirements_dev.txt /code/
 
 # Install requirements and clean up
-RUN pip --no-cache-dir install -r code/requirements.txt \
-    && rm -rf /root/.cache
+RUN pip --no-cache-dir install numpy==1.14.5 \
+  && pip --no-cache-dir install -r code/requirements.txt \
+  && rm -rf /root/.cache
 
 # Install dev requirements and clean up
 RUN pip --no-cache-dir install -r code/requirements_dev.txt \
