@@ -16,7 +16,7 @@ This code accompanies the paper [1]_ and implements the code for estimating the 
   in Proc. of the Conference on Neural Information Processing Systems (NIPS), 2017.
   
 .. [2] F. Berkenkamp, R. Moriconi, A. P. Schoellig, A. Krause, 
-  `Safe Learning of Regions of Attraction in Uncertain, Nonlinear Systems with Gaussian Processes` <http://arxiv.org/abs/1603.04915>
+  `Safe Learning of Regions of Attraction in Uncertain, Nonlinear Systems with Gaussian Processes <http://arxiv.org/abs/1603.04915>`_
   in Proc. of the Conference on Decision and Control (CDC), 2016.
 
 Getting started
