@@ -24,7 +24,13 @@ Getting started
 
 You can install the library by cloning the repository and installing it with
 
-``pip install .``
+``pip install . --process-dependency-links``
+
+To run the tests in `scripts/test_code.sh`, you need to install additional dependencies with
+
+``pip install .[test] --process-dependency-links``
+
+The ``--process-dependency-links`` flag is needed to install ``gpflow==0.4.0``, which is not on pypi. You can skip it if that particular version of the library is already installed.
 
 You can the find example jupyter notebooks and the experiments in the paper in the `examples <./examples>`_ folder.
 
