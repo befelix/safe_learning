@@ -12,26 +12,11 @@ RUN conda update conda --yes --quiet \
   && conda clean --yes --all \
   && hash -r
 
-# Get the requirements files (seperate from the main body)
-COPY requirements.txt requirements_dev.txt /code/
-
-# Install requirements and clean up
-RUN pip install --no-cache-dir numpy==1.14.5 \
-  && pip --no-cache-dir install -r code/requirements.txt \
-  && rm -rf /root/.cache
-
-# Install dev requirements and clean up
-RUN pip --no-cache-dir install -r code/requirements_dev.txt \
-  && rm -rf /root/.cache
-
-# Manually install GPflow and clean up
-RUN git clone --depth=1 --branch=0.4.0 https://github.com/GPflow/GPflow.git \
-  && cd GPflow \
-  && python setup.py install \
-  && rm -rf /GPflow
-
 # Copy the main code
 COPY . /code
-RUN cd /code && python setup.py develop
+RUN cd /code \
+  && pip install numpy==1.14.5 \
+  && pip install -e .[test] --process-dependency-links \
+  && rm -rf /root/.cache
 
 WORKDIR /code

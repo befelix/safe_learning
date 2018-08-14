@@ -1,5 +1,6 @@
 numpy
 scipy
+gpflow==0.4.0
 matplotlib
 cvxpy>=1
 tensorflow>=1.6.0

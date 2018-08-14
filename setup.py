@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 import sys
-
+import pip
 
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
@@ -17,6 +17,11 @@ class PyTest(TestCommand):
         errno = pytest.main(shlex.split(self.pytest_args))
         sys.exit(errno)
 
+with open('requirements.txt', 'r') as f:
+    requirements = f.read().splitlines()
+
+with open('requirements_dev.txt', 'r') as f:
+    test_requirements = f.read().splitlines()
 
 setup(
     name="safe_learning",
@@ -29,12 +34,11 @@ setup(
     keywords="safe reinforcement learning Lyapunov",
     url="https://github.com/befelix/lyapunov-learning",
     packages=find_packages(exclude=['docs']),
-    install_requires=[
-        'numpy',
-        'scipy',
-        'tensorflow>=1.0.0',
-    ],
-    tests_require=['pytest'],
+    setup_requires=['numpy'],
+    install_requires=requirements,
+    extras_require={'test': list(test_requirements)},
+    tests_require=test_requirements,
+    dependency_links=['git+https://github.com/GPflow/GPflow.git@0.4.0#egg=gpflow-0.4.0'],
     cmdclass={'test': PyTest},
     classifiers=[
         # How mature is this project? Common values are
