@@ -92,22 +92,15 @@ class LyapunovNetwork(DeterministicFunction):
                 layer_input_dim = self.input_dim
             else:
                 layer_input_dim = self.output_dims[i - 1]
-
             W = tf.get_variable('weights_posdef_{}'.format(i), [self.hidden_dims[i], layer_input_dim], TF_DTYPE, self.initializer)
             kernel = tf.matmul(W, W, transpose_a=True) + self.eps * tf.eye(layer_input_dim, dtype=TF_DTYPE)
             dim_diff = self.output_dims[i] - layer_input_dim
             if dim_diff > 0:
                 W = tf.get_variable('weights_{}'.format(i), [dim_diff, layer_input_dim], TF_DTYPE, self.initializer)
                 kernel = tf.concat([kernel, W], axis=0)
-
             layer_output = tf.matmul(net, kernel, transpose_b=True)
             net = self.activations[i](layer_output, name='layer_output_{}'.format(i))
-
-        # Quadratic form of output
-        W = tf.get_variable('sqrt_shape_matrix', [self.output_dims[-1], self.output_dims[-1]], TF_DTYPE, self.initializer)
-        P = tf.matmul(W, W, transpose_a=True) + self.eps * tf.eye(self.output_dims[-1], dtype=TF_DTYPE)
-        values = tf.reduce_sum(tf.matmul(net, P) * net, axis=1, keepdims=True, name='quadratic_form')
-
+        values = tf.reduce_sum(tf.square(net), axis=1, keepdims=True, name='quadratic_form')
         return values
 
     def print_params(self):
@@ -755,3 +748,33 @@ def balanced_class_weights(y_true, scale_by_total=True):
         weights *= y.size
 
     return weights, class_counts
+
+def monomials(x, deg):
+    x = np.atleast_2d(x)
+    # 1-D features (x, y)
+    Z = np.copy(x)
+    if deg >= 2:
+        # 2-D features (x^2, x * y, y^2)
+        temp = np.empty([len(x), 3])
+        temp[:, 0] = x[:, 0] ** 2
+        temp[:, 1] = x[:, 0] * x[:, 1]
+        temp[:, 2] = x[:, 1] ** 2
+        Z = np.hstack((Z, temp))
+    if deg >= 3:
+        # 3-D features (x^3, x^2 * y, x * y^2, y^3)
+        temp = np.empty([len(x), 4])
+        temp[:, 0] = x[:, 0] ** 3
+        temp[:, 1] = (x[:, 0] ** 2) * x[:, 1]
+        temp[:, 2] = x[:, 0] * (x[:, 1] ** 2)
+        temp[:, 3] = x[:, 1] ** 3
+        Z = np.hstack((Z, temp))
+    if deg >= 4:
+        # 4-D features (x^4, x^3 * y, x^2 * y^2, x * y^3, y^4)
+        temp = np.empty([len(x), 5])
+        temp[:, 0] = x[:, 0] ** 4
+        temp[:, 1] = (x[:, 0] ** 3) * x[:, 1]
+        temp[:, 2] = (x[:, 0] ** 2) * (x[:, 1] ** 2)
+        temp[:, 3] = x[:, 0] * (x[:, 1] ** 3)
+        temp[:, 4] = x[:, 1] ** 4
+        Z = np.hstack((Z, temp))
+    return Z
