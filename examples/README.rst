@@ -16,4 +16,4 @@ Experiments
 - `lyapunov_function_learning.ipynb <./lyapunov_function_learning.ipynb>`_ demonstrates how a parameterized Lyapunov candidate for the inverted pendulum can be trained with the machine learning approach in [1]_.
 
 .. [1] S. M. Richards, F. Berkenkamp, A. Krause,
-  `The Lyapunov Neural Network: Adaptive Stability Certification for Safe Learning of Dynamic Systems <https://arxiv.org/abs/1808.00924>`_. Technical report, 2018.
+  `The Lyapunov Neural Network: Adaptive Stability Certification for Safe Learning of Dynamic Systems <https://arxiv.org/abs/1808.00924>`_. Conference on Robot Learning (CoRL), 2018.
