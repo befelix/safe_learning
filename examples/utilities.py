@@ -527,7 +527,7 @@ def reward_rollout(grid, closed_loop_dynamics, reward_function, discount, horizo
     else: # grid is a GridWorld instance
         all_points = grid.all_points
         nindex = grid.nindex
-    
+
     converged = False
     rollout = np.zeros(nindex)
     current_states = all_points
@@ -749,10 +749,12 @@ def balanced_class_weights(y_true, scale_by_total=True):
 
     return weights, class_counts
 
+
 def monomials(x, deg):
-    x = np.atleast_2d(x)
+    """Compute monomial features of `x' up to degree `deg'."""
+    x = np.atleast_2d(np.copy(x))
     # 1-D features (x, y)
-    Z = np.copy(x)
+    Z = x
     if deg >= 2:
         # 2-D features (x^2, x * y, y^2)
         temp = np.empty([len(x), 3])
@@ -777,4 +779,33 @@ def monomials(x, deg):
         temp[:, 3] = x[:, 0] * (x[:, 1] ** 3)
         temp[:, 4] = x[:, 1] ** 4
         Z = np.hstack((Z, temp))
+    return Z
+
+
+def derivative_monomials(x, deg):
+    """Compute derivatives of monomial features of `x' up to degree `deg'."""
+    x = np.atleast_2d(np.copy(x))
+    dim = x.shape[1]
+    # 1-D features (x, y)
+    Z = np.zeros([len(x), 2, dim])
+    Z[:, 0, 0] = 1
+    Z[:, 1, 1] = 1
+    if deg >= 2:
+        # 2-D features (x^2, x * y, y^2)
+        temp = np.zeros([len(x), 3, dim])
+        temp[:, 0, 0] = 2 * x[:, 0]
+        temp[:, 1, 0] = x[:, 1]
+        temp[:, 1, 1] = x[:, 0]
+        temp[:, 2, 1] = 2 * x[:, 1]
+        Z = np.concatenate((Z, temp), axis=1)
+    if deg >= 3:
+        # 3-D features (x^3, x^2 * y, x * y^2, y^3)
+        temp = np.zeros([len(x), 4, dim])
+        temp[:, 0, 0] = 3 * x[:, 0] ** 2
+        temp[:, 1, 0] = 2 * x[:, 0] * x[:, 1]
+        temp[:, 1, 1] = x[:, 0] ** 2
+        temp[:, 2, 0] = x[:, 1] ** 2
+        temp[:, 2, 1] = 2 * x[:, 0] * x[:, 1]
+        temp[:, 3, 1] = 3 * x[:, 1] ** 2
+        Z = np.concatenate((Z, temp), axis=1)
     return Z
