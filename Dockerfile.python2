@@ -7,14 +7,14 @@ RUN apt-get update --quiet \
   && rm -rf /var/lib/apt/lists/*
 
 # Update conda, install packages, and clean up
-RUN conda update conda --yes --quiet \
-  && conda install python=2.7 --yes --quiet \
+RUN conda install python=2.7 --yes --quiet \
   && conda clean --yes --all \
   && hash -r
 
 # Copy the main code
 COPY . /code
 RUN cd /code \
+  && pip install --upgrade pip \
   && pip install numpy==1.14.5 \
   && pip install -e .[test] --process-dependency-links \
   && rm -rf /root/.cache
