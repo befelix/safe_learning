@@ -1,4 +1,4 @@
-FROM continuumio/miniconda3
+FROM continuumio/miniconda3:4.5.11
 
 # Install build essentials and clean up
 RUN apt-get update --quiet \
