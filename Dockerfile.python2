@@ -14,7 +14,7 @@ RUN conda install python=2.7 --yes --quiet \
 # Copy the main code
 COPY . /code
 RUN cd /code \
-  && pip install --upgrade pip \
+  && pip install pip==18.1 \
   && pip install numpy==1.14.5 \
   && pip install -e .[test] --process-dependency-links \
   && rm -rf /root/.cache
