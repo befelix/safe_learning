@@ -27,7 +27,7 @@ Getting started
 
 You can install the library by cloning the repository and installing it with
 
-``pip install . --process-dependency-links``
+``pip install . e``
 
 To run the tests in `scripts/test_code.sh`, you need to install additional dependencies with
 

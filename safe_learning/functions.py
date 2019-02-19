@@ -354,7 +354,7 @@ class Saturation(DeterministicFunction):
         return tf.minimum(tf.maximum(res, self.lower), self.upper)
 
 
-class GPRCached(gpflow.gpr.GPR):
+class GPRCached(gpflow.models.GPR):
     """gpflow.gpr.GPR class that stores cholesky decomposition for efficiency.
 
     Parameters
@@ -393,7 +393,7 @@ class GPRCached(gpflow.gpr.GPR):
         self.update_cache()
 
     @with_scope('compute_cache')
-    @gpflow.param.AutoFlow()
+    @gpflow.autoflow()
     def _compute_cache(self):
         """Compute cache."""
         # Scaled kernel
