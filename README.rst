@@ -25,13 +25,21 @@ This code accompanies the paper [1]_ and implements the code for estimating the 
 Getting started
 ---------------
 
-You can install the library by cloning the repository and installing it with
+This library is tested based on the following dependencies. ``pip>=19`` does not support ``--process-dependency-links`` (see below)
+
+::
+
+  pip install pip==18.1
+  pip install numpy==1.14.5
+
+
+Based on this, you can install the library by cloning the repository and installing it with
 
 ``pip install . --process-dependency-links``
 
-To run the tests in `scripts/test_code.sh`, you need to install additional dependencies with
+To run the tests with the bash script in ``scripts/test_code.sh``, you need to install additional dependencies with
 
-``pip install .[test] --process-dependency-links``
+``pip install ".[test]" --process-dependency-links``
 
 The ``--process-dependency-links`` flag is needed to install ``gpflow==0.4.0``, which is not on pypi. You can skip it if that particular version of the library is already installed.
 
