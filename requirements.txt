@@ -2,6 +2,6 @@ numpy>=1.0,<1.15
 scipy
 gpflow==0.4.0
 matplotlib
-cvxpy>=1,<2
+cvxpy>=1,<=1.0.15
 tensorflow>=1.6.0,<2.0
 future
