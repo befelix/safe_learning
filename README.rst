@@ -25,7 +25,7 @@ This code accompanies the paper [1]_ and implements the code for estimating the 
 Getting started
 ---------------
 
-This library is tested based on the following dependencies. ``pip>=19`` does not support ``--process-dependency-links`` (see below)
+This library is tested based on both python 2.7 and 3.5, together with the following dependencies, since ``pip>=19`` does not support ``--process-dependency-links`` (see below)
 
 ::
 
