@@ -12,7 +12,7 @@ Safe Reinforcement Learning with Stability Guarantees
 This code accompanies the paper [1]_ and implements the code for estimating the region of attraction for a policy and optimizing the policy subject to stability constraints. For the old numpy-based code to estimate the region of attraction in [2]_ see the `lyapunov-learning <https://github.com/befelix/lyapunov-learning>`_ repository. The code for learning Lyapunov functions from [3]_ can be found in the `examples <./examples>`_ folder.
 
 .. [1] F. Berkenkamp, M. Turchetta, A. P. Schoellig, A. Krause,
-  `Safe Model-based Reinforcement Learning with Stability Guarantees <http://arxiv.org/abs/1509.01066>`_
+  `Safe Model-based Reinforcement Learning with Stability Guarantees <https://arxiv.org/abs/1705.08551>`_
   in Proc. of the Conference on Neural Information Processing Systems (NIPS), 2017.
 
 .. [2] F. Berkenkamp, R. Moriconi, A. P. Schoellig, A. Krause,
